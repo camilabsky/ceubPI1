@@ -43,7 +43,6 @@ Protótipo navegável de baixa fidelidade que valide a proposta conceitual e sir
   - **Enzo Nardelli** (Desenvolvedor)
   - **Leticia Santos** (Desenvolvedora) 
   - **João Gabriel Costa Alves** (Desenvolvedor)
-  - **Rafaela** (Desenvolvedora)
 
 ### **Stakeholders Externos**
 - Gestores de hortas comunitárias (usuários-chave)
