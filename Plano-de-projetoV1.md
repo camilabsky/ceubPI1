@@ -41,7 +41,7 @@ Protótipo navegável de baixa fidelidade que valide a proposta conceitual e sir
 
 - **Development Team:**
   - **Enzo Nardelli** (Desenvolvedor)
-  - **Leticia Santos** (Desenvolvedora) 
+  - **Leticia Souza** (Desenvolvedora) 
   - **João Gabriel Costa Alves** (Desenvolvedor)
 
 ### **Stakeholders Externos**
@@ -459,7 +459,7 @@ App Root
 - [ ] **Camila ** (Product Owner) - _______________
 - [ ] ** ** (Scrum Master) - _______________  
 - [ ] **Enzo Nardelli** (Developer) - _______________
-- [ ] **Leticia Santos** (Developer) - _______________
+- [ ] **Leticia Souza** (Developer) - _______________
 - [ ] **João Gabriel Costa Alves** (Developer) - _______________
 
 ### **Aprovação Institucional**
