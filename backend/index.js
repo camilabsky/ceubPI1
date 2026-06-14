@@ -17,7 +17,7 @@ app.use(express.json())
 
 function get_minhas_tarefas(req, res){
     const {id_perfil} = req.body
-    connection.query(`SELECT * FROM Tarefas WHERE id_perfil=${id_perfil}`,
+    connection.query(`SELECT * FROM Tarefas WHERE id_perfil=${id_perfil} AND NOT concluido`,
     (error, results, fields) => {
         if (error) throw error;
         res.send(results);
