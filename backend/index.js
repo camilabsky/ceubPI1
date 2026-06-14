@@ -24,9 +24,16 @@ function get_minhas_tarefas(req, res){
     });
 }
 app.get('/minhas_tarefas',  get_minhas_tarefas)
-app.post('/concluir_tarefa', 
-   (req, res) => res.send('tarefa concluida')
-)
+
+function concluir_tarefas(req, res){
+    const {id_tarefa} = req.body
+    connection.query(`UPDATE Tarefas SET concluido=true WHERE id=${id_tarefa}`,
+    (error, results, fields) => {
+        if (error) throw error;
+        res.send(results);
+    });
+}
+app.post('/concluir_tarefa', concluir_tarefas)
 
 function get_tarefas(req, res){
     connection.query('SELECT * FROM Tarefas WHERE id_perfil IS NULL', 
