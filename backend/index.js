@@ -35,9 +35,15 @@ app.post('/aceitar_tarefa', 
    (req, res) => res.send('tarefa aceita')
 )
 
-app.get('/recompensas_disponiveis', 
-   (req, res) => res.send('recompensas disponiveis')
-)
+function get_recompensas_disponiveis(req, res){
+    connection.query('SELECT * FROM RecompensasDisponiveis', 
+    (error, results, fields) => {
+        if (error) throw error;
+        res.send(results);
+    });
+}
+app.get('/recompensas_disponiveis', get_recompensas_disponiveis)
+
 app.post('/resgatar_recompensa', 
    (req, res) => res.send('recompensa resgatada')
 )
@@ -46,4 +52,3 @@ const port = 8080;
 app.listen(port, 
    () => console.log(`⚡️[bootup]: Server is running at port: ${port}`)
 );
-

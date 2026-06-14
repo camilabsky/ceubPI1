@@ -89,3 +89,14 @@ VALUES
   (4), (4), (4), (4), (4), (4), (4), (4), (4), (4),
   (5), (5), (5), (5), (5), (5), (5), (5), (5), (5), (5), (5), (5), (5), (5),
   (6), (6), (6);
+
+CREATE VIEW RecompensasDisponiveis AS
+SELECT Recompensas.*, cnt.total
+FROM Recompensas
+JOIN (
+  SELECT COUNT(*) AS total, id_recompensa
+  FROM PerfilRecompensas
+  WHERE id_perfil IS NULL
+  GROUP BY id_recompensa
+) AS cnt
+ON Recompensas.id = cnt.id_recompensa;
