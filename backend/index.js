@@ -31,9 +31,15 @@ function get_tarefas(req, res){
 }
 app.get('/tarefas_disponiveis', get_tarefas)
 
-app.post('/aceitar_tarefa', 
-   (req, res) => res.send('tarefa aceita')
-)
+function aceitar_tarefa(req, res){
+    const {id_tarefa, id_perfil} = req.body
+    connection.query(`UPDATE Tarefas SET id_perfil=${id_perfil} WHERE id=${id_tarefa}`,
+    (error, results, fields) => {
+        if (error) throw error;
+        res.send(results);
+    });
+}
+app.post('/aceitar_tarefa', aceitar_tarefa)
 
 function get_recompensas_disponiveis(req, res){
     connection.query('SELECT * FROM RecompensasDisponiveis', 

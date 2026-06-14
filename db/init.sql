@@ -80,6 +80,8 @@ INSERT INTO Recompensas (
   'https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=400'
 );
 
+INSERT INTO Perfil (nome) VALUES ("Maria Silva");
+
 INSERT INTO
   PerfilRecompensas (id_recompensa)
 VALUES
