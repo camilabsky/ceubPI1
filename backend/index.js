@@ -1,3 +1,22 @@
+var mysql      = require('mysql2');
+var connection = mysql.createConnection({
+  host     : 'localhost',
+  user     : 'user',
+  password : 'password',
+  database : 'horta',
+  port     : 3307
+});
+
+connection.connect();
+
+connection.query('SELECT * FROM Tarefas WHERE id_perfil IS NULL', function (error, results, fields) {
+  if (error) throw error;
+  console.log(results);
+});
+
+connection.end();
+
+
 const express = require('express'),
 app = express();
 
