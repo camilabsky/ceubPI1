@@ -15,9 +15,15 @@ app = express();
 app.use(express.urlencoded({ extended: true }))
 app.use(express.json())
 
-app.get('/minhas_tarefas', 
-   (req, res) => res.send('minhas tarefas')
-)
+function get_minhas_tarefas(req, res){
+    const {id_perfil} = req.body
+    connection.query(`SELECT * FROM Tarefas WHERE id_perfil=${id_perfil}`,
+    (error, results, fields) => {
+        if (error) throw error;
+        res.send(results);
+    });
+}
+app.get('/minhas_tarefas',  get_minhas_tarefas)
 app.post('/concluir_tarefa', 
    (req, res) => res.send('tarefa concluida')
 )
