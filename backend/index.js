@@ -9,14 +9,6 @@ var connection = mysql.createConnection({
 
 connection.connect();
 
-connection.query('SELECT * FROM Tarefas WHERE id_perfil IS NULL', function (error, results, fields) {
-  if (error) throw error;
-  console.log(results);
-});
-
-connection.end();
-
-
 const express = require('express'),
 app = express();
 
@@ -30,9 +22,15 @@ app.post('/concluir_tarefa', 
    (req, res) => res.send('tarefa concluida')
 )
 
-app.get('/tarefas_disponiveis', 
-   (req, res) => res.send('tarefas disponiveis')
-)
+function get_tarefas(req, res){
+    connection.query('SELECT * FROM Tarefas WHERE id_perfil IS NULL', 
+    (error, results, fields) => {
+        if (error) throw error;
+        res.send(results);
+    });
+}
+app.get('/tarefas_disponiveis', get_tarefas)
+
 app.post('/aceitar_tarefa', 
    (req, res) => res.send('tarefa aceita')
 )
