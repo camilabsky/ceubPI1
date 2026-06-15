@@ -102,3 +102,20 @@ JOIN (
   GROUP BY id_recompensa
 ) AS cnt
 ON Recompensas.id = cnt.id_recompensa;
+
+CREATE VIEW SaldoPerfil AS
+SELECT
+  COALESCE(t.total_moedas, 0) - COALESCE(r.total_gasto, 0) AS Saldo, 
+  p.id as id_perfil
+FROM Perfil p
+LEFT JOIN (
+  SELECT id_perfil, SUM(moedas) AS total_moedas
+  FROM Tarefas
+  GROUP BY id_perfil
+) t ON p.id = t.id_perfil
+LEFT JOIN (
+  SELECT pr.id_perfil, SUM(rec.preco) AS total_gasto
+  FROM PerfilRecompensas pr
+  JOIN Recompensas rec ON pr.id_recompensa = rec.id
+  GROUP BY pr.id_perfil
+) r ON p.id = r.id_perfil;

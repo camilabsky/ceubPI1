@@ -63,9 +63,17 @@ function get_recompensas_disponiveis(req, res){
 }
 app.get('/recompensas_disponiveis', get_recompensas_disponiveis)
 
-app.post('/resgatar_recompensa', 
-   (req, res) => res.send('recompensa resgatada')
-)
+function resgatar_recompensa(req, res){
+    const {id_recompensa, id_perfil} = req.body
+    connection.query(
+        `UPDATE PerfilRecompensas SET id_perfil=${id_perfil} WHERE id_perfil is null AND id_recompensa=${id_recompensa} LIMIT 1`,
+        (error, results, fields) => {
+            if (error) throw error;
+            res.send(results);
+        }
+    );
+}
+app.post('/resgatar_recompensa', resgatar_recompensa)
 
 const port = 8080;
 app.listen(port, 
