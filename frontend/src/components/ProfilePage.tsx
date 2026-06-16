@@ -142,7 +142,7 @@ export default function ProfilePage({ coins, tasksCompleted }: ProfilePageProps)
         <div className="bg-white rounded-[14px] border border-gray-200 p-6">
           <div className="text-center mb-4">
             <p className="text-[14px] text-[#717182] mb-2">Você ajudou a plantar</p>
-            <p className="text-[32px] text-[#00a63e]">{mudas}</p>
+            <p className="text-[32px] text-[#00a63e]">{mudas??0}</p>
             <p className="text-[14px] text-neutral-950">mudas este mês</p>
           </div>
           
