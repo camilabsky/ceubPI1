@@ -27,7 +27,6 @@ interface Task {
 interface TasksPageProps {
   tasks: Task[];
   onUpdateTasks: (tasks: Task[]) => void;
-  onTaskComplete: () => void;
 }
 
 function acceptTask(id_tarefa: Number){
@@ -41,7 +40,7 @@ function acceptTask(id_tarefa: Number){
   })
 }
 
-export default function TasksPage({ tasks, onUpdateTasks, onTaskComplete }: TasksPageProps) {
+export default function TasksPage({ tasks, onUpdateTasks}: TasksPageProps) {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [acceptedTaskTitle, setAcceptedTaskTitle] = useState('');
 

@@ -21,17 +21,6 @@ interface Task {
   progress?: number;
 }
 
-function completeTask(id_tarefa: Number){
-  fetch("http://localhost:8080/concluir_tarefa", {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({id_tarefa})
-  })
-}
-
 async function get_tasks(): Taks[]{
   const tasks = await fetch("http://localhost:8080/tarefas_disponiveis")
   return await tasks.json()
@@ -70,24 +59,24 @@ export default function App() {
   const [coins, setCoins] = useState(0);
   const [tasksCompleted, setTasksCompleted] = useState(0);
 
+  const fetchData = async () => {
+    try {
+      console.log("aqui")
+      const [tasksData, coinsData, completedData] = await Promise.all([
+        get_tasks(),
+        get_coins(user_id),
+        get_number_of_completed_tasks(user_id)
+      ]);
+
+      setTasks(tasksData);
+      setCoins(coinsData);
+      setTasksCompleted(completedData);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [tasksData, coinsData, completedData] = await Promise.all([
-          get_tasks(),
-          get_coins(user_id),
-          get_number_of_completed_tasks(user_id)
-        ]);
-
-        setTasks(tasksData);
-        setCoins(coinsData);
-        setTasksCompleted(completedData);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        // Optionally set error state here
-      }
-    };
-
     fetchData();
   }, []);
 
@@ -103,14 +92,12 @@ export default function App() {
             tasks={tasks}
             onNavigate={setCurrentPage}
             onUpdateTasks={setTasks}
-            onTaskComplete={completeTask}
           />
         )}
         {currentPage === 'tasks' && (
           <TasksPage
             tasks={tasks}
             onUpdateTasks={setTasks}
-            onTaskComplete={completeTask}
           />
         )}
         {currentPage === 'rewards' && (

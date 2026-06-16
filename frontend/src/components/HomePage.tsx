@@ -30,7 +30,6 @@ interface HomePageProps {
   tasks: Task[];
   onNavigate: (page: 'home' | 'tasks' | 'rewards' | 'profile') => void;
   onUpdateTasks: (tasks: Task[]) => void;
-  onTaskComplete: () => void;
 }
 async function get_tasks(id_perfil): Taks[]{
   const tasks = await fetch("http://localhost:8080/minhas_tarefas", {
@@ -43,35 +42,23 @@ async function get_tasks(id_perfil): Taks[]{
   })
   return await tasks.json()
 }
-function completeTask(id_tarefa: Number){
-  fetch("http://localhost:8080/concluir_tarefa", {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({id_tarefa})
-  })
-}
 
-
-export default function HomePage({ coins, tasksCompleted, tasks, onNavigate, onUpdateTasks, onTaskComplete }: HomePageProps) {
+export default function HomePage({ coins, tasksCompleted, tasks, onNavigate, onUpdateTasks }: HomePageProps) {
   const [inProgressTasks, setInProgressTasks] = useState([]);
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
   const [completedTaskInfo, setCompletedTaskInfo] = useState({ title: '', coins: 0 });
 
+  const fetchData = async () => {
+    try {
+      const [tasksData] = await Promise.all([get_tasks(1)]);
+
+      setInProgressTasks(tasksData);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [tasksData] = await Promise.all([get_tasks(1)]);
-
-        setInProgressTasks(tasksData);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      }
-    };
-
     fetchData();
   }, []);
 
@@ -99,8 +86,20 @@ export default function HomePage({ coins, tasksCompleted, tasks, onNavigate, onU
     return colors[difficulty]
   };
 
-  const continueTask = (taskId: number) => {
-    completeTask(taskId);
+  const completeTask = async (id_tarefa: Number) => {
+    try {
+      await fetch("http://localhost:8080/concluir_tarefa", {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ id_tarefa })
+      });
+      await fetchData();
+    } catch (error) {
+      console.error('Error completing task:', error);
+    }
   };
 
   return (
@@ -208,7 +207,7 @@ export default function HomePage({ coins, tasksCompleted, tasks, onNavigate, onU
                 </div>
 
                 <button
-                  onClick={() => continueTask(task.id)}
+                  onClick={() => completeTask(task.id)}
                   className="w-full bg-[#00a63e] text-white text-[14px] py-2.5 rounded-lg hover:bg-[#008236] transition-colors flex items-center justify-center gap-2"
                 >
                   {task.progress === 100 ? (
