@@ -120,7 +120,7 @@ export default function RewardsPage({ coins, onRedeem }: RewardsPageProps) {
                   <span className={`${getCategoryColor(reward.tipo)} text-[12px] px-2.5 py-1 rounded-lg`}>
                     {reward.tipo}
                   </span>
-                  <span className="text-[14px] text-[#4a5565]">{reward.quantidade} disponíveis</span>
+                  <span className="text-[14px] text-[#4a5565]">{reward.total} disponíveis</span>
                 </div>
 
                 {reward.horta && (
