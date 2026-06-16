@@ -20,23 +20,36 @@ async function getMudas(id_perfil: Number){
   return c.Total
 }
 
+async function recompensasResgatadas(id_perfil: Number){
+  const recom = await fetch("http://localhost:8080/minhas_recompensas", {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({id_perfil})
+  })
+  const c = await recom.json()
+  console.log(c)
+  return c.Total
+}
+
 export default function ProfilePage({ coins, tasksCompleted }: ProfilePageProps) {
   const [mudas, setMudas] = useState(0)
+  const [resgatou, setResgatou] = useState(false)
   const achievements = [
     { id: 1, name: 'Primeiro Passo', description: 'Complete sua primeira tarefa', icon: '🌱', unlocked: true },
     { id: 2, name: 'Jardineiro Dedicado', description: 'Trabalhe 5 dias seguidos', icon: '🌿', unlocked: true },
-    { id: 3, name: 'Mestre das Plantas', description: 'Alcance o nível 10', icon: '🌳', unlocked: false },
-    { id: 4, name: 'Coletor de Recompensas', description: 'Resgate 5 recompensas', icon: '🎁', unlocked: false },
+    { id: 3, name: 'Coletor de Recompensas', description: 'Resgate 5 recompensas', icon: '🎁', unlocked:  resgatou},
   ];
   const stats = [ ];
-
-  const nextLevelProgress = (tasksCompleted % 10) * 10;
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [mudaData] = await Promise.all([ getMudas(1) ]);
+        const [mudaData, recompensasData] = await Promise.all([ getMudas(1), recompensasResgatadas(1) ]);
         setMudas(mudaData);
+        setResgatou(recompensasData>=5);
       } catch (error) {
         console.error('Error fetching data:', error);
       }

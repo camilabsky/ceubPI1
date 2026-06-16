@@ -61,6 +61,17 @@ function get_minhas_mudas(req, res){
 }
 app.post('/minhas_mudas',  get_minhas_mudas)
 
+function get_minhas_recompensas(req, res){
+    const {id_perfil} = req.body
+    connection.query(`
+      SELECT COUNT(*) as Total FROM PerfilRecompensas WHERE id_perfil=${id_perfil}`,
+      (error, results, fields) => {
+          if (error) throw error;
+          res.send(results[0]);
+    });
+}
+app.post('/minhas_recompensas',  get_minhas_recompensas)
+
 function concluir_tarefas(req, res){
     const {id_tarefa} = req.body
     connection.query(`UPDATE Tarefas SET concluido=true WHERE id=${id_tarefa}`,
