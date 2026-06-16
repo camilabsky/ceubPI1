@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Home, ListTodo, Gift, User } from 'lucide-react';
 import { Toaster } from './components/ui/sonner';
 import HomePage from './components/HomePage';
@@ -21,90 +21,74 @@ interface Task {
   progress?: number;
 }
 
+function completeTask(id_tarefa: Number){
+  fetch("http://localhost:8080/concluir_tarefa", {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({id_tarefa})
+  })
+}
+
+async function get_tasks(): Taks[]{
+  const tasks = await fetch("http://localhost:8080/tarefas_disponiveis")
+  return await tasks.json()
+}
+
+async function get_coins(id_perfil: Number){
+  const coins = await fetch("http://localhost:8080/minhas_moedas", {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({id_perfil})
+  })
+  return await coins.json().Saldo
+}
+
+async function get_number_of_completed_tasks(id_perfil: Number){
+  const tarefas_concluidas = await fetch("http://localhost:8080/tarefas_concluidas", {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({id_perfil})
+  })
+  return await tarefas_concluidas.json().Total
+}
+
 export default function App() {
+  const user_id = 1;
   const [currentPage, setCurrentPage] = useState<Page>('home');
-  const [coins, setCoins] = useState(450);
-  const [level, setLevel] = useState(7);
-  const [daysWorked, setDaysWorked] = useState(5);
-  const [tasksCompleted, setTasksCompleted] = useState(24);
-  const [tasks, setTasks] = useState<Task[]>([
-    {
-      id: 1,
-      title: 'Preparar composto orgânico',
-      description: 'Preparar nova leva de composto com resíduos orgânicos',
-      location: 'Jardim da Praça Verde',
-      duration: '2h',
-      category: 'Compostagem',
-      difficulty: 'Difícil',
-      coins: 150,
-      status: 'in-progress',
-      progress: 60,
-    },
-    {
-      id: 2,
-      title: 'Regar plantas da seção A',
-      description: 'Realizar a rega das plantas na seção A do jardim durante a manhã',
-      location: 'Horta Comunitária Centro',
-      duration: '30 min',
-      category: 'Manutenção',
-      difficulty: 'Fácil',
-      coins: 50,
-      status: 'available',
-    },
-    {
-      id: 3,
-      title: 'Capinar canteiro de tomates',
-      description: 'Remover ervas daninhas do canteiro de tomates',
-      location: 'Jardim da Praça Verde',
-      duration: '1h',
-      category: 'Manutenção',
-      difficulty: 'Médio',
-      coins: 80,
-      status: 'available',
-    },
-    {
-      id: 4,
-      title: 'Plantar mudas de alface',
-      description: 'Plantar 20 mudas de alface na área designada',
-      location: 'Horta Comunitária Centro',
-      duration: '1h 30min',
-      category: 'Plantio',
-      difficulty: 'Médio',
-      coins: 120,
-      status: 'available',
-    },
-    {
-      id: 5,
-      title: 'Colher vegetais maduros',
-      description: 'Fazer a colheita dos vegetais que estão prontos',
-      location: 'Horta Orgânica Vila Nova',
-      duration: '45 min',
-      category: 'Colheita',
-      difficulty: 'Fácil',
-      coins: 100,
-      status: 'available',
-    },
-  ]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [coins, setCoins] = useState(0);
+  const [tasksCompleted, setTasksCompleted] = useState(0);
 
-  const addCoins = (amount: number) => {
-    setCoins(prev => prev + amount);
-  };
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [tasksData, coinsData, completedData] = await Promise.all([
+          get_tasks(),
+          get_coins(user_id),
+          get_number_of_completed_tasks(user_id)
+        ]);
 
-  const removeCoins = (amount: number) => {
-    if (coins >= amount) {
-      setCoins(prev => prev - amount);
-      return true;
-    }
-    return false;
-  };
+        setTasks(tasksData);
+        setCoins(coinsData);
+        setTasksCompleted(completedData);
+        console.log(tasksData, coinsData, completedData)
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        // Optionally set error state here
+      }
+    };
 
-  const completeTask = () => {
-    setTasksCompleted(prev => prev + 1);
-    // Level up logic
-    if ((tasksCompleted + 1) % 10 === 0) {
-      setLevel(prev => prev + 1);
-    }
-  };
+    fetchData();
+  }, []);
 
   return (
     <div className="relative min-h-screen bg-gray-50 mx-auto max-w-md">
@@ -114,13 +98,10 @@ export default function App() {
         {currentPage === 'home' && (
           <HomePage
             coins={coins}
-            level={level}
-            daysWorked={daysWorked}
             tasksCompleted={tasksCompleted}
             tasks={tasks}
             onNavigate={setCurrentPage}
             onUpdateTasks={setTasks}
-            onCoinsEarned={addCoins}
             onTaskComplete={completeTask}
           />
         )}
@@ -129,7 +110,6 @@ export default function App() {
             tasks={tasks}
             onUpdateTasks={setTasks}
             onTaskComplete={completeTask}
-            onCoinsEarned={addCoins}
           />
         )}
         {currentPage === 'rewards' && (
@@ -141,8 +121,6 @@ export default function App() {
         {currentPage === 'profile' && (
           <ProfilePage
             coins={coins}
-            level={level}
-            daysWorked={daysWorked}
             tasksCompleted={tasksCompleted}
           />
         )}

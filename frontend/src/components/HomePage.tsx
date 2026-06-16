@@ -26,17 +26,14 @@ interface Task {
 
 interface HomePageProps {
   coins: number;
-  level: number;
-  daysWorked: number;
   tasksCompleted: number;
   tasks: Task[];
   onNavigate: (page: 'home' | 'tasks' | 'rewards' | 'profile') => void;
   onUpdateTasks: (tasks: Task[]) => void;
-  onCoinsEarned: (amount: number) => void;
   onTaskComplete: () => void;
 }
 
-export default function HomePage({ coins, level, daysWorked, tasksCompleted, tasks, onNavigate, onUpdateTasks, onCoinsEarned, onTaskComplete }: HomePageProps) {
+export default function HomePage({ coins, tasksCompleted, tasks, onNavigate, onUpdateTasks, onTaskComplete }: HomePageProps) {
   const inProgressTasks = tasks.filter(t => t.status === 'in-progress');
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
   const [completedTaskInfo, setCompletedTaskInfo] = useState({ title: '', coins: 0 });
@@ -70,34 +67,9 @@ export default function HomePage({ coins, level, daysWorked, tasksCompleted, tas
   };
 
   const continueTask = (taskId: number) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (task) {
-      onUpdateTasks(
-        tasks.map(t =>
-          t.id === taskId ? { ...t, progress: Math.min((t.progress || 0) + 20, 100) } : t
-        )
-      );
-      
-      if ((task.progress || 0) + 20 >= 100) {
-        setTimeout(() => {
-          completeTask(taskId);
-        }, 500);
-      } else {
-        toast.success('Progresso atualizado!');
-      }
-    }
+    completeTask(taskId);
   };
 
-  const completeTask = (taskId: number) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (task) {
-      setCompletedTaskInfo({ title: task.title, coins: task.coins });
-      onUpdateTasks(tasks.filter(t => t.id !== taskId));
-      onTaskComplete();
-      onCoinsEarned(task.coins);
-      setShowCompletionDialog(true);
-    }
-  };
   return (
     <>
       <AlertDialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
@@ -155,18 +127,6 @@ export default function HomePage({ coins, level, daysWorked, tasksCompleted, tas
             <TrendingUp className="size-6 text-[#00a63e] mb-2" />
             <p className="text-[11px] text-[#4a5565] text-center mb-1">Tarefas Completas</p>
             <p className="text-[18px] text-neutral-950">{tasksCompleted}</p>
-          </div>
-
-          <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
-            <Calendar className="size-6 text-[#155DFC] mb-2" />
-            <p className="text-[11px] text-[#4a5565] text-center mb-1">Dias Trabalhados</p>
-            <p className="text-[18px] text-neutral-950">{daysWorked}</p>
-          </div>
-
-          <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
-            <Trophy className="size-6 text-[#9810FA] mb-2" />
-            <p className="text-[11px] text-[#4a5565] text-center mb-1">Nível Atual</p>
-            <p className="text-[18px] text-neutral-950">{level}</p>
           </div>
         </div>
       </div>

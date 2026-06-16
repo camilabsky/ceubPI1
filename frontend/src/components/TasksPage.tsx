@@ -28,41 +28,30 @@ interface TasksPageProps {
   tasks: Task[];
   onUpdateTasks: (tasks: Task[]) => void;
   onTaskComplete: () => void;
-  onCoinsEarned: (amount: number) => void;
 }
 
-export default function TasksPage({ tasks, onUpdateTasks, onTaskComplete, onCoinsEarned }: TasksPageProps) {
+function acceptTask(id_tarefa: Number){
+  fetch("http://localhost:8080/aceitar_tarefa", {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({id_tarefa, id_perfil: 1})
+  })
+}
+
+export default function TasksPage({ tasks, onUpdateTasks, onTaskComplete }: TasksPageProps) {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [acceptedTaskTitle, setAcceptedTaskTitle] = useState('');
 
-  const acceptTask = (taskId: number) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (task) {
-      setAcceptedTaskTitle(task.title);
-    }
-    
-    onUpdateTasks(
-      tasks.map(task =>
-        task.id === taskId ? { ...task, status: 'in-progress' as const, progress: 0 } : task
-      )
-    );
-    
-    setShowConfirmDialog(true);
-  };
-
-
-
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'Fácil':
-        return 'bg-[#00c950] text-white font-semibold';
-      case 'Médio':
-        return 'bg-[#f0b100] text-white font-semibold';
-      case 'Difícil':
-        return 'bg-[#fb2c36] text-white font-semibold';
-      default:
-        return 'bg-gray-500 text-white font-semibold';
-    }
+  const getDifficultyColor = (difficulty: Number) => {
+    const colors = [
+      'bg-[#00c950] text-white font-semibold',
+      'bg-[#f0b100] text-white font-semibold',
+      'bg-[#fb2c36] text-white font-semibold'
+    ]
+    return colors[difficulty]
   };
 
   const getCategoryColor = (category: string) => {
@@ -80,7 +69,8 @@ export default function TasksPage({ tasks, onUpdateTasks, onTaskComplete, onCoin
     }
   };
 
-  const availableTasks = tasks.filter(t => t.status === 'available');
+  const availableTasks = tasks;
+  console.log(tasks)
 
   return (
     <>
@@ -119,32 +109,32 @@ export default function TasksPage({ tasks, onUpdateTasks, onTaskComplete, onCoin
         {availableTasks.map(task => (
           <div key={task.id} className="bg-white rounded-[14px] border border-gray-200 p-6">
             <div className="flex items-start justify-between mb-3">
-              <h3 className="text-[16px] text-neutral-950 flex-1 pt-[5px] pr-[0px] pb-[0px] pl-[0px]">{task.title}</h3>
+              <h3 className="text-[16px] text-neutral-950 flex-1 pt-[5px] pr-[0px] pb-[0px] pl-[0px]">{task.titulo}</h3>
               <div className="bg-green-50 rounded-[10px] px-3 py-1.5 flex items-center gap-1">
                 <Sprout className="size-4 text-[#00a63e]" />
-                <span className="text-[16px] text-[#00a63e] font-bold">{task.coins}</span>
+                <span className="text-[16px] text-[#00a63e] font-bold">{task.moedas}</span>
               </div>
             </div>
 
-            <p className="text-[14px] text-[#717182] mb-4">{task.description}</p>
+            <p className="text-[14px] text-[#717182] mb-4">{task.descricao}</p>
 
             <div className="space-y-3 mb-4">
               <div className="flex items-center gap-2 text-[14px] text-[#4a5565]">
                 <MapPin className="size-4" />
-                <span>{task.location}</span>
+                <span>{task.horta}</span>
               </div>
 
               <div className="flex items-center gap-2 text-[14px] text-[#4a5565]">
                 <Clock className="size-4" />
-                <span>{task.duration}</span>
+                <span>{task.tempo} minutos</span>
               </div>
 
               <div className="flex gap-2">
-                <span className={`${getCategoryColor(task.category)} text-[12px] px-2.5 py-1 rounded-lg`}>
-                  {task.category}
+                <span className={`${getCategoryColor(task.tipo)} text-[12px] px-2.5 py-1 rounded-lg`}>
+                  {task.tipo}
                 </span>
-                <span className={`${getDifficultyColor(task.difficulty)} text-[12px] px-2.5 py-1 rounded-lg`}>
-                  {task.difficulty}
+                <span className={`${getDifficultyColor(task.dificuldade)} text-[12px] px-2.5 py-1 rounded-lg`}>
+                  {["Fácil", "Médio", "Difícil"][task.dificuldade]}
                 </span>
               </div>
             </div>

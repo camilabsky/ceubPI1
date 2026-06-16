@@ -12,6 +12,11 @@ connection.connect();
 const express = require('express'),
 app = express();
 
+const cors = require('cors');
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://0.0.0.0:3000']
+}));
+
 app.use(express.urlencoded({ extended: true }))
 app.use(express.json())
 
@@ -24,6 +29,26 @@ function get_minhas_tarefas(req, res){
     });
 }
 app.get('/minhas_tarefas',  get_minhas_tarefas)
+
+function get_numero_de_tarefas_concluidas(req, res){
+    const {id_perfil} = req.body
+    connection.query(`SELECT count(*) as Total FROM Tarefas WHERE id_perfil=${id_perfil} AND concluido`,
+    (error, results, fields) => {
+        if (error) throw error;
+        res.send(results);
+    });
+}
+app.post('/tarefas_concluidas',  get_numero_de_tarefas_concluidas)
+
+function get_minhas_moedas(req, res){
+    const {id_perfil} = req.body
+    connection.query(`SELECT Saldo FROM SaldoPerfil WHERE id_perfil=${id_perfil}`,
+    (error, results, fields) => {
+        if (error) throw error;
+        res.send(results);
+    });
+}
+app.post('/minhas_moedas',  get_minhas_moedas)
 
 function concluir_tarefas(req, res){
     const {id_tarefa} = req.body

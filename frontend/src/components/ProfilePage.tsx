@@ -2,12 +2,10 @@ import { Trophy, Calendar, TrendingUp, Sprout, Award, MapPin, Users, Heart } fro
 
 interface ProfilePageProps {
   coins: number;
-  level: number;
-  daysWorked: number;
   tasksCompleted: number;
 }
 
-export default function ProfilePage({ coins, level, daysWorked, tasksCompleted }: ProfilePageProps) {
+export default function ProfilePage({ coins, tasksCompleted }: ProfilePageProps) {
   const achievements = [
     { id: 1, name: 'Primeiro Passo', description: 'Complete sua primeira tarefa', icon: '🌱', unlocked: true },
     { id: 2, name: 'Jardineiro Dedicado', description: 'Trabalhe 5 dias seguidos', icon: '🌿', unlocked: true },
@@ -35,7 +33,6 @@ export default function ProfilePage({ coins, level, daysWorked, tasksCompleted }
               </div>
               <div>
                 <h1 className="text-[20px] mb-1">Maria Silva</h1>
-                <p className="text-white/80 text-[14px]">Jardineira Nível {level}</p>
               </div>
             </div>
             
@@ -47,10 +44,6 @@ export default function ProfilePage({ coins, level, daysWorked, tasksCompleted }
 
           {/* Level Progress */}
           <div className="mt-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[14px] text-white/80">Progresso para o nível {level + 1}</span>
-              <span className="text-[14px]">{nextLevelProgress}%</span>
-            </div>
             <div className="w-full bg-white/20 rounded-full h-2 overflow-hidden">
               <div
                 className="bg-white h-full transition-all duration-500"
@@ -76,15 +69,9 @@ export default function ProfilePage({ coins, level, daysWorked, tasksCompleted }
 
           <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
             <Calendar className="size-6 text-[#155DFC] mb-2" />
-            <p className="text-[24px] text-neutral-950 mb-1">{daysWorked}</p>
             <p className="text-[11px] text-[#4a5565] text-center">Dias Ativos</p>
           </div>
 
-          <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
-            <Trophy className="size-6 text-[#9810FA] mb-2" />
-            <p className="text-[24px] text-neutral-950 mb-1">{level}</p>
-            <p className="text-[11px] text-[#4a5565] text-center">Nível Atual</p>
-          </div>
         </div>
       </div>
 
