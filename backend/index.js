@@ -28,7 +28,7 @@ function get_minhas_tarefas(req, res){
         res.send(results);
     });
 }
-app.get('/minhas_tarefas',  get_minhas_tarefas)
+app.post('/minhas_tarefas',  get_minhas_tarefas)
 
 function get_numero_de_tarefas_concluidas(req, res){
     const {id_perfil} = req.body
@@ -45,7 +45,7 @@ function get_minhas_moedas(req, res){
     connection.query(`SELECT Saldo FROM SaldoPerfil WHERE id_perfil=${id_perfil}`,
     (error, results, fields) => {
         if (error) throw error;
-        res.send(results);
+        res.send(results[0]);
     });
 }
 app.post('/minhas_moedas',  get_minhas_moedas)

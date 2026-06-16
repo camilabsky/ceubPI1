@@ -1,6 +1,6 @@
 import { Trophy, Calendar, TrendingUp, Sprout, Play, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -32,11 +32,50 @@ interface HomePageProps {
   onUpdateTasks: (tasks: Task[]) => void;
   onTaskComplete: () => void;
 }
+async function get_tasks(id_perfil): Taks[]{
+  const tasks = await fetch("http://localhost:8080/minhas_tarefas", {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({id_perfil})
+  })
+  return await tasks.json()
+}
+function completeTask(id_tarefa: Number){
+  fetch("http://localhost:8080/concluir_tarefa", {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({id_tarefa})
+  })
+}
+
 
 export default function HomePage({ coins, tasksCompleted, tasks, onNavigate, onUpdateTasks, onTaskComplete }: HomePageProps) {
-  const inProgressTasks = tasks.filter(t => t.status === 'in-progress');
+  const [inProgressTasks, setInProgressTasks] = useState([]);
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
   const [completedTaskInfo, setCompletedTaskInfo] = useState({ title: '', coins: 0 });
+
+  console.log("coins", coins);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [tasksData] = await Promise.all([get_tasks(1)]);
+
+        setInProgressTasks(tasksData);
+        console.log(tasksData)
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const getCategoryColor = (category: string) => {
     switch (category) {
@@ -53,17 +92,13 @@ export default function HomePage({ coins, tasksCompleted, tasks, onNavigate, onU
     }
   };
 
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'Fácil':
-        return 'bg-[#00c950] text-white';
-      case 'Médio':
-        return 'bg-[#f0b100] text-white';
-      case 'Difícil':
-        return 'bg-[#fb2c36] text-white';
-      default:
-        return 'bg-gray-500 text-white';
-    }
+  const getDifficultyColor = (difficulty: Number) => {
+    const colors = [
+      'bg-[#00c950] text-white font-semibold',
+      'bg-[#f0b100] text-white font-semibold',
+      'bg-[#fb2c36] text-white font-semibold'
+    ]
+    return colors[difficulty]
   };
 
   const continueTask = (taskId: number) => {
@@ -158,34 +193,20 @@ export default function HomePage({ coins, tasksCompleted, tasks, onNavigate, onU
             {inProgressTasks.map(task => (
               <div key={task.id} className="bg-white rounded-[14px] border border-gray-200 p-4">
                 <div className="flex items-start justify-between mb-3">
-                  <h3 className="text-[16px] text-neutral-950 flex-1">{task.title}</h3>
+                  <h3 className="text-[16px] text-neutral-950 flex-1">{task.titulo}</h3>
                   <div className="bg-green-50 rounded-[10px] px-3 py-1.5 flex items-center gap-1">
                     <Sprout className="size-4 text-[#00a63e]" />
-                    <span className="text-[16px] text-[#00a63e] font-bold">{task.coins}</span>
+                    <span className="text-[16px] text-[#00a63e] font-bold">{task.moedas}</span>
                   </div>
                 </div>
 
                 <div className="flex gap-2 mb-3">
-                  <span className={`${getCategoryColor(task.category)} text-[12px] px-2.5 py-1 rounded-lg`}>
-                    {task.category}
+                  <span className={`${getCategoryColor(task.tipo)} text-[12px] px-2.5 py-1 rounded-lg`}>
+                    {task.tipo}
                   </span>
-                  <span className={`${getDifficultyColor(task.difficulty)} text-[11px] px-2.5 py-1 rounded-lg`}>
-                    {task.difficulty}
+                  <span className={`${getDifficultyColor(task.dificuldade)} text-[11px] px-2.5 py-1 rounded-lg`}>
+                  {["Fácil", "Médio", "Difícil"][task.dificuldade]}
                   </span>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="mb-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[12px] text-[#4a5565]">Progresso</span>
-                    <span className="text-[12px] text-[#4a5565]">{task.progress}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-[#030213] h-full transition-all duration-500"
-                      style={{ width: `${task.progress}%` }}
-                    />
-                  </div>
                 </div>
 
                 <button

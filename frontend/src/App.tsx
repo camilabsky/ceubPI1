@@ -46,7 +46,8 @@ async function get_coins(id_perfil: Number){
     },
     body: JSON.stringify({id_perfil})
   })
-  return await coins.json().Saldo
+  const c = await coins.json()
+  return c.Saldo
 }
 
 async function get_number_of_completed_tasks(id_perfil: Number){
@@ -58,7 +59,8 @@ async function get_number_of_completed_tasks(id_perfil: Number){
     },
     body: JSON.stringify({id_perfil})
   })
-  return await tarefas_concluidas.json().Total
+  const t = await tarefas_concluidas.json()
+  return t[0].Total
 }
 
 export default function App() {
@@ -113,10 +115,7 @@ export default function App() {
           />
         )}
         {currentPage === 'rewards' && (
-          <RewardsPage
-            coins={coins}
-            onRedeem={removeCoins}
-          />
+          <RewardsPage coins={coins} />
         )}
         {currentPage === 'profile' && (
           <ProfilePage

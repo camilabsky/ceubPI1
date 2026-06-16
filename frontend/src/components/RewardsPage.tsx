@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sprout, Lock, Gift } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { toast } from 'sonner';
@@ -19,79 +19,41 @@ interface RewardsPageProps {
   onRedeem: (amount: number) => boolean;
 }
 
-export default function RewardsPage({ coins, onRedeem }: RewardsPageProps) {
-  const [rewards] = useState<Reward[]>([
-    {
-      id: 1,
-      title: 'Cesta de Vegetais Orgânicos',
-      description: 'Cesta com vegetais frescos da horta',
-      category: 'Produtos',
-      coins: 200,
-      available: 5,
-      imageUrl: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400',
+function redeemReward(id_recompensa, id_perfil ){
+  fetch("http://localhost:8080/resgatar_recompensa", {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
     },
-    {
-      id: 2,
-      title: 'Kit de Ferramentas de Jardim',
-      description: 'Kit básico com pá, rastelo e luvas',
-      category: 'Ferramentas',
-      coins: 500,
-      available: 2,
-      imageUrl: 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=400',
-    },
-    {
-      id: 3,
-      title: 'Mudas de Ervas Aromáticas',
-      description: '5 mudas de manjericão, tomilho e alecrim',
-      category: 'Plantas',
-      coins: 150,
-      available: 8,
-      imageUrl: 'https://images.unsplash.com/photo-1466692476868-aef1dfb1e735?w=400',
-    },
-    {
-      id: 4,
-      title: 'Workshop de Compostagem',
-      description: 'Acesso ao workshop sobre compostagem doméstica',
-      category: 'Educação',
-      coins: 300,
-      available: 10,
-      location: 'Jardim da Praça Verde',
-      imageUrl: 'https://images.unsplash.com/photo-1464226184884-fa280b87c399?w=400',
-    },
-    {
-      id: 5,
-      title: 'Sacola Ecológica Personalizada',
-      description: 'Sacola reutilizável com logo da horta',
-      category: 'Acessórios',
-      coins: 100,
-      available: 15,
-      location: 'Horta Orgânica Vila Nova',
-      imageUrl: 'https://images.unsplash.com/photo-1553531087-1ea13dd840ad?w=400',
-    },
-    {
-      id: 6,
-      title: 'Cesta Premium de Vegetais',
-      description: 'Cesta especial com vegetais selecionados',
-      category: 'Produtos',
-      coins: 800,
-      available: 3,
-      location: 'Horta Comunitária Centro',
-      imageUrl: 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=400',
-    },
-  ]);
+    body: JSON.stringify({id_recompensa, id_perfil})
+  })
+}
 
-  const redeemReward = (reward: Reward) => {
-    if (onRedeem(reward.coins)) {
-      toast.success(`${reward.title} resgatado com sucesso!`, {
-        description: `${reward.coins} moedas foram debitadas`,
-        icon: '🎁',
-      });
-    } else {
-      toast.error('Moedas insuficientes', {
-        description: `Você precisa de ${reward.coins - coins} moedas a mais`,
-      });
-    }
-  };
+async function get_reward(): Taks[]{
+  const tasks = await fetch("http://localhost:8080/recompensas_disponiveis")
+  const r = await tasks.json()  
+  console.log(r)
+  return r
+}
+
+export default function RewardsPage({ coins, onRedeem }: RewardsPageProps) {
+  const [rewards, setRewards] = useState<Reward[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [rewardData] = await Promise.all([get_reward()]);
+
+        setRewards(rewardData)
+        console.log(rewardData)
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const getCategoryColor = (category: string) => {
     switch (category) {
@@ -134,8 +96,8 @@ export default function RewardsPage({ coins, onRedeem }: RewardsPageProps) {
               {/* Image */}
               <div className="relative h-[180px]">
                 <ImageWithFallback
-                  src={reward.imageUrl}
-                  alt={reward.title}
+                  src={reward.src}
+                  alt={reward.titulo}
                   className="w-full h-full object-cover"
                 />
                 
@@ -147,28 +109,28 @@ export default function RewardsPage({ coins, onRedeem }: RewardsPageProps) {
                 
                 <div className="absolute top-2 right-2 bg-white rounded-[10px] px-3 py-1.5 flex items-center gap-1">
                   <Sprout className="size-4 text-[#00a63e]" />
-                  <span className="text-[16px] text-[#00a63e]">{reward.coins}</span>
+                  <span className="text-[16px] text-[#00a63e]">{reward.preco}</span>
                 </div>
               </div>
 
               {/* Content */}
               <div className="p-6">
-                <h3 className="text-[16px] text-neutral-950 mb-2">{reward.title}</h3>
-                <p className="text-[14px] text-[#717182] mb-4">{reward.description}</p>
+                <h3 className="text-[16px] text-neutral-950 mb-2">{reward.titulo}</h3>
+                <p className="text-[14px] text-[#717182] mb-4">{reward.descricao}</p>
 
                 <div className="flex items-center justify-between mb-2">
-                  <span className={`${getCategoryColor(reward.category)} text-[12px] px-2.5 py-1 rounded-lg`}>
-                    {reward.category}
+                  <span className={`${getCategoryColor(reward.tipo)} text-[12px] px-2.5 py-1 rounded-lg`}>
+                    {reward.tipo}
                   </span>
-                  <span className="text-[14px] text-[#4a5565]">{reward.available} disponíveis</span>
+                  <span className="text-[14px] text-[#4a5565]">{reward.quantidade} disponíveis</span>
                 </div>
 
-                {reward.location && (
-                  <p className="text-[12px] text-[#6a7282] mb-4">{reward.location}</p>
+                {reward.horta && (
+                  <p className="text-[12px] text-[#6a7282] mb-4">{reward.horta}</p>
                 )}
 
                 <button
-                  onClick={() => redeemReward(reward)}
+                  onClick={() => redeemReward(reward.id, 1)}
                   disabled={!canAfford}
                   className={`w-full py-2.5 rounded-lg text-[14px] text-white flex items-center justify-center gap-2 transition-all ${
                     canAfford
