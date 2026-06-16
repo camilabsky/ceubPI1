@@ -84,7 +84,7 @@ export default function RewardsPage({ coins, onRedeem }: RewardsPageProps) {
 
       <div className="space-y-7">
         {rewards.map(reward => {
-          const canAfford = coins >= reward.coins;
+          const canAfford = coins >= reward.preco;
           
           return (
             <div
