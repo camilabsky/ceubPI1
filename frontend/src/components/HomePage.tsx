@@ -29,7 +29,31 @@ interface HomePageProps {
   tasksCompleted: number;
   tasks: Task[];
   onNavigate: (page: 'home' | 'tasks' | 'rewards' | 'profile') => void;
-  onUpdateTasks: (tasks: Task[]) => void;
+}
+async function get_coins(id_perfil: Number){
+  const coins = await fetch("http://localhost:8080/minhas_moedas", {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({id_perfil})
+  })
+  const c = await coins.json()
+  return c.Saldo
+}
+
+async function get_number_of_completed_tasks(id_perfil: Number){
+  const tarefas_concluidas = await fetch("http://localhost:8080/tarefas_concluidas", {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({id_perfil})
+  })
+  const t = await tarefas_concluidas.json()
+  return t[0].Total
 }
 async function get_tasks(id_perfil): Taks[]{
   const tasks = await fetch("http://localhost:8080/minhas_tarefas", {
@@ -43,16 +67,22 @@ async function get_tasks(id_perfil): Taks[]{
   return await tasks.json()
 }
 
-export default function HomePage({ coins, tasksCompleted, tasks, onNavigate, onUpdateTasks }: HomePageProps) {
+export default function HomePage() {
   const [inProgressTasks, setInProgressTasks] = useState([]);
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
   const [completedTaskInfo, setCompletedTaskInfo] = useState({ title: '', coins: 0 });
+  const [coins, setCoins] = useState(0);
+  const [tasksCompleted, setTasksCompleted] = useState(0);
 
   const fetchData = async () => {
     try {
-      const [tasksData] = await Promise.all([get_tasks(1)]);
+      const [tasksData, coinsData, completedData] = await Promise.all([
+        get_tasks(1), get_coins(1), get_number_of_completed_tasks(1)
+      ]);
 
       setInProgressTasks(tasksData);
+      setCoins(coinsData);
+      setTasksCompleted(completedData);
     } catch (error) {
       console.error('Error fetching data:', error);
     }
@@ -218,7 +248,7 @@ export default function HomePage({ coins, tasksCompleted, tasks, onNavigate, onU
                   ) : (
                     <>
                       <Play className="size-4" />
-                      Continuar Tarefa
+                      Concluir Tarefa
                     </>
                   )}
                 </button>

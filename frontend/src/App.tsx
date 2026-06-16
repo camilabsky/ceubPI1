@@ -21,11 +21,6 @@ interface Task {
   progress?: number;
 }
 
-async function get_tasks(): Taks[]{
-  const tasks = await fetch("http://localhost:8080/tarefas_disponiveis")
-  return await tasks.json()
-}
-
 async function get_coins(id_perfil: Number){
   const coins = await fetch("http://localhost:8080/minhas_moedas", {
     method: 'POST',
@@ -55,20 +50,18 @@ async function get_number_of_completed_tasks(id_perfil: Number){
 export default function App() {
   const user_id = 1;
   const [currentPage, setCurrentPage] = useState<Page>('home');
-  const [tasks, setTasks] = useState<Task[]>([]);
+
   const [coins, setCoins] = useState(0);
   const [tasksCompleted, setTasksCompleted] = useState(0);
 
   const fetchData = async () => {
     try {
       console.log("aqui")
-      const [tasksData, coinsData, completedData] = await Promise.all([
-        get_tasks(),
+      const [coinsData, completedData] = await Promise.all([
         get_coins(user_id),
         get_number_of_completed_tasks(user_id)
       ]);
 
-      setTasks(tasksData);
       setCoins(coinsData);
       setTasksCompleted(completedData);
     } catch (error) {
@@ -86,19 +79,10 @@ export default function App() {
       {/* Main Content */}
       <div className="pb-20">
         {currentPage === 'home' && (
-          <HomePage
-            coins={coins}
-            tasksCompleted={tasksCompleted}
-            tasks={tasks}
-            onNavigate={setCurrentPage}
-            onUpdateTasks={setTasks}
-          />
+          <HomePage />
         )}
         {currentPage === 'tasks' && (
-          <TasksPage
-            tasks={tasks}
-            onUpdateTasks={setTasks}
-          />
+          <TasksPage />
         )}
         {currentPage === 'rewards' && (
           <RewardsPage coins={coins} />

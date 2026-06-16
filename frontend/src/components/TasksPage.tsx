@@ -1,6 +1,6 @@
 import { MapPin, Clock, Sprout } from 'lucide-react';
 import { toast } from 'sonner';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -24,25 +24,47 @@ interface Task {
   progress?: number;
 }
 
-interface TasksPageProps {
-  tasks: Task[];
-  onUpdateTasks: (tasks: Task[]) => void;
+async function get_tasks(): Taks[]{
+  const tasks = await fetch("http://localhost:8080/tarefas_disponiveis")
+  return await tasks.json()
 }
 
-function acceptTask(id_tarefa: Number){
-  fetch("http://localhost:8080/aceitar_tarefa", {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({id_tarefa, id_perfil: 1})
-  })
-}
 
-export default function TasksPage({ tasks, onUpdateTasks}: TasksPageProps) {
+export default function TasksPage() {
+  const id_perfil = 1;
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [acceptedTaskTitle, setAcceptedTaskTitle] = useState('');
+  const [tasks, setTasks] = useState([])
+
+  const fetchData = async () => {
+    try {
+      console.log("aqui")
+      const [tasksData] = await Promise.all([get_tasks()]);
+      setTasks(tasksData);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const acceptTask = async (id_tarefa: Number, id_perfil: Number) => {
+    try {
+      await fetch("http://localhost:8080/aceitar_tarefa", {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ id_tarefa, id_perfil })
+      });
+      await fetchData();
+    } catch (error) {
+      console.error('Error completing task:', error);
+    }
+  };
 
   const getDifficultyColor = (difficulty: Number) => {
     const colors = [
@@ -67,8 +89,6 @@ export default function TasksPage({ tasks, onUpdateTasks}: TasksPageProps) {
         return 'bg-gray-200 text-gray-800';
     }
   };
-
-  const availableTasks = tasks;
 
   return (
     <>
@@ -98,13 +118,13 @@ export default function TasksPage({ tasks, onUpdateTasks}: TasksPageProps) {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-[16px] text-neutral-950 px-2 font-bold">Tarefas Disponíveis</h1>
           <div className="bg-white border border-gray-200 rounded-lg px-3 py-1">
-            <span className="text-[12px] text-neutral-950">{availableTasks.length} tarefas</span>
+            <span className="text-[12px] text-neutral-950">{tasks.length} tarefas</span>
           </div>
         </div>
 
       <div className="space-y-5">
         {/* Available Tasks */}
-        {availableTasks.map(task => (
+        {tasks.map(task => (
           <div key={task.id} className="bg-white rounded-[14px] border border-gray-200 p-6">
             <div className="flex items-start justify-between mb-3">
               <h3 className="text-[16px] text-neutral-950 flex-1 pt-[5px] pr-[0px] pb-[0px] pl-[0px]">{task.titulo}</h3>
@@ -138,7 +158,7 @@ export default function TasksPage({ tasks, onUpdateTasks}: TasksPageProps) {
             </div>
 
             <button
-              onClick={() => acceptTask(task.id)}
+              onClick={() => acceptTask(task.id, id_perfil)}
               className="w-full bg-[#00a63e] text-white text-[14px] py-2.5 rounded-lg hover:bg-[#008236] transition-colors text-center"
             >
               Aceitar Tarefa
