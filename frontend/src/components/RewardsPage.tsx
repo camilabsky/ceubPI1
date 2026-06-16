@@ -14,42 +14,61 @@ interface Reward {
   imageUrl: string;
 }
 
-interface RewardsPageProps {
-  coins: number;
-  onRedeem: (amount: number) => boolean;
-}
-
-function redeemReward(id_recompensa, id_perfil ){
-  fetch("http://localhost:8080/resgatar_recompensa", {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({id_recompensa, id_perfil})
-  })
-}
-
 async function get_reward(): Taks[]{
   const tasks = await fetch("http://localhost:8080/recompensas_disponiveis")
   const r = await tasks.json()  
   return r
 }
 
-export default function RewardsPage({ coins, onRedeem }: RewardsPageProps) {
+async function get_coins(id_perfil: Number){
+  const coins = await fetch("http://localhost:8080/minhas_moedas", {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({id_perfil})
+  })
+  const c = await coins.json()
+  return c.Saldo
+}
+
+
+export default function RewardsPage() {
   const [rewards, setRewards] = useState<Reward[]>([]);
+  const [coins, setCoins] = useState(0);
+
+  const fetchData = async () => {
+    try {
+      const [rewardData, coinsData] = await Promise.all([
+        get_reward(),
+        get_coins(1)
+      ]);
+
+      setCoins(coinsData);
+      setRewards(rewardData)
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  };
+
+  const redeemReward = async (id_recompensa: Number, id_perfil: Number) => {
+    try {
+      await fetch("http://localhost:8080/resgatar_recompensa", {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({id_recompensa, id_perfil})
+      });
+      await fetchData();
+    } catch (error) {
+      console.error('Error completing task:', error);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [rewardData] = await Promise.all([get_reward()]);
-
-        setRewards(rewardData)
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      }
-    };
-
     fetchData();
   }, []);
 

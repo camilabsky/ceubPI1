@@ -56,7 +56,6 @@ export default function App() {
 
   const fetchData = async () => {
     try {
-      console.log("aqui")
       const [coinsData, completedData] = await Promise.all([
         get_coins(user_id),
         get_number_of_completed_tasks(user_id)
@@ -85,7 +84,7 @@ export default function App() {
           <TasksPage />
         )}
         {currentPage === 'rewards' && (
-          <RewardsPage coins={coins} />
+          <RewardsPage />
         )}
         {currentPage === 'profile' && (
           <ProfilePage
