@@ -12,7 +12,21 @@ services:
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./db/config.cnf:/etc/mysql/conf.d/custom.cnf
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-P", "3307"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      test: ["CMD-SHELL", "mysql -h localhost -u user -ppassword -D horta -e 'SELECT 1 FROM RecompensasDisponiveis LIMIT 1'"]
+      interval: 60s
+      timeout: 30s
+      retries: 20
+  frontend:
+    build: ./frontend        
+    ports:            
+      - "3000:3000"        
+  backend:
+    build: ./backend        
+    ports:            
+      - "8080:8080"
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+

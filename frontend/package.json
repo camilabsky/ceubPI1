@@ -54,7 +54,7 @@
             "vite": "^6.4.1"
       },
       "scripts": {
-            "dev": "vite",
+            "dev": "vite --no-open",
             "build": "vite build"
       }
 }

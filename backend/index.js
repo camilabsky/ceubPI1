@@ -1,10 +1,10 @@
 var mysql      = require('mysql2');
 var connection = mysql.createConnection({
-  host     : 'localhost',
+  host     : 'db',
   user     : 'user',
   password : 'password',
   database : 'horta',
-  port     : 3307
+  port     : 3306
 });
 
 connection.connect();
