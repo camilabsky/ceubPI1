@@ -111,6 +111,7 @@ FROM Perfil p
 LEFT JOIN (
   SELECT id_perfil, SUM(moedas) AS total_moedas
   FROM Tarefas
+  WHERE concluido
   GROUP BY id_perfil
 ) t ON p.id = t.id_perfil
 LEFT JOIN (
