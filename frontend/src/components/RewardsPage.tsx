@@ -33,7 +33,6 @@ function redeemReward(id_recompensa, id_perfil ){
 async function get_reward(): Taks[]{
   const tasks = await fetch("http://localhost:8080/recompensas_disponiveis")
   const r = await tasks.json()  
-  console.log(r)
   return r
 }
 
@@ -46,7 +45,6 @@ export default function RewardsPage({ coins, onRedeem }: RewardsPageProps) {
         const [rewardData] = await Promise.all([get_reward()]);
 
         setRewards(rewardData)
-        console.log(rewardData)
       } catch (error) {
         console.error('Error fetching data:', error);
       }

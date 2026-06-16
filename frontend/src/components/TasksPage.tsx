@@ -70,7 +70,6 @@ export default function TasksPage({ tasks, onUpdateTasks, onTaskComplete }: Task
   };
 
   const availableTasks = tasks;
-  console.log(tasks)
 
   return (
     <>

@@ -1,25 +1,48 @@
 import { Trophy, Calendar, TrendingUp, Sprout, Award, MapPin, Users, Heart } from 'lucide-react';
+import {useState, useEffect} from 'react'
 
 interface ProfilePageProps {
   coins: number;
   tasksCompleted: number;
 }
 
+async function getMudas(id_perfil: Number){
+  const mudas = await fetch("http://localhost:8080/minhas_mudas", {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({id_perfil})
+  })
+  const c = await mudas.json()
+  console.log(c)
+  return c.Total
+}
+
 export default function ProfilePage({ coins, tasksCompleted }: ProfilePageProps) {
+  const [mudas, setMudas] = useState(0)
   const achievements = [
     { id: 1, name: 'Primeiro Passo', description: 'Complete sua primeira tarefa', icon: '🌱', unlocked: true },
     { id: 2, name: 'Jardineiro Dedicado', description: 'Trabalhe 5 dias seguidos', icon: '🌿', unlocked: true },
     { id: 3, name: 'Mestre das Plantas', description: 'Alcance o nível 10', icon: '🌳', unlocked: false },
     { id: 4, name: 'Coletor de Recompensas', description: 'Resgate 5 recompensas', icon: '🎁', unlocked: false },
   ];
-
-  const stats = [
-    { label: 'Hortas visitadas', value: '3', icon: MapPin, color: 'text-[#00a63e]' },
-    { label: 'Colaboradores conhecidos', value: '12', icon: Users, color: 'text-[#155DFC]' },
-    { label: 'Impacto ambiental', value: '45kg CO₂', icon: Heart, color: 'text-[#fb2c36]' },
-  ];
+  const stats = [ ];
 
   const nextLevelProgress = (tasksCompleted % 10) * 10;
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [mudaData] = await Promise.all([ getMudas(1) ]);
+        setMudas(mudaData);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
+    fetchData();
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16 pb-4">
@@ -41,19 +64,6 @@ export default function ProfilePage({ coins, tasksCompleted }: ProfilePageProps)
               <span className="text-[16px]">{coins}</span>
             </div>
           </div>
-
-          {/* Level Progress */}
-          <div className="mt-6">
-            <div className="w-full bg-white/20 rounded-full h-2 overflow-hidden">
-              <div
-                className="bg-white h-full transition-all duration-500"
-                style={{ width: `${nextLevelProgress}%` }}
-              />
-            </div>
-            <p className="text-[12px] text-white/60 mt-2">
-              {10 - (tasksCompleted % 10)} tarefas até o próximo nível
-            </p>
-          </div>
         </div>
       </div>
 
@@ -66,17 +76,12 @@ export default function ProfilePage({ coins, tasksCompleted }: ProfilePageProps)
             <p className="text-[24px] text-neutral-950 mb-1">{tasksCompleted}</p>
             <p className="text-[11px] text-[#4a5565] text-center">Tarefas Completas</p>
           </div>
-
-          <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
-            <Calendar className="size-6 text-[#155DFC] mb-2" />
-            <p className="text-[11px] text-[#4a5565] text-center">Dias Ativos</p>
-          </div>
-
         </div>
       </div>
 
       {/* Additional Stats */}
       <div className="px-4 mb-6">
+      { stats ??
         <div className="bg-white rounded-[14px] border border-gray-200 p-4 space-y-3">
           {stats.map(stat => (
             <div key={stat.label} className="flex items-center justify-between">
@@ -87,7 +92,7 @@ export default function ProfilePage({ coins, tasksCompleted }: ProfilePageProps)
               <span className="text-[14px] text-[#4a5565]">{stat.value}</span>
             </div>
           ))}
-        </div>
+        </div>}
       </div>
 
       {/* Achievements */}
@@ -124,7 +129,7 @@ export default function ProfilePage({ coins, tasksCompleted }: ProfilePageProps)
         <div className="bg-white rounded-[14px] border border-gray-200 p-6">
           <div className="text-center mb-4">
             <p className="text-[14px] text-[#717182] mb-2">Você ajudou a plantar</p>
-            <p className="text-[32px] text-[#00a63e]">47</p>
+            <p className="text-[32px] text-[#00a63e]">{mudas}</p>
             <p className="text-[14px] text-neutral-950">mudas este mês</p>
           </div>
           

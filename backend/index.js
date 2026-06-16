@@ -50,6 +50,17 @@ function get_minhas_moedas(req, res){
 }
 app.post('/minhas_moedas',  get_minhas_moedas)
 
+function get_minhas_mudas(req, res){
+    const {id_perfil} = req.body
+    connection.query(`
+      SELECT SUM(mudas) AS Total FROM Tarefas WHERE id_perfil=${id_perfil} AND concluido`,
+      (error, results, fields) => {
+          if (error) throw error;
+          res.send(results[0]);
+    });
+}
+app.post('/minhas_mudas',  get_minhas_mudas)
+
 function concluir_tarefas(req, res){
     const {id_tarefa} = req.body
     connection.query(`UPDATE Tarefas SET concluido=true WHERE id=${id_tarefa}`,

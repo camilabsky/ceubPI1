@@ -82,7 +82,6 @@ export default function App() {
         setTasks(tasksData);
         setCoins(coinsData);
         setTasksCompleted(completedData);
-        console.log(tasksData, coinsData, completedData)
       } catch (error) {
         console.error('Error fetching data:', error);
         // Optionally set error state here

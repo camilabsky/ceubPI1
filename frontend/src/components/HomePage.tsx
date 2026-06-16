@@ -60,7 +60,6 @@ export default function HomePage({ coins, tasksCompleted, tasks, onNavigate, onU
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
   const [completedTaskInfo, setCompletedTaskInfo] = useState({ title: '', coins: 0 });
 
-  console.log("coins", coins);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -68,7 +67,6 @@ export default function HomePage({ coins, tasksCompleted, tasks, onNavigate, onU
         const [tasksData] = await Promise.all([get_tasks(1)]);
 
         setInProgressTasks(tasksData);
-        console.log(tasksData)
       } catch (error) {
         console.error('Error fetching data:', error);
       }
