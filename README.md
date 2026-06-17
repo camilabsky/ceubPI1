@@ -351,50 +351,14 @@ id_perfil (FK, PK)     | int | Referência ao Perfil
 id_recompensa (FK, PK) | int | Referência ao Recompensas
 ```
 
-### **Diagrama de Relacionamentos**
+### **Orientação a Eventos**
 
-```
-┌─────────────┐
-│   Perfil    │
-└──────┬──────┘
-       │ 1
-       │ n
-       │
-┌──────┴──────────────────┬────────────────────┐
-│                         │                    │
-│                    (tarefas completadas)  (recompensas resgatadas)
-│                         │                    │
-│              ┌──────────┘                    │
-│              │                               │
-│          (id_perfil)                     (id_perfil)
-│              │                               │
-│              │                               │
-│         ┌────▼────────┐           ┌─────────▼──┐
-│         │   Tarefas   │           │Recompensas │
-│         └────┬────────┘           └─────┬──────┘
-│              │                          │
-│          (id_horta)                 (id_horta)
-│              │                          │
-│              └──────────┬───────────────┘
-│                         │ n
-│                         │ 1
-│                    ┌────▼─────┐
-│                    │  Horta    │
-│                    └───────────┘
-│
-└──────────┬─────────────────┐
-           │                 │
-      (Usuario)         (UsuarioHortaRole)
-           │                 │
-      ┌────▼─────┐       ┌───▼────────┐
-      │ Usuario   │──┬──→│ UsuarioRole│
-      └───────────┘  │   └─────────────┘
-                     │         │
-                     │    (id_horta)
-                     └──────┬──┘
-                            │
-                       (Horta)
-```
+A aplicação segue um modelo **orientado a eventos** no frontend: cada ação do usuário (aceitar tarefa, resgatar recompensa, fazer login) dispara uma atualização de estado no React, que re-renderiza a UI de forma reativa. No backend, as requisições HTTP funcionam como eventos — o servidor reage a cada chamada de forma independente e stateless, mantendo o estado centralizado no banco de dados.
+
+Por exemplo, ao concluir uma tarefa:
+1. O frontend emite um `PUT /tarefas/:id` com `concluido: true`
+2. O backend registra a conclusão e credita as moedas no perfil
+3. O frontend reage ao sucesso atualizando o saldo exibido ao usuário
 
 ### **Soft Deletes**
 
