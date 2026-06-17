@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS Recompensas (
   preco int,
   tipo varchar(32),
   src varchar(256),
+  quantidade_disponivel int default 0,
   id_horta int NULL,
   created_by int NULL,
   updated_at datetime NULL,
@@ -204,6 +205,118 @@ UPDATE Recompensas r
 JOIN Horta h ON h.nome = 'Horta Geral'
 SET r.id_horta = h.id
 WHERE r.id_horta IS NULL;
+
+INSERT INTO Tarefas (
+  titulo, tipo, horta, descricao, dificuldade, moedas, mudas, tempo, id_horta, id_perfil, concluido, created_by
+)
+SELECT
+  'Mutirao: preparo de canteiro central',
+  'Manutenção',
+  h.nome,
+  'Organizar e preparar o canteiro principal para novos plantios',
+  1,
+  140,
+  0,
+  80,
+  h.id,
+  u.id_perfil,
+  true,
+  u.id
+FROM Horta h
+JOIN Usuario u ON u.email = 'admin@horta.local'
+WHERE h.nome = 'Horta Comunitária Centro'
+  AND NOT EXISTS (
+    SELECT 1 FROM Tarefas t
+    WHERE t.titulo = 'Mutirao: preparo de canteiro central' AND t.id_horta = h.id
+  );
+
+INSERT INTO Tarefas (
+  titulo, tipo, horta, descricao, dificuldade, moedas, mudas, tempo, id_horta, id_perfil, concluido, created_by
+)
+SELECT
+  'Reforco de irrigacao do setor A',
+  'Manutenção',
+  h.nome,
+  'Ajustar gotejadores e testar fluxo de agua no setor A',
+  1,
+  115,
+  0,
+  60,
+  h.id,
+  u.id_perfil,
+  true,
+  u.id
+FROM Horta h
+JOIN Usuario u ON u.email = 'admin@horta.local'
+WHERE h.nome = 'Horta Comunitária Centro'
+  AND NOT EXISTS (
+    SELECT 1 FROM Tarefas t
+    WHERE t.titulo = 'Reforco de irrigacao do setor A' AND t.id_horta = h.id
+  );
+
+INSERT INTO Recompensas (
+  nome, descricao, tipo, preco, src, quantidade_disponivel, id_horta, created_by
+)
+SELECT
+  'Kit Sementes da Estacao',
+  'Selecao de sementes para o proximo ciclo da horta comunitaria',
+  'Produto',
+  180,
+  'https://images.unsplash.com/photo-1471193945509-9ad0617afabf?w=400',
+  12,
+  h.id,
+  u.id
+FROM Horta h
+JOIN Usuario u ON u.email = 'admin@horta.local'
+WHERE h.nome = 'Horta Comunitária Centro'
+  AND NOT EXISTS (
+    SELECT 1 FROM Recompensas r
+    WHERE r.nome = 'Kit Sementes da Estacao' AND r.id_horta = h.id
+  );
+
+INSERT INTO Recompensas (
+  nome, descricao, tipo, preco, src, quantidade_disponivel, id_horta, created_by
+)
+SELECT
+  'Oficina de Plantio Urbano',
+  'Vaga em oficina pratica sobre cultivo em pequenos espacos',
+  'Workshop',
+  220,
+  'https://images.unsplash.com/photo-1464226184884-fa280b87c399?w=400',
+  8,
+  h.id,
+  u.id
+FROM Horta h
+JOIN Usuario u ON u.email = 'admin@horta.local'
+WHERE h.nome = 'Horta Comunitária Centro'
+  AND NOT EXISTS (
+    SELECT 1 FROM Recompensas r
+    WHERE r.nome = 'Oficina de Plantio Urbano' AND r.id_horta = h.id
+  );
+
+INSERT INTO PerfilRecompensas (id_perfil, id_recompensa)
+SELECT u.id_perfil, r.id
+FROM Usuario u
+JOIN Recompensas r ON r.nome = 'Kit Sementes da Estacao'
+JOIN Horta h ON h.id = r.id_horta
+WHERE u.email = 'admin@horta.local'
+  AND h.nome = 'Horta Comunitária Centro'
+  AND NOT EXISTS (
+    SELECT 1 FROM PerfilRecompensas pr
+    WHERE pr.id_perfil = u.id_perfil AND pr.id_recompensa = r.id
+  );
+
+INSERT INTO PerfilRecompensas (id_perfil, id_recompensa)
+SELECT u.id_perfil, r.id
+FROM Usuario u
+JOIN Recompensas r ON r.nome = 'Oficina de Plantio Urbano'
+JOIN Horta h ON h.id = r.id_horta
+WHERE u.email = 'admin@horta.local'
+  AND h.nome = 'Horta Comunitária Centro'
+  AND NOT EXISTS (
+    SELECT 1 FROM PerfilRecompensas pr
+    WHERE pr.id_perfil = u.id_perfil AND pr.id_recompensa = r.id
+  );
 
 INSERT INTO
   PerfilRecompensas (id_recompensa)

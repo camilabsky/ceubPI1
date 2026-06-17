@@ -68,7 +68,7 @@ function requireAuth(req, res, next) {
 
 async function requireHortaAdmin(req, res, next) {
     try {
-        const id_horta = Number(req.body.id_horta || req.query.id_horta);
+        const id_horta = Number(req.body?.id_horta || req.query.id_horta);
         if (!Number.isInteger(id_horta) || id_horta <= 0) {
             return res.status(400).send({ error: 'id_horta invalido' });
         }
@@ -392,12 +392,81 @@ app.get('/recompensas_disponiveis', async (req, res) => {
 app.get('/recompensas', requireAuth, async (req, res) => {
     try {
         const [results] = await db.query(
-            'SELECT id, nome, descricao, preco, quantidade_disponivel FROM Recompensas WHERE deleted_at IS NULL ORDER BY id DESC'
+            `SELECT id, nome, descricao, tipo, preco, src, quantidade_disponivel, id_horta
+             FROM Recompensas
+             WHERE deleted_at IS NULL
+             ORDER BY id DESC`
         );
         return res.send(results);
     } catch (error) {
         console.error('Erro em /recompensas:', error);
         return res.status(500).send({ error: 'Erro ao listar recompensas' });
+    }
+});
+
+app.get('/me/historico', requireAuth, async (req, res) => {
+    try {
+        const id_perfil = Number(req.user.id_perfil);
+
+        const [tarefasConcluidas] = await db.query(
+            `SELECT id, titulo, descricao, tipo, horta, moedas, tempo
+             FROM Tarefas
+             WHERE id_perfil = ? AND concluido = true AND deleted_at IS NULL
+             ORDER BY id DESC
+             LIMIT 50`,
+            [id_perfil]
+        );
+
+        const [recompensasResgatadas] = await db.query(
+            `SELECT r.id, r.nome, r.descricao, r.tipo, r.preco, r.src, r.id_horta
+             FROM PerfilRecompensas pr
+             JOIN Recompensas r ON r.id = pr.id_recompensa
+             WHERE pr.id_perfil = ? AND r.deleted_at IS NULL
+             ORDER BY r.id DESC
+             LIMIT 50`,
+            [id_perfil]
+        );
+
+        return res.send({
+            tarefas_concluidas: tarefasConcluidas,
+            recompensas_resgatadas: recompensasResgatadas
+        });
+    } catch (error) {
+        console.error('Erro em /me/historico:', error);
+        return res.status(500).send({ error: 'Erro ao carregar historico do usuario' });
+    }
+});
+
+app.get('/admin/horta/historico', requireAuth, requireHortaAdmin, async (req, res) => {
+    try {
+        const [tarefasConcluidas] = await db.query(
+            `SELECT t.id, t.titulo, t.tipo, t.horta, t.moedas, t.tempo, p.nome AS perfil_nome
+             FROM Tarefas t
+             LEFT JOIN Perfil p ON p.id = t.id_perfil
+             WHERE t.id_horta = ? AND t.concluido = true AND t.deleted_at IS NULL
+             ORDER BY t.id DESC
+             LIMIT 100`,
+            [req.id_horta]
+        );
+
+        const [recompensasResgatadas] = await db.query(
+            `SELECT r.id, r.nome, r.tipo, r.preco, p.nome AS perfil_nome
+             FROM PerfilRecompensas pr
+             JOIN Recompensas r ON r.id = pr.id_recompensa
+             LEFT JOIN Perfil p ON p.id = pr.id_perfil
+             WHERE r.id_horta = ? AND pr.id_perfil IS NOT NULL AND r.deleted_at IS NULL
+             ORDER BY r.id DESC
+             LIMIT 100`,
+            [req.id_horta]
+        );
+
+        return res.send({
+            tarefas_concluidas_horta: tarefasConcluidas,
+            recompensas_resgatadas_horta: recompensasResgatadas
+        });
+    } catch (error) {
+        console.error('Erro em /admin/horta/historico:', error);
+        return res.status(500).send({ error: 'Erro ao carregar historico da horta' });
     }
 });
 
