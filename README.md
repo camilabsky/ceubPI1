@@ -127,3 +127,149 @@ Mais Trabalho → Mais Produção → Mais Produtos → Mais Incentivo → Mais 
 
 
 *Este projeto representa mais que um app - é um movimento para transformar como as cidades produzem alimentos e como as comunidades se organizam para o bem comum.*
+
+---
+
+## 📦 **Tech Stack**
+
+### **Frontend**
+- **React 18+** com TypeScript
+- **Vite** - Build tool e dev server
+- **TailwindCSS** - Estilização
+- **Shadcn/ui** - Componentes UI reutilizáveis
+- **Axios/Fetch API** - Requisições HTTP
+
+### **Backend**
+- **Node.js** com Express.js
+- **JWT (JSON Web Tokens)** - Autenticação
+- **MySQL 8.0** - Banco de dados relacional
+
+### **Infraestrutura**
+- **Docker & Docker Compose** - Containerização
+- **Nginx** (opcional) - Reverse proxy
+
+### **Arquitetura**
+- API RESTful
+- Autenticação baseada em JWT com Bearer tokens
+- Role-based access control (RBAC) para admin/usuário
+- Banco de dados relacional com soft deletes
+- Imagens com fallback SVG para recompensas
+
+---
+
+## 🚀 **Como Rodar o Projeto**
+
+### **Pré-requisitos**
+- Docker e Docker Compose instalados
+- Git para clonar o repositório
+- Um navegador moderno (Chrome, Firefox, Safari, Edge)
+
+### **Instalação e Execução**
+
+1. **Clone o repositório**
+   ```bash
+   git clone <seu-repo-url>
+   cd ceubPI1
+   ```
+
+2. **Inicie os containers com Docker Compose**
+   ```bash
+   docker compose up
+   ```
+   Isso irá:
+   - Criar e popular o banco de dados MySQL
+   - Iniciar o backend Node.js na porta 8080
+   - Iniciar o frontend Vite na porta 3000
+
+3. **Acesse a aplicação**
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8080
+   - Database: localhost:3306
+
+### **Parar os containers**
+   ```bash
+   docker compose down
+   ```
+
+### **Dados de Teste**
+
+A aplicação inclui seed data com usuários de exemplo:
+
+**Usuário Comum:**
+- Email: `user@horta.local`
+- Senha: `senha123`
+
+**Administrador (Gestor de Horta):**
+- Email: `admin@horta.local`
+- Senha: `senha123`
+
+---
+
+## 📁 **Estrutura do Projeto**
+
+```
+ceubPI1/
+├── frontend/              # React app com Vite
+│   ├── src/
+│   │   ├── components/    # Páginas: TasksPage, RewardsPage, ProfilePage
+│   │   ├── App.tsx        # Router principal
+│   │   └── main.tsx       # Entry point
+│   ├── package.json
+│   └── Dockerfile
+│
+├── backend/               # Express API
+│   ├── index.js           # Servidor e endpoints
+│   ├── package.json
+│   └── Dockerfile
+│
+├── db/                    # Database initialization
+│   ├── init.sql           # Schema + seed data
+│   └── config.cnf         # Configuração MySQL
+│
+└── docker-compose.yml     # Orquestração dos containers
+```
+
+---
+
+## 🔌 **Principais Endpoints da API**
+
+### **Autenticação**
+- `POST /auth/login` - Login (retorna JWT token)
+
+### **Tarefas**
+- `GET /tarefas_disponiveis` - Listar tarefas disponíveis
+- `POST /tarefas` (admin) - Criar tarefa
+- `PUT /tarefas/:id` (admin) - Atualizar tarefa
+- `DELETE /tarefas/:id` (admin) - Deletar tarefa
+
+### **Recompensas**
+- `GET /recompensas` - Listar recompensas disponíveis
+- `POST /recompensas` (admin) - Criar recompensa
+- `PUT /recompensas/:id` (admin) - Atualizar recompensa
+- `DELETE /recompensas/:id` (admin) - Deletar recompensa
+
+### **Histórico do Usuário**
+- `GET /me/historico` - Tarefas concluídas e recompensas resgatadas do usuário
+
+### **Histórico da Horta (Admin)**
+- `GET /admin/horta/historico?id_horta=1` - Tarefas concluídas e recompensas resgatadas da horta
+
+---
+
+## 📝 **Funcionalidades**
+
+✅ Autenticação com JWT  
+✅ Gestão de tarefas (CRUD completo)  
+✅ Gestão de recompensas (CRUD completo)  
+✅ Sistema de gamificação com moedas virtuais (HortaCoins)  
+✅ Histórico de tarefas concluídas por usuário  
+✅ Histórico de recompensas resgatadas por usuário  
+✅ Panel administrativo integrado nas abas  
+✅ Histórico de atividades da horta (para admin)  
+✅ Fallback visual para imagens externas bloqueadas  
+
+---
+
+## 👥 **Contribuidores**
+
+Projeto desenvolvido pela turma de Projeto Integrador 1 do curso de ADS
