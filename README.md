@@ -270,6 +270,143 @@ ceubPI1/
 
 ---
 
-## 👥 **Contribuidores**
+## �️ **Estrutura do Banco de Dados**
+
+### **Tabelas Principais**
+
+#### **Perfil**
+Perfis de usuários que acumulam pontos e conquistam recompensas.
+```
+id (PK)           | int          | Auto-increment
+nome              | varchar(64)  | Nome do perfil
+```
+
+#### **Usuario**
+Usuários que fazem login na plataforma.
+```
+id (PK)                   | int          | Auto-increment
+nome                      | varchar(128) | Nome completo
+email (UNIQUE)            | varchar(128) | Email único
+password_hash             | varchar(255) | Hash bcrypt da senha
+ativo                     | boolean      | Status ativo/inativo
+id_perfil (FK)            | int          | Referência ao Perfil
+```
+
+#### **Horta**
+Hortas urbanas cadastradas no sistema.
+```
+id (PK)      | int          | Auto-increment
+nome (UNIQUE)| varchar(128) | Nome da horta
+descricao    | varchar(255) | Descrição da horta
+```
+
+#### **UsuarioHortaRole**
+Relacionamento muitos-para-muitos entre Usuário e Horta com papéis.
+```
+id_usuario (FK, PK) | int         | Referência ao Usuario
+id_horta (FK, PK)   | int         | Referência ao Horta
+papel (PK)          | varchar(16) | ADMIN ou MEMBER
+```
+
+#### **Tarefas**
+Tarefas disponíveis nas hortas que usuários podem completar.
+```
+id (PK)              | int          | Auto-increment
+titulo               | varchar(128) | Título da tarefa
+tipo                 | varchar(32)  | Plantio, Manutenção, Colheita, Compostagem
+descricao            | varchar(128) | Descrição breve
+dificuldade          | int          | Nível de dificuldade
+moedas               | int          | HortaCoins como recompensa
+mudas                | int          | Quantidade de mudas entregues (se houver)
+tempo                | int          | Tempo estimado em minutos
+horta                | varchar(128) | Nome da horta (redundante com id_horta)
+concluido            | boolean      | Status de conclusão
+id_perfil (FK)       | int          | Perfil que completou a tarefa
+id_horta (FK)        | int          | Horta associada
+created_by (FK)      | int          | Usuário que criou a tarefa
+updated_at           | datetime     | Última atualização
+deleted_at           | datetime     | Soft delete timestamp
+```
+
+#### **Recompensas**
+Recompensas que usuários podem resgatar com suas moedas.
+```
+id (PK)                  | int          | Auto-increment
+nome                     | varchar(128) | Nome da recompensa
+descricao                | text         | Descrição detalhada
+tipo                     | varchar(32)  | Produto, Ferramentas, Plantas, Educação, Acessórios, Workshop
+preco                    | int          | Custo em HortaCoins
+src                      | varchar(256) | URL da imagem da recompensa
+quantidade_disponivel    | int          | Unidades disponíveis
+id_horta (FK)            | int          | Horta que oferece a recompensa
+created_by (FK)          | int          | Usuário que criou a recompensa
+updated_at               | datetime     | Última atualização
+deleted_at               | datetime     | Soft delete timestamp
+```
+
+#### **PerfilRecompensas**
+Histórico de recompensas resgatadas por usuários.
+```
+id_perfil (FK, PK)     | int | Referência ao Perfil
+id_recompensa (FK, PK) | int | Referência ao Recompensas
+```
+
+### **Diagrama de Relacionamentos**
+
+```
+┌─────────────┐
+│   Perfil    │
+└──────┬──────┘
+       │ 1
+       │ n
+       │
+┌──────┴──────────────────┬────────────────────┐
+│                         │                    │
+│                    (tarefas completadas)  (recompensas resgatadas)
+│                         │                    │
+│              ┌──────────┘                    │
+│              │                               │
+│          (id_perfil)                     (id_perfil)
+│              │                               │
+│              │                               │
+│         ┌────▼────────┐           ┌─────────▼──┐
+│         │   Tarefas   │           │Recompensas │
+│         └────┬────────┘           └─────┬──────┘
+│              │                          │
+│          (id_horta)                 (id_horta)
+│              │                          │
+│              └──────────┬───────────────┘
+│                         │ n
+│                         │ 1
+│                    ┌────▼─────┐
+│                    │  Horta    │
+│                    └───────────┘
+│
+└──────────┬─────────────────┐
+           │                 │
+      (Usuario)         (UsuarioHortaRole)
+           │                 │
+      ┌────▼─────┐       ┌───▼────────┐
+      │ Usuario   │──┬──→│ UsuarioRole│
+      └───────────┘  │   └─────────────┘
+                     │         │
+                     │    (id_horta)
+                     └──────┬──┘
+                            │
+                       (Horta)
+```
+
+### **Soft Deletes**
+
+Todas as tabelas com dados mestre (`Tarefas` e `Recompensas`) implementam soft deletes via coluna `deleted_at`. Registros nunca são realmente deletados do banco, apenas marcados com timestamp de deleção.
+
+```sql
+-- Exemplo de query com soft delete
+SELECT * FROM Tarefas WHERE deleted_at IS NULL;
+```
+
+---
+
+## �👥 **Contribuidores**
 
 Projeto desenvolvido pela turma de Projeto Integrador 1 do curso de ADS
