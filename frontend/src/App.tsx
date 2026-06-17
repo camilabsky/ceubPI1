@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Home, ListTodo, Gift, User } from 'lucide-react';
+import { Home, ListTodo, Gift, User, Settings } from 'lucide-react';
 import { Toaster } from './components/ui/sonner';
+import { useAuth } from './contexts/AuthContext';
+import LoginPage from './components/LoginPage';
 import HomePage from './components/HomePage';
 import TasksPage from './components/TasksPage';
 import RewardsPage from './components/RewardsPage';
 import ProfilePage from './components/ProfilePage';
+import CreateTaskPage from './components/CreateTaskPage';
+import AdminPanel from './components/AdminPanel';
 
-type Page = 'home' | 'tasks' | 'rewards' | 'profile';
+type Page = 'home' | 'tasks' | 'rewards' | 'profile' | 'create-task';
 
 interface Task {
   id: number;
@@ -48,8 +52,10 @@ async function get_number_of_completed_tasks(id_perfil: Number){
 }
 
 export default function App() {
-  const user_id = 1;
+  const { token, user, isAdmin, isLoading } = useAuth();
+  const user_id = user?.id_perfil || 1;
   const [currentPage, setCurrentPage] = useState<Page>('home');
+  const [showAdmin, setShowAdmin] = useState(false);
 
   const [coins, setCoins] = useState(0);
   const [tasksCompleted, setTasksCompleted] = useState(0);
@@ -69,19 +75,44 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (token) {
+      fetchData();
+    }
+  }, [token]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-[14px] text-[#4a5565]">Carregando...</p>
+      </div>
+    );
+  }
+
+  if (!token) {
+    return <LoginPage />;
+  }
+
+  if (showAdmin && isAdmin) {
+    return (
+      <AdminPanel onBack={() => setShowAdmin(false)} />
+    );
+  }
 
   return (
     <div className="relative min-h-screen bg-gray-50 mx-auto max-w-md">
       <Toaster position="top-center" richColors />
+      {isAdmin && (
+        <div className="fixed top-0 left-0 right-0 bg-[#00a63e] text-white px-4 py-3 text-[12px] text-center max-w-md mx-auto z-50">
+          Modo admin disponivel
+        </div>
+      )}
       {/* Main Content */}
-      <div className="pb-20">
+      <div className={`pb-20 ${isAdmin ? 'pt-10' : ''}`}>
         {currentPage === 'home' && (
           <HomePage />
         )}
         {currentPage === 'tasks' && (
-          <TasksPage />
+          <TasksPage onCreateTask={() => setCurrentPage('create-task')} />
         )}
         {currentPage === 'rewards' && (
           <RewardsPage />
@@ -90,13 +121,20 @@ export default function App() {
           <ProfilePage
             coins={coins}
             tasksCompleted={tasksCompleted}
+            onLogout={() => setCurrentPage('home')}
+          />
+        )}
+        {currentPage === 'create-task' && (
+          <CreateTaskPage
+            onBack={() => setCurrentPage('tasks')}
+            onCreated={() => setCurrentPage('tasks')}
           />
         )}
       </div>
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg max-w-md mx-auto">
-        <div className="flex items-center justify-around h-[70px]">
+        <div className={`flex items-center justify-around h-[70px] ${isAdmin ? 'justify-between' : ''}`}>
           <button
             onClick={() => setCurrentPage('home')}
             className="flex flex-col items-center justify-center gap-1 min-w-[80px]"
@@ -168,6 +206,17 @@ export default function App() {
               Perfil
             </span>
           </button>
+
+          {isAdmin && (
+            <button
+              onClick={() => setShowAdmin(true)}
+              className="flex flex-col items-center justify-center gap-1 min-w-[80px]"
+            >
+              <Settings className="size-6 stroke-[#4a5565]" />
+              <span className="text-[12px] text-[#4a5565]">Admin</span>
+            </button>
+          )}
+
         </div>
         {currentPage === 'home' && (
           <div className="absolute top-[-4px] left-0 h-1 w-1/4 bg-[#00a63e]" />

@@ -1,9 +1,11 @@
-import { Trophy, Calendar, TrendingUp, Sprout, Award, MapPin, Users, Heart } from 'lucide-react';
+import { Trophy, Calendar, TrendingUp, Sprout, Award, MapPin, Users, Heart, LogOut } from 'lucide-react';
 import {useState, useEffect} from 'react'
+import { useAuth } from '../contexts/AuthContext';
 
 interface ProfilePageProps {
   coins: number;
   tasksCompleted: number;
+  onLogout?: () => void;
 }
 
 async function getMudas(id_perfil: Number){
@@ -34,7 +36,8 @@ async function recompensasResgatadas(id_perfil: Number){
   return c.Total
 }
 
-export default function ProfilePage({ coins, tasksCompleted }: ProfilePageProps) {
+export default function ProfilePage({ coins, tasksCompleted, onLogout }: ProfilePageProps) {
+  const { logout } = useAuth();
   const [mudas, setMudas] = useState(0)
   const [resgatou, setResgatou] = useState(false)
   const achievements = [
@@ -137,6 +140,19 @@ export default function ProfilePage({ coins, tasksCompleted }: ProfilePageProps)
       </div>
 
       {/* Community Impact */}
+      <div className="px-4 mb-6">
+        <button
+          onClick={() => {
+            logout();
+            onLogout?.();
+          }}
+          className="w-full bg-white border border-gray-200 rounded-[14px] py-3 px-4 flex items-center justify-center gap-2 text-[#4a5565]"
+        >
+          <LogOut className="size-5" />
+          <span className="text-[14px]">Sair</span>
+        </button>
+      </div>
+
       <div className="px-4 mb-6">
         <h2 className="text-[16px] text-neutral-950 mb-4 px-2">Impacto na Comunidade</h2>
         <div className="bg-white rounded-[14px] border border-gray-200 p-6">

@@ -1,6 +1,6 @@
 services:
   db:
-    image: mysql:8.0
+    build: ./db
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: horta
@@ -10,7 +10,6 @@ services:
       - "3307:3306"
     volumes:
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
-      - ./db/config.cnf:/etc/mysql/conf.d/custom.cnf
     healthcheck:
       test: ["CMD-SHELL", "mysql -h localhost -u user -ppassword -D horta -e 'SELECT 1 FROM RecompensasDisponiveis LIMIT 1'"]
       interval: 60s

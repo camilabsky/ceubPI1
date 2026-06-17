@@ -1,4 +1,4 @@
-import { MapPin, Clock, Sprout } from 'lucide-react';
+import { MapPin, Clock, Sprout, PlusCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import {
@@ -29,8 +29,11 @@ async function get_tasks(): Taks[]{
   return await tasks.json()
 }
 
+interface TasksPageProps {
+  onCreateTask: () => void;
+}
 
-export default function TasksPage() {
+export default function TasksPage({ onCreateTask }: TasksPageProps) {
   const id_perfil = 1;
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [acceptedTaskTitle, setAcceptedTaskTitle] = useState('');
@@ -117,14 +120,28 @@ export default function TasksPage() {
       <div className="min-h-screen bg-gray-50 pt-16 pb-4 px-4">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-[16px] text-neutral-950 px-2 font-bold">Tarefas Disponíveis</h1>
-          <div className="bg-white border border-gray-200 rounded-lg px-3 py-1">
-            <span className="text-[12px] text-neutral-950">{tasks.length} tarefas</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onCreateTask}
+              className="inline-flex items-center gap-1.5 bg-[#00a63e] text-white text-[12px] px-3 py-2 rounded-lg hover:bg-[#008236] transition-colors"
+            >
+              <PlusCircle className="size-4" />
+              Nova tarefa
+            </button>
+            <div className="bg-white border border-gray-200 rounded-lg px-3 py-1">
+              <span className="text-[12px] text-neutral-950">{tasks.length} tarefas</span>
+            </div>
           </div>
         </div>
 
       <div className="space-y-5">
         {/* Available Tasks */}
-        {tasks.map(task => (
+        {tasks.length === 0 ? (
+          <div className="bg-white rounded-[14px] border border-gray-200 p-6 text-center">
+            <p className="text-[16px] text-neutral-950 font-semibold mb-2">Sem tarefas disponiveis</p>
+            <p className="text-[14px] text-[#717182]">Volte mais tarde para ver novas tarefas.</p>
+          </div>
+        ) : tasks.map(task => (
           <div key={task.id} className="bg-white rounded-[14px] border border-gray-200 p-6">
             <div className="flex items-start justify-between mb-3">
               <h3 className="text-[16px] text-neutral-950 flex-1 pt-[5px] pr-[0px] pb-[0px] pl-[0px]">{task.titulo}</h3>

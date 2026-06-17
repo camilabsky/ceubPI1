@@ -2,13 +2,52 @@ CREATE TABLE IF NOT EXISTS Perfil (
   id int AUTO_INCREMENT PRIMARY KEY,
   nome varchar(64)
 );
+
+CREATE TABLE IF NOT EXISTS Horta (
+  id int AUTO_INCREMENT PRIMARY KEY,
+  nome varchar(128) NOT NULL UNIQUE,
+  descricao varchar(255)
+);
+
+CREATE TABLE IF NOT EXISTS Usuario (
+  id int AUTO_INCREMENT PRIMARY KEY,
+  nome varchar(128) NOT NULL,
+  email varchar(128) NOT NULL UNIQUE,
+  password_hash varchar(255) NOT NULL,
+  ativo boolean default true,
+  id_perfil int NULL,
+  CONSTRAINT fk_usuario_perfil
+  FOREIGN KEY (id_perfil)
+  REFERENCES Perfil(id)
+);
+
+CREATE TABLE IF NOT EXISTS UsuarioHortaRole (
+  id_usuario int NOT NULL,
+  id_horta int NOT NULL,
+  papel varchar(16) NOT NULL,
+  PRIMARY KEY (id_usuario, id_horta, papel),
+  CONSTRAINT fk_usuario_horta_role_usuario
+  FOREIGN KEY (id_usuario)
+  REFERENCES Usuario(id),
+  CONSTRAINT fk_usuario_horta_role_horta
+  FOREIGN KEY (id_horta)
+  REFERENCES Horta(id)
+);
+
 CREATE TABLE IF NOT EXISTS Recompensas (
   id int AUTO_INCREMENT PRIMARY KEY,
   nome varchar(128),
   descricao text,
   preco int,
   tipo varchar(32),
-  src varchar(256)
+  src varchar(256),
+  id_horta int NULL,
+  created_by int NULL,
+  updated_at datetime NULL,
+  deleted_at datetime NULL,
+  CONSTRAINT fk_recompensas_horta
+  FOREIGN KEY (id_horta)
+  REFERENCES Horta(id)
 );
 CREATE TABLE IF NOT EXISTS Tarefas (
   id int AUTO_INCREMENT PRIMARY KEY,
@@ -22,9 +61,16 @@ CREATE TABLE IF NOT EXISTS Tarefas (
   moedas int,
   mudas int,
   tempo int,
+  id_horta int NULL,
+  created_by int NULL,
+  updated_at datetime NULL,
+  deleted_at datetime NULL,
   CONSTRAINT fk_perfil_tarefas
   FOREIGN KEY (id_perfil)
-  REFERENCES Perfil(id)
+  REFERENCES Perfil(id),
+  CONSTRAINT fk_tarefas_horta
+  FOREIGN KEY (id_horta)
+  REFERENCES Horta(id)
 );
 CREATE TABLE IF NOT EXISTS PerfilRecompensas (
   id_perfil int,
@@ -36,6 +82,34 @@ CREATE TABLE IF NOT EXISTS PerfilRecompensas (
   FOREIGN KEY (id_recompensa)
   REFERENCES Recompensas(id)
 );
+
+INSERT INTO Usuario (nome, email, password_hash, ativo)
+SELECT 'Admin Horta Centro', 'admin@horta.local', '$2b$10$NqKGljuI.OwtX2ROYQUFN.UJ2mPtLPGeN3/ZyMMty2sYvfVdOnu8S', true
+WHERE NOT EXISTS (
+  SELECT 1 FROM Usuario WHERE email = 'admin@horta.local'
+);
+
+INSERT INTO Usuario (nome, email, password_hash, ativo)
+SELECT 'Usuario Comunidade', 'user@horta.local', '$2b$10$jI/6XvERw7r.Yl5y9xSEeOhXs9oT5PkM7tZSvArB3FLICFs/VTzAS', true
+WHERE NOT EXISTS (
+  SELECT 1 FROM Usuario WHERE email = 'user@horta.local'
+);
+
+INSERT INTO UsuarioHortaRole (id_usuario, id_horta, papel)
+SELECT u.id, h.id, 'ADMIN'
+FROM Usuario u
+JOIN Horta h ON h.nome = 'Horta Comunitaria Centro' OR h.nome = 'Horta Comunitária Centro'
+LEFT JOIN UsuarioHortaRole r ON r.id_usuario = u.id AND r.id_horta = h.id AND r.papel = 'ADMIN'
+WHERE u.email = 'admin@horta.local'
+  AND r.id_usuario IS NULL;
+
+INSERT INTO UsuarioHortaRole (id_usuario, id_horta, papel)
+SELECT u.id, h.id, 'MEMBER'
+FROM Usuario u
+JOIN Horta h ON h.nome = 'Horta Comunitaria Centro' OR h.nome = 'Horta Comunitária Centro'
+LEFT JOIN UsuarioHortaRole r ON r.id_usuario = u.id AND r.id_horta = h.id AND r.papel = 'MEMBER'
+WHERE u.email = 'user@horta.local'
+  AND r.id_usuario IS NULL;
 
 INSERT INTO Tarefas (
   titulo, tipo, horta, descricao, dificuldade, moedas, mudas, tempo
@@ -56,6 +130,27 @@ INSERT INTO Tarefas (
 (
   "Colher vegetais maduros", "colheita", "Horta Orgânica Vila Nova",
   "Fazer a colheita dos vegetais que estão prontos", 0, 100, 0, 45
+), (
+  "Podar ervas medicinais", "Manutenção", "Horta Bairro Esperança",
+  "Realizar poda de alecrim e hortelã para estimular novo crescimento", 1, 90, 0, 50
+), (
+  "Preparar canteiro de cenoura", "Plantio", "Horta Comunitária Centro",
+  "Afofar o solo e marcar linhas para plantio de cenoura", 1, 110, 40, 75
+), (
+  "Instalar cobertura morta", "Manutenção", "Jardim da Praça Verde",
+  "Aplicar cobertura seca para reduzir perda de umidade", 2, 160, 0, 90
+), (
+  "Reforçar compostagem", "compostagem", "Horta Orgânica Vila Nova",
+  "Misturar matéria seca e úmida na composteira principal", 1, 130, 0, 70
+), (
+  "Colher tomates maduros", "colheita", "Horta Bairro Esperança",
+  "Fazer colheita seletiva de tomates maduros para distribuição", 0, 95, 0, 40
+), (
+  "Plantar mudas de couve", "Plantio", "Horta Comunitária Centro",
+  "Plantar 15 mudas de couve no canteiro lateral", 1, 125, 15, 80
+), (
+  "Revisar irrigação por gotejamento", "Manutenção", "Horta Orgânica Vila Nova",
+  "Checar vazamentos e ajustar fluxo dos gotejadores", 2, 170, 0, 95
 );
 
 INSERT INTO Recompensas (
@@ -81,6 +176,34 @@ INSERT INTO Recompensas (
 );
 
 INSERT INTO Perfil (nome) VALUES ("Maria Silva");
+
+UPDATE Usuario
+SET id_perfil = 1
+WHERE id_perfil IS NULL;
+
+INSERT INTO Horta (nome, descricao)
+SELECT x.horta, 'Horta cadastrada automaticamente pelo seed'
+FROM (
+  SELECT DISTINCT horta FROM Tarefas WHERE horta IS NOT NULL
+) AS x
+LEFT JOIN Horta h ON h.nome = x.horta
+WHERE h.id IS NULL;
+
+INSERT INTO Horta (nome, descricao)
+SELECT 'Horta Geral', 'Horta padrao para recompensas sem horta especifica'
+WHERE NOT EXISTS (
+  SELECT 1 FROM Horta WHERE nome = 'Horta Geral'
+);
+
+UPDATE Tarefas t
+JOIN Horta h ON h.nome = t.horta
+SET t.id_horta = h.id
+WHERE t.id_horta IS NULL;
+
+UPDATE Recompensas r
+JOIN Horta h ON h.nome = 'Horta Geral'
+SET r.id_horta = h.id
+WHERE r.id_horta IS NULL;
 
 INSERT INTO
   PerfilRecompensas (id_recompensa)
