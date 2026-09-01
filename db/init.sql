@@ -96,21 +96,6 @@ WHERE NOT EXISTS (
   SELECT 1 FROM Usuario WHERE email = 'user@horta.local'
 );
 
-INSERT INTO UsuarioHortaRole (id_usuario, id_horta, papel)
-SELECT u.id, h.id, 'ADMIN'
-FROM Usuario u
-JOIN Horta h ON h.nome = 'Horta Comunitaria Centro' OR h.nome = 'Horta Comunitária Centro'
-LEFT JOIN UsuarioHortaRole r ON r.id_usuario = u.id AND r.id_horta = h.id AND r.papel = 'ADMIN'
-WHERE u.email = 'admin@horta.local'
-  AND r.id_usuario IS NULL;
-
-INSERT INTO UsuarioHortaRole (id_usuario, id_horta, papel)
-SELECT u.id, h.id, 'MEMBER'
-FROM Usuario u
-JOIN Horta h ON h.nome = 'Horta Comunitaria Centro' OR h.nome = 'Horta Comunitária Centro'
-LEFT JOIN UsuarioHortaRole r ON r.id_usuario = u.id AND r.id_horta = h.id AND r.papel = 'MEMBER'
-WHERE u.email = 'user@horta.local'
-  AND r.id_usuario IS NULL;
 
 INSERT INTO Tarefas (
   titulo, tipo, horta, descricao, dificuldade, moedas, mudas, tempo
@@ -196,6 +181,22 @@ WHERE NOT EXISTS (
   SELECT 1 FROM Horta WHERE nome = 'Horta Geral'
 );
 
+INSERT INTO UsuarioHortaRole (id_usuario, id_horta, papel)
+SELECT u.id, h.id, 'ADMIN'
+FROM Usuario u
+JOIN Horta h ON h.nome = 'Horta Comunitaria Centro' OR h.nome = 'Horta Comunitária Centro'
+LEFT JOIN UsuarioHortaRole r ON r.id_usuario = u.id AND r.id_horta = h.id AND r.papel = 'ADMIN'
+WHERE u.email = 'admin@horta.local'
+  AND r.id_usuario IS NULL;
+
+INSERT INTO UsuarioHortaRole (id_usuario, id_horta, papel)
+SELECT u.id, h.id, 'MEMBER'
+FROM Usuario u
+JOIN Horta h ON h.nome = 'Horta Comunitaria Centro' OR h.nome = 'Horta Comunitária Centro'
+LEFT JOIN UsuarioHortaRole r ON r.id_usuario = u.id AND r.id_horta = h.id AND r.papel = 'MEMBER'
+WHERE u.email = 'user@horta.local'
+  AND r.id_usuario IS NULL;
+  
 UPDATE Tarefas t
 JOIN Horta h ON h.nome = t.horta
 SET t.id_horta = h.id

@@ -70,7 +70,10 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
   const loadTarefas = async () => {
     setLoadingTarefas(true);
     try {
-      const res = await fetch(`http://localhost:8080/tarefas_disponiveis`, {
+      const loadTarefas = async () => {
+    setLoadingTarefas(true);
+    try {
+      const res = await fetch(`http://localhost:8080/admin/tarefas?id_horta=${id_horta}`, {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${token}` }
       });
