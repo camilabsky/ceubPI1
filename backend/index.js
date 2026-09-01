@@ -1,3 +1,4 @@
+require('dotenv').config();
 const mysql = require('mysql2');
 const express = require('express');
 const cors = require('cors');
@@ -5,7 +6,10 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET nao definido no .env');
+}
 
 const pool = mysql.createPool({
     host: 'db',
@@ -132,6 +136,85 @@ app.post('/auth/login', async (req, res) => {
     }
 });
 
+app.post('/auth/register', async (req, res) => {
+    const { nome, email, senha, id_horta, nome_nova_horta } = req.body;
+
+    if (!nome || !email || !senha) {
+        return res.status(400).send({ error: 'Nome, email e senha sao obrigatorios' });
+    }
+    if (!id_horta && !nome_nova_horta) {
+        return res.status(400).send({ error: 'Informe id_horta (horta existente) ou nome_nova_horta (horta nova)' });
+    }
+    if (id_horta && nome_nova_horta) {
+        return res.status(400).send({ error: 'Informe apenas id_horta OU nome_nova_horta, nao os dois' });
+    }
+
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const senhaHash = await bcrypt.hash(senha, 10);
+
+        const [existing] = await connection.query('SELECT id FROM Usuario WHERE email = ? LIMIT 1', [email]);
+        if (existing.length > 0) {
+            await connection.rollback();
+            return res.status(409).send({ error: 'Ja existe um usuario com este email' });
+        }
+
+        const [userResult] = await connection.query(
+            'INSERT INTO Usuario (nome, email, password_hash) VALUES (?, ?, ?)',
+            [nome, email, senhaHash]
+        );
+        const id_usuario = userResult.insertId;
+
+        let idHortaFinal = id_horta;
+        let papel = 'MEMBER';
+
+        if (nome_nova_horta) {
+            const [hortaResult] = await connection.query(
+                'INSERT INTO Horta (nome) VALUES (?)',
+                [nome_nova_horta]
+            );
+            idHortaFinal = hortaResult.insertId;
+            papel = 'ADMIN';
+        } else {
+            const [hortaRows] = await connection.query('SELECT id FROM Horta WHERE id = ? LIMIT 1', [id_horta]);
+            if (hortaRows.length === 0) {
+                await connection.rollback();
+                return res.status(404).send({ error: 'Horta nao encontrada' });
+            }
+        }
+
+        await connection.query(
+            'INSERT INTO UsuarioHortaRole (id_usuario, id_horta, papel) VALUES (?, ?, ?)',
+            [id_usuario, idHortaFinal, papel]
+        );
+
+        await connection.commit();
+
+        const roles = await getUserRoles(id_usuario);
+        const token = jwt.sign(
+            { id: id_usuario, email, nome, id_perfil: null },
+            JWT_SECRET,
+            { expiresIn: '8h' }
+        );
+
+        return res.status(201).send({
+            token,
+            user: { id: id_usuario, nome, email, id_perfil: null, roles }
+        });
+    } catch (error) {
+        await connection.rollback();
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(409).send({ error: 'Nome de horta ou email ja cadastrado' });
+        }
+        console.error('Erro em /auth/register:', error);
+        return res.status(500).send({ error: 'Erro ao cadastrar usuario' });
+    } finally {
+        connection.release();
+    }
+});
+
 app.get('/auth/me', requireAuth, async (req, res) => {
     try {
         const [users] = await db.query(
@@ -151,9 +234,9 @@ app.get('/auth/me', requireAuth, async (req, res) => {
     }
 });
 
-app.post('/minhas_tarefas', async (req, res) => {
+app.post('/minhas_tarefas', requireAuth, async (req, res) => {
     try {
-        const id_perfil = Number(req.body.id_perfil);
+        const id_perfil = Number(req.user.id_perfil);
         const [results] = await db.query(
             'SELECT * FROM Tarefas WHERE id_perfil = ? AND NOT concluido AND deleted_at IS NULL',
             [id_perfil]
@@ -165,9 +248,9 @@ app.post('/minhas_tarefas', async (req, res) => {
     }
 });
 
-app.post('/tarefas_concluidas', async (req, res) => {
+app.post('/tarefas_concluidas', requireAuth, async (req, res) => {
     try {
-        const id_perfil = Number(req.body.id_perfil);
+        const id_perfil = Number(req.user.id_perfil);
         const [results] = await db.query(
             'SELECT count(*) as Total FROM Tarefas WHERE id_perfil = ? AND concluido AND deleted_at IS NULL',
             [id_perfil]
@@ -179,9 +262,9 @@ app.post('/tarefas_concluidas', async (req, res) => {
     }
 });
 
-app.post('/minhas_moedas', async (req, res) => {
+app.post('/minhas_moedas', requireAuth, async (req, res) => {
     try {
-        const id_perfil = Number(req.body.id_perfil);
+        const id_perfil = Number(req.user.id_perfil);
         const [results] = await db.query('SELECT Saldo FROM SaldoPerfil WHERE id_perfil = ?', [id_perfil]);
         return res.send(results[0] || { Saldo: 0 });
     } catch (error) {
@@ -190,9 +273,9 @@ app.post('/minhas_moedas', async (req, res) => {
     }
 });
 
-app.post('/minhas_mudas', async (req, res) => {
+app.post('/minhas_mudas', requireAuth, async (req, res) => {
     try {
-        const id_perfil = Number(req.body.id_perfil);
+        const id_perfil = Number(req.user.id_perfil);
         const [results] = await db.query(
             'SELECT SUM(mudas) AS Total FROM Tarefas WHERE id_perfil = ? AND concluido AND deleted_at IS NULL',
             [id_perfil]
@@ -204,9 +287,9 @@ app.post('/minhas_mudas', async (req, res) => {
     }
 });
 
-app.post('/minhas_recompensas', async (req, res) => {
+app.post('/minhas_recompensas', requireAuth, async (req, res) => {
     try {
-        const id_perfil = Number(req.body.id_perfil);
+        const id_perfil = Number(req.user.id_perfil);
         const [results] = await db.query(
             'SELECT COUNT(*) as Total FROM PerfilRecompensas WHERE id_perfil = ?',
             [id_perfil]
@@ -218,10 +301,16 @@ app.post('/minhas_recompensas', async (req, res) => {
     }
 });
 
-app.post('/concluir_tarefa', async (req, res) => {
+app.post('/concluir_tarefa', requireAuth, async (req, res) => {
     try {
         const id_tarefa = Number(req.body.id_tarefa);
-        const [results] = await db.query('UPDATE Tarefas SET concluido = true WHERE id = ?', [id_tarefa]);
+        const [results] = await db.query(
+            'UPDATE Tarefas SET concluido = true WHERE id = ? AND id_perfil = ?',
+            [id_tarefa, req.user.id_perfil]
+        );
+        if (results.affectedRows === 0) {
+            return res.status(403).send({ error: 'Tarefa nao pertence a este usuario ou nao existe' });
+        }
         return res.send(results);
     } catch (error) {
         console.error('Erro em /concluir_tarefa:', error);
@@ -239,11 +328,39 @@ app.get('/tarefas_disponiveis', async (req, res) => {
     }
 });
 
-app.post('/aceitar_tarefa', async (req, res) => {
+app.get('/hortas', async (req, res) => {
+    try {
+        const [results] = await db.query('SELECT id, nome FROM Horta ORDER BY nome ASC');
+        return res.send(results);
+    } catch (error) {
+        console.error('Erro em /hortas:', error);
+        return res.status(500).send({ error: 'Erro ao listar hortas' });
+    }
+});
+
+app.get('/admin/tarefas', requireAuth, requireHortaAdmin, async (req, res) => {
+    try {
+        const [results] = await db.query(
+            'SELECT * FROM Tarefas WHERE id_horta = ? AND deleted_at IS NULL ORDER BY id DESC',
+            [req.id_horta]
+        );
+        return res.send(results);
+    } catch (error) {
+        console.error('Erro em GET /admin/tarefas:', error);
+        return res.status(500).send({ error: 'Erro ao listar tarefas da horta' });
+    }
+});
+
+app.post('/aceitar_tarefa', requireAuth, async (req, res) => {
     try {
         const id_tarefa = Number(req.body.id_tarefa);
-        const id_perfil = Number(req.body.id_perfil);
-        const [results] = await db.query('UPDATE Tarefas SET id_perfil = ? WHERE id = ?', [id_perfil, id_tarefa]);
+        const [results] = await db.query(
+            'UPDATE Tarefas SET id_perfil = ? WHERE id = ? AND id_perfil IS NULL',
+            [req.user.id_perfil, id_tarefa]
+        );
+        if (results.affectedRows === 0) {
+            return res.status(409).send({ error: 'Tarefa ja foi aceita por outra pessoa' });
+        }
         return res.send(results);
     } catch (error) {
         console.error('Erro em /aceitar_tarefa:', error);

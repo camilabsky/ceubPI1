@@ -7,6 +7,7 @@ import HomePage from './components/HomePage';
 import TasksPage from './components/TasksPage';
 import RewardsPage from './components/RewardsPage';
 import ProfilePage from './components/ProfilePage';
+import RegisterPage from './components/RegisterPage';
 
 type Page = 'home' | 'tasks' | 'rewards' | 'profile';
 
@@ -51,6 +52,7 @@ async function get_number_of_completed_tasks(id_perfil: Number){
 
 export default function App() {
   const { token, user, isAdmin, isLoading } = useAuth();
+  const [authView, setAuthView] = useState<'login' | 'register'>('login');
   const user_id = user?.id_perfil || 1;
   const [currentPage, setCurrentPage] = useState<Page>('home');
 
@@ -85,8 +87,10 @@ export default function App() {
     );
   }
 
-  if (!token) {
-    return <LoginPage />;
+    if (!token) {
+    return authView === 'login'
+      ? <LoginPage onSwitchToRegister={() => setAuthView('register')} />
+      : <RegisterPage onSwitchToLogin={() => setAuthView('login')} />;
   }
 
   return (

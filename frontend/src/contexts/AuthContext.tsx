@@ -20,6 +20,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isLoading: boolean;
   login: (email: string, senha: string) => Promise<void>;
+  register: (nome: string, email: string, senha: string, opts: { id_horta?: number; nome_nova_horta?: string }) => Promise<void>;
   logout: () => void;
 }
 
@@ -80,6 +81,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+    const register = async (
+    nome: string,
+    email: string,
+    senha: string,
+    opts: { id_horta?: number; nome_nova_horta?: string }
+  ) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('http://localhost:8080/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome, email, senha, ...opts })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Registro falhou');
+      }
+      const data = await res.json();
+      setToken(data.token);
+      setUser(data.user);
+      localStorage.setItem('token', data.token);
+    } catch (error) {
+      console.error('Erro no registro:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -87,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ token, user, isAdmin, isLoading, login, logout }}>
+        <AuthContext.Provider value={{ token, user, isAdmin, isLoading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

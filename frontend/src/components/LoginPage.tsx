@@ -3,7 +3,11 @@ import { LogIn, Sprout } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 
-export default function LoginPage() {
+interface LoginPageProps {
+  onSwitchToRegister: () => void;
+}
+
+export default function LoginPage({ onSwitchToRegister }: LoginPageProps) {
   const { login, isLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -71,6 +75,14 @@ export default function LoginPage() {
             {isLoading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
+
+         <button
+          type="button"
+          onClick={onSwitchToRegister}
+          className="w-full text-center text-[13px] text-[#00a63e] mt-4 hover:underline"
+        >
+          Criar conta
+        </button>
 
         <div className="mt-6 pt-6 border-t border-gray-200">
           <p className="text-[12px] text-[#717182] text-center mb-3">Dados de teste:</p>
