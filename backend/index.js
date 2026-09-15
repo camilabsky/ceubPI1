@@ -23,7 +23,7 @@ const pool = mysql.createPool({
 const db = pool.promise();
 
 app.use(cors({
-    origin: ['http://localhost:3000', 'http://0.0.0.0:3000']
+    origin: ['http://localhost:3000', 'http://0.0.0.0:3000', 'http://localhost:3001']
 }));
 
 app.use(express.urlencoded({ extended: true }));
@@ -338,16 +338,20 @@ app.get('/hortas', async (req, res) => {
     }
 });
 
-app.get('/admin/tarefas', requireAuth, requireHortaAdmin, async (req, res) => {
+app.get('/admin/tarefas', requireAuth, async (req, res) => {
     try {
         const [results] = await db.query(
-            'SELECT * FROM Tarefas WHERE id_horta = ? AND deleted_at IS NULL ORDER BY id DESC',
-            [req.id_horta]
+            `SELECT t.*
+             FROM Tarefas t
+             JOIN UsuarioHortaRole uhr ON uhr.id_horta = t.id_horta AND uhr.papel = 'ADMIN'
+             WHERE uhr.id_usuario = ? AND t.deleted_at IS NULL
+             ORDER BY t.id DESC`,
+            [req.user.id]
         );
         return res.send(results);
     } catch (error) {
         console.error('Erro em GET /admin/tarefas:', error);
-        return res.status(500).send({ error: 'Erro ao listar tarefas da horta' });
+        return res.status(500).send({ error: 'Erro ao listar tarefas administrativas' });
     }
 });
 
@@ -587,18 +591,55 @@ app.get('/admin/horta/historico', requireAuth, requireHortaAdmin, async (req, re
     }
 });
 
-app.post('/resgatar_recompensa', async (req, res) => {
+app.post('/resgatar_recompensa', requireAuth, async (req, res) => {
+    const conn = await db.getConnection();
     try {
+        const id_perfil = req.user.id_perfil;
         const id_recompensa = Number(req.body.id_recompensa);
-        const id_perfil = Number(req.body.id_perfil);
-        const [results] = await db.query(
+
+        if (!Number.isInteger(id_recompensa) || id_recompensa <= 0) {
+            return res.status(400).send({ error: 'id_recompensa invalido' });
+        }
+
+        await conn.beginTransaction();
+
+        const [recompensas] = await conn.query(
+            'SELECT preco FROM Recompensas WHERE id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
+            [id_recompensa]
+        );
+        if (recompensas.length === 0 || recompensas[0].preco === null) {
+            await conn.rollback();
+            return res.status(404).send({ error: 'Recompensa nao encontrada ou invalida' });
+        }
+        const preco = recompensas[0].preco;
+
+        const [saldos] = await conn.query(
+            'SELECT Saldo FROM SaldoPerfil WHERE id_perfil = ?',
+            [id_perfil]
+        );
+        const saldo = saldos.length > 0 ? saldos[0].Saldo : 0;
+        if (saldo < preco) {
+            await conn.rollback();
+            return res.status(402).send({ error: 'Saldo insuficiente' });
+        }
+
+        const [results] = await conn.query(
             'UPDATE PerfilRecompensas SET id_perfil = ? WHERE id_perfil IS NULL AND id_recompensa = ? LIMIT 1',
             [id_perfil, id_recompensa]
         );
-        return res.send(results);
+        if (results.affectedRows === 0) {
+            await conn.rollback();
+            return res.status(409).send({ error: 'Sem estoque disponivel' });
+        }
+
+        await conn.commit();
+        return res.send({ ok: true, saldo_restante: saldo - preco });
     } catch (error) {
+        await conn.rollback();
         console.error('Erro em /resgatar_recompensa:', error);
         return res.status(500).send({ error: 'Erro ao resgatar recompensa' });
+    } finally {
+        conn.release();
     }
 });
 
