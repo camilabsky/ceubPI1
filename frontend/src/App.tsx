@@ -9,6 +9,7 @@ import TasksPage from './components/TasksPage';
 import RewardsPage from './components/RewardsPage';
 import ProfilePage from './components/ProfilePage';
 import RegisterPage from './components/RegisterPage';
+import AdminProfilePage from './components/AdminProfilePage';
 
 type Page = 'home' | 'tasks' | 'rewards' | 'profile';
 
@@ -25,46 +26,50 @@ interface Task {
   progress?: number;
 }
 
-async function get_coins(id_perfil: Number){
+async function get_coins(id_perfil: Number, token: string){
   const coins = await fetch("http://localhost:8080/minhas_moedas", {
     method: 'POST',
     headers: {
       'Accept': 'application/json',
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
     },
     body: JSON.stringify({id_perfil})
   })
+  if (!coins.ok) throw new Error('Falha ao buscar moedas');
   const c = await coins.json()
   return c.Saldo
 }
 
-async function get_number_of_completed_tasks(id_perfil: Number){
+async function get_number_of_completed_tasks(id_perfil: Number, token: string){
   const tarefas_concluidas = await fetch("http://localhost:8080/tarefas_concluidas", {
     method: 'POST',
     headers: {
       'Accept': 'application/json',
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
     },
     body: JSON.stringify({id_perfil})
   })
+  if (!tarefas_concluidas.ok) throw new Error('Falha ao buscar tarefas concluidas');
   const t = await tarefas_concluidas.json()
-  return t[0].Total
+  return t[0]?.Total ?? 0
 }
 
 export default function App() {
   const { token, user, isAdmin, isLoading } = useAuth();
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
-  const user_id = user?.id_perfil || 1;
   const [currentPage, setCurrentPage] = useState<Page>('home');
 
   const [coins, setCoins] = useState(0);
   const [tasksCompleted, setTasksCompleted] = useState(0);
 
   const fetchData = async () => {
+    if (!user?.id_perfil) return;
     try {
       const [coinsData, completedData] = await Promise.all([
-        get_coins(user_id),
-        get_number_of_completed_tasks(user_id)
+        get_coins(user.id_perfil, token!),
+        get_number_of_completed_tasks(user.id_perfil, token!)
       ]);
 
       setCoins(coinsData);
@@ -75,10 +80,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (token) {
-      fetchData();
-    }
-  }, [token]);
+  if (token) {
+    fetchData();
+  }
+}, [token, user?.id_perfil]);
 
   if (isLoading) {
     return (
@@ -116,11 +121,13 @@ export default function App() {
           <RewardsPage />
         )}
         {currentPage === 'profile' && (
-          <ProfilePage
-            coins={coins}
-            tasksCompleted={tasksCompleted}
-            onLogout={() => setCurrentPage('home')}
-          />
+          isAdmin
+            ? <AdminProfilePage onLogout={() => setCurrentPage('home')} />
+            : <ProfilePage
+                coins={coins}
+                tasksCompleted={tasksCompleted}
+                onLogout={() => setCurrentPage('home')}
+              />
         )}
       </div>
 
