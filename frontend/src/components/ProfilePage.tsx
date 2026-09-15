@@ -41,8 +41,6 @@ async function getMudas(idPerfil: number) {
 
 export default function ProfilePage({ coins, tasksCompleted, onLogout }: ProfilePageProps) {
   const { logout, token, user } = useAuth();
-  const idPerfil = user?.id_perfil || 1;
-
   const [mudas, setMudas] = useState(0);
   const [resgatou, setResgatou] = useState(false);
   const [tarefasConcluidas, setTarefasConcluidas] = useState<TaskDone[]>([]);
@@ -50,42 +48,46 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout }: Profile
 
   const achievements = [
     { id: 1, name: 'Primeiro Passo', description: 'Complete sua primeira tarefa', icon: '🌱', unlocked: tasksCompleted > 0 },
-    { id: 2, name: 'Jardineiro Dedicado', description: 'Trabalhe 5 dias seguidos', icon: '🌿', unlocked: tasksCompleted >= 5 },
+    { id: 2, name: 'Jardineiro Dedicado', description: 'Complete 5 tarefas', icon: '🌿', unlocked: tasksCompleted >= 5 },
     { id: 3, name: 'Coletor de Recompensas', description: 'Resgate 5 recompensas', icon: '🎁', unlocked: resgatou },
   ];
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const mudasData = await getMudas(idPerfil);
+  const fetchData = async () => {
+    try {
+      if (!user?.id_perfil) {
+        setMudas(0);
+      } else {
+        const mudasData = await getMudas(user.id_perfil);
         setMudas(mudasData);
-
-        if (!token) {
-          setTarefasConcluidas([]);
-          setRecompensasResgatadas([]);
-          setResgatou(false);
-          return;
-        }
-
-        const response = await fetch('http://localhost:8080/me/historico', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) throw new Error('Falha ao carregar historico');
-
-        const data = await response.json();
-        const tarefas = data.tarefas_concluidas || [];
-        const recompensas = data.recompensas_resgatadas || [];
-
-        setTarefasConcluidas(tarefas);
-        setRecompensasResgatadas(recompensas);
-        setResgatou(recompensas.length >= 5);
-      } catch (error) {
-        console.error('Error fetching profile data:', error);
       }
-    };
 
-    fetchData();
-  }, [idPerfil, token]);
+      if (!token) {
+        setTarefasConcluidas([]);
+        setRecompensasResgatadas([]);
+        setResgatou(false);
+        return;
+      }
+
+      const response = await fetch('http://localhost:8080/me/historico', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error('Falha ao carregar historico');
+
+      const data = await response.json();
+      const tarefas = data.tarefas_concluidas || [];
+      const recompensas = data.recompensas_resgatadas || [];
+
+      setTarefasConcluidas(tarefas);
+      setRecompensasResgatadas(recompensas);
+      setResgatou(recompensas.length >= 5);
+    } catch (error) {
+      console.error('Error fetching profile data:', error);
+    }
+  };
+
+  fetchData();
+}, [user?.id_perfil, token]);
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16 pb-4">
