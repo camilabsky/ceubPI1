@@ -60,7 +60,13 @@ export default function TasksPage() {
   const fetchData = async () => {
     setIsLoadingTasks(true);
     try {
-      const tasksResponse = await fetch('http://localhost:8080/tarefas_disponiveis');
+      const tasksUrl = isAdmin && token
+        ? 'http://localhost:8080/admin/tarefas'
+        : 'http://localhost:8080/tarefas_disponiveis';
+      const tasksResponse = await fetch(
+        tasksUrl,
+        isAdmin && token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      );
       if (!tasksResponse.ok) {
         throw new Error('Falha ao carregar tarefas');
       }
@@ -94,16 +100,30 @@ export default function TasksPage() {
     fetchData();
   }, [isAdmin, token, idHorta]);
 
-  const acceptTask = async (idTarefa: number, idPerfilAtual: number) => {
+  const acceptTask = async (idTarefa: number) => {
+    if (!token) {
+      toast.error('Sessão expirada, faça login novamente');
+      return;
+    }
     try {
-      await fetch('http://localhost:8080/aceitar_tarefa', {
+      const response = await fetch('http://localhost:8080/aceitar_tarefa', {
         method: 'POST',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ id_tarefa: idTarefa, id_perfil: idPerfilAtual }),
+        body: JSON.stringify({ id_tarefa: idTarefa }),
       });
+
+      if (response.status === 409) {
+        toast.error('Essa tarefa já foi aceita por outra pessoa');
+        await fetchData();
+        return;
+      }
+      if (!response.ok) {
+        throw new Error('Falha ao aceitar tarefa');
+      }
 
       const accepted = tasks.find((task) => task.id === idTarefa);
       setAcceptedTaskTitle(accepted?.titulo || 'Tarefa');
@@ -114,7 +134,6 @@ export default function TasksPage() {
       toast.error('Erro ao aceitar tarefa');
     }
   };
-
   const resetTaskForm = () => {
     setEditingId(null);
     setFormData({
@@ -447,7 +466,7 @@ export default function TasksPage() {
                 </div>
 
                 <button
-                  onClick={() => acceptTask(task.id, idPerfil)}
+                  onClick={() => acceptTask(task.id)}
                   className="w-full bg-[#00a63e] text-white text-[14px] py-2.5 rounded-lg hover:bg-[#008236] transition-colors text-center"
                 >
                   Aceitar Tarefa

@@ -57,14 +57,17 @@ export default function RewardsPage() {
     quantidade_disponivel: 10,
   });
 
-  const fetchCoins = async (idPerfilAtual: number) => {
+  const fetchCoins = async () => {
+    if (!token) {
+      throw new Error('Sessão expirada');
+    }
+
     const response = await fetch('http://localhost:8080/minhas_moedas', {
       method: 'POST',
       headers: {
         Accept: 'application/json',
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ id_perfil: idPerfilAtual }),
     });
 
     if (!response.ok) {
@@ -95,7 +98,7 @@ export default function RewardsPage() {
   const fetchData = async () => {
     setIsLoadingRewards(true);
     try {
-      const [rewardData, coinsData] = await Promise.all([fetchRewards(), fetchCoins(idPerfil)]);
+      const [rewardData, coinsData] = await Promise.all([fetchRewards(), fetchCoins()]);
       setCoins(coinsData);
       setRewards(rewardData);
 
@@ -126,16 +129,31 @@ export default function RewardsPage() {
     fetchData();
   }, [isAdmin, token, idHorta]);
 
-  const redeemReward = async (idRecompensa: number, idPerfilAtual: number) => {
+  const redeemReward = async (idRecompensa: number) => {
+    if (!token) {
+      toast.error('Sessão expirada, faça login novamente');
+      return;
+    }
     try {
-      await fetch('http://localhost:8080/resgatar_recompensa', {
+      const response = await fetch('http://localhost:8080/resgatar_recompensa', {
         method: 'POST',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ id_recompensa: idRecompensa, id_perfil: idPerfilAtual }),
+        body: JSON.stringify({ id_recompensa: idRecompensa }),
       });
+
+      if (response.status === 409) {
+        toast.error('Recompensa indisponível');
+        await fetchData();
+        return;
+      }
+      if (!response.ok) {
+        throw new Error('Falha ao resgatar recompensa');
+      }
+
       toast.success('Recompensa resgatada');
       await fetchData();
     } catch (error) {
@@ -440,7 +458,7 @@ export default function RewardsPage() {
                     </div>
                   ) : (
                     <button
-                      onClick={() => redeemReward(reward.id, idPerfil)}
+                      onClick={() => redeemReward(reward.id)}
                       disabled={!canAfford}
                       className={`w-full py-2.5 rounded-lg text-[14px] text-white flex items-center justify-center gap-2 transition-all ${
                         canAfford
