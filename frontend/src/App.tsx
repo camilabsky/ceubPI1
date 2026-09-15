@@ -4,6 +4,7 @@ import { Toaster } from './components/ui/sonner';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './components/LoginPage';
 import HomePage from './components/HomePage';
+import AdminHomePage from './components/AdminHomePage';
 import TasksPage from './components/TasksPage';
 import RewardsPage from './components/RewardsPage';
 import ProfilePage from './components/ProfilePage';
@@ -104,8 +105,10 @@ export default function App() {
       {/* Main Content */}
       <div className={`pb-20 ${isAdmin ? 'pt-10' : ''}`}>
         {currentPage === 'home' && (
-          <HomePage />
-        )}
+      isAdmin
+        ? <AdminHomePage onNavigate={setCurrentPage} />
+        : <HomePage onNavigate={setCurrentPage} />
+    )}
         {currentPage === 'tasks' && (
           <TasksPage />
         )}
