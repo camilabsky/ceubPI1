@@ -210,6 +210,7 @@ export default function TasksPage() {
 
   const handleEditTask = (task: Task) => {
     setEditingId(task.id);
+
     setFormData({
       titulo: task.titulo,
       descricao: task.descricao,
@@ -219,7 +220,8 @@ export default function TasksPage() {
       mudas: Number(task.mudas) || 0,
       tempo: Number(task.tempo) || 30,
     });
-    setShowFormTask(true);
+
+    setShowFormTask(false);
   };
 
   const getDifficultyColor = (difficulty: number) => {
@@ -295,7 +297,7 @@ export default function TasksPage() {
         {isAdmin && showFormTask && (
           <div className="bg-white rounded-[14px] border border-gray-200 p-5 space-y-4 mb-5">
             <h3 className="text-[16px] text-neutral-950 font-semibold">
-              {editingId ? 'Editar tarefa' : 'Criar nova tarefa'}
+              Criar nova tarefa
             </h3>
 
             <input
@@ -413,64 +415,211 @@ export default function TasksPage() {
             </div>
           ) : (
             tasks.map((task) => (
-              <div key={task.id} className="bg-white rounded-[14px] border border-gray-200 p-6">
-                <div className="flex items-start justify-between mb-3 gap-3">
-                  <h3 className="text-[16px] text-neutral-950 flex-1">{task.titulo}</h3>
-                  <div className="flex items-center gap-2">
-                    <div className="bg-green-50 rounded-[10px] px-3 py-1.5 flex items-center gap-1">
-                      <Sprout className="size-4 text-[#00a63e]" />
-                      <span className="text-[16px] text-[#00a63e] font-bold">{task.moedas}</span>
+              <div
+                key={task.id}
+                className="bg-white rounded-[14px] border border-gray-200 p-6"
+              >
+                {editingId === task.id && isAdmin ? (
+                  // EDIÇÃO INLINE
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-[16px] font-semibold text-neutral-950">
+                        Editar tarefa
+                      </h3>
+
+                      <button
+                        onClick={() => {
+                          setEditingId(null);
+                          resetTaskForm();
+                        }}
+                        className="text-gray-500 hover:text-gray-700"
+                      >
+                        ✕
+                      </button>
                     </div>
-                    {isAdmin && (
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => handleEditTask(task)}
-                          className="p-2 hover:bg-blue-50 rounded-lg text-blue-600"
-                          title="Editar"
-                        >
-                          <Edit2 className="size-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteTask(task.id)}
-                          className="p-2 hover:bg-red-50 rounded-lg text-red-600"
-                          title="Deletar"
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
+
+                    <input
+                      type="text"
+                      placeholder="Título"
+                      value={formData.titulo}
+                      onChange={(e) =>
+                        setFormData({ ...formData, titulo: e.target.value })
+                      }
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e]"
+                    />
+
+                    <textarea
+                      placeholder="Descrição"
+                      value={formData.descricao}
+                      onChange={(e) =>
+                        setFormData({ ...formData, descricao: e.target.value })
+                      }
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e] min-h-16"
+                    />
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <select
+                        value={formData.tipo}
+                        onChange={(e) =>
+                          setFormData({ ...formData, tipo: e.target.value })
+                        }
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                      >
+                        <option>Manutenção</option>
+                        <option>Plantio</option>
+                        <option>colheita</option>
+                        <option>compostagem</option>
+                      </select>
+
+                      <select
+                        value={formData.dificuldade}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            dificuldade: Number(e.target.value),
+                          })
+                        }
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                      >
+                        <option value={0}>Fácil</option>
+                        <option value={1}>Médio</option>
+                        <option value={2}>Difícil</option>
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <input
+                        type="number"
+                        placeholder="Moedas"
+                        value={formData.moedas}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            moedas: Number(e.target.value),
+                          })
+                        }
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                      />
+
+                      <input
+                        type="number"
+                        placeholder="Mudas"
+                        value={formData.mudas}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            mudas: Number(e.target.value),
+                          })
+                        }
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                      />
+
+                      <input
+                        type="number"
+                        placeholder="Tempo (min)"
+                        value={formData.tempo}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            tempo: Number(e.target.value),
+                          })
+                        }
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                      />
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleSaveTask}
+                        disabled={isSavingTask}
+                        className="flex-1 bg-[#00a63e] text-white text-[14px] py-2 rounded-lg hover:bg-[#008236] disabled:opacity-70"
+                      >
+                        {isSavingTask ? 'Salvando...' : 'Salvar alterações'}
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setEditingId(null);
+                          resetTaskForm();
+                        }}
+                        className="flex-1 bg-gray-200 text-[#4a5565] text-[14px] py-2 rounded-lg"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  // VISUALIZAÇÃO NORMAL
+                  <>
+                    <div className="flex items-start justify-between mb-3 gap-3">
+                      <h3 className="text-[16px] text-neutral-950 flex-1">
+                        {task.titulo}
+                      </h3>
+
+                      <div className="flex items-center gap-2">
+                        <div className="bg-green-50 rounded-[10px] px-3 py-1.5 flex items-center gap-1">
+                          <Sprout className="size-4 text-[#00a63e]" />
+                          <span className="text-[16px] text-[#00a63e] font-bold">
+                            {task.moedas}
+                          </span>
+                        </div>
+
+                        {isAdmin && (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => handleEditTask(task)}
+                              className="p-2 hover:bg-blue-50 rounded-lg text-blue-600"
+                              title="Editar"
+                            >
+                              <Edit2 className="size-4" />
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteTask(task.id)}
+                              className="p-2 hover:bg-red-50 rounded-lg text-red-600"
+                              title="Deletar"
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
+                    </div>
 
-                <p className="text-[14px] text-[#717182] mb-4">{task.descricao}</p>
+                    <p className="text-[14px] text-[#717182] mb-4">
+                      {task.descricao}
+                    </p>
 
-                <div className="space-y-3 mb-4">
-                  <div className="flex items-center gap-2 text-[14px] text-[#4a5565]">
-                    <MapPin className="size-4" />
-                    <span>{task.horta}</span>
-                  </div>
+                    <div className="space-y-3 mb-4">
+                      <div className="flex items-center gap-2 text-[14px] text-[#4a5565]">
+                        <MapPin className="size-4" />
+                        <span>{task.horta}</span>
+                      </div>
 
-                  <div className="flex items-center gap-2 text-[14px] text-[#4a5565]">
-                    <Clock className="size-4" />
-                    <span>{task.tempo} minutos</span>
-                  </div>
+                      <div className="flex items-center gap-2 text-[14px] text-[#4a5565]">
+                        <Clock className="size-4" />
+                        <span>{task.tempo} minutos</span>
+                      </div>
 
-                  <div className="flex gap-2">
-                    <span className={`${getCategoryColor(task.tipo)} text-[12px] px-2.5 py-1 rounded-lg`}>
-                      {task.tipo}
-                    </span>
-                    <span className={`${getDifficultyColor(task.dificuldade)} text-[12px] px-2.5 py-1 rounded-lg`}>
-                      {['Fácil', 'Médio', 'Difícil'][task.dificuldade] || 'Fácil'}
-                    </span>
-                  </div>
-                </div>
+                      <div className="flex gap-2">
+                        <span className={`${getCategoryColor(task.tipo)} text-[12px] px-2.5 py-1 rounded-lg`}>
+                          {task.tipo}
+                        </span>
 
-                <button
-                  onClick={() => acceptTask(task.id)}
-                  className="w-full bg-[#00a63e] text-white text-[14px] py-2.5 rounded-lg hover:bg-[#008236] transition-colors text-center"
-                >
-                  Aceitar Tarefa
-                </button>
+                        <span className={`${getDifficultyColor(task.dificuldade)} text-[12px] px-2.5 py-1 rounded-lg`}>
+                          {['Fácil', 'Médio', 'Difícil'][task.dificuldade] || 'Fácil'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => acceptTask(task.id)}
+                      className="w-full bg-[#00a63e] text-white text-[14px] py-2.5 rounded-lg hover:bg-[#008236] transition-colors text-center"
+                    >
+                      Aceitar Tarefa
+                    </button>
+                  </>
+                )}
               </div>
             ))
           )}

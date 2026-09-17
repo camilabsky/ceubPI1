@@ -1,4 +1,4 @@
-import { TrendingUp, Sprout, Award, LogOut, CheckCircle2, Gift } from 'lucide-react';
+import { TrendingUp, Sprout, Award, LogOut, CheckCircle2, Gift} from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -6,6 +6,8 @@ interface ProfilePageProps {
   coins: number;
   tasksCompleted: number;
   onLogout?: () => void;
+  isAdmin?: boolean;
+  onNavigate?: (page: string) => void;
 }
 
 interface TaskDone {
@@ -39,7 +41,7 @@ async function getMudas(idPerfil: number) {
   return Number(result.Total) || 0;
 }
 
-export default function ProfilePage({ coins, tasksCompleted, onLogout }: ProfilePageProps) {
+export default function ProfilePage({ coins, tasksCompleted, onLogout, isAdmin = false, onNavigate }: ProfilePageProps) {
   const { logout, token, user } = useAuth();
   const [mudas, setMudas] = useState(0);
   const [resgatou, setResgatou] = useState(false);
@@ -53,41 +55,41 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout }: Profile
   ];
 
   useEffect(() => {
-  const fetchData = async () => {
-    try {
-      if (!user?.id_perfil) {
-        setMudas(0);
-      } else {
-        const mudasData = await getMudas(user.id_perfil);
-        setMudas(mudasData);
+    const fetchData = async () => {
+      try {
+        if (!user?.id_perfil) {
+          setMudas(0);
+        } else {
+          const mudasData = await getMudas(user.id_perfil);
+          setMudas(mudasData);
+        }
+
+        if (!token) {
+          setTarefasConcluidas([]);
+          setRecompensasResgatadas([]);
+          setResgatou(false);
+          return;
+        }
+
+        const response = await fetch('http://localhost:8080/me/historico', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) throw new Error('Falha ao carregar historico');
+
+        const data = await response.json();
+        const tarefas = data.tarefas_concluidas || [];
+        const recompensas = data.recompensas_resgatadas || [];
+
+        setTarefasConcluidas(tarefas);
+        setRecompensasResgatadas(recompensas);
+        setResgatou(recompensas.length >= 5);
+      } catch (error) {
+        console.error('Error fetching profile data:', error);
       }
+    };
 
-      if (!token) {
-        setTarefasConcluidas([]);
-        setRecompensasResgatadas([]);
-        setResgatou(false);
-        return;
-      }
-
-      const response = await fetch('http://localhost:8080/me/historico', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) throw new Error('Falha ao carregar historico');
-
-      const data = await response.json();
-      const tarefas = data.tarefas_concluidas || [];
-      const recompensas = data.recompensas_resgatadas || [];
-
-      setTarefasConcluidas(tarefas);
-      setRecompensasResgatadas(recompensas);
-      setResgatou(recompensas.length >= 5);
-    } catch (error) {
-      console.error('Error fetching profile data:', error);
-    }
-  };
-
-  fetchData();
-}, [user?.id_perfil, token]);
+    fetchData();
+  }, [user?.id_perfil, token]);
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16 pb-4">
@@ -117,7 +119,7 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout }: Profile
           <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
             <TrendingUp className="size-6 text-[#00a63e] mb-2" />
             <p className="text-[24px] text-neutral-950 mb-1">{tasksCompleted}</p>
-            <p className="text-[11px] text-[#4a5565] text-center">Tarefas Completas</p>
+            <p className="text-[11px]">Tarefas Completas</p>
           </div>
           <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
             <Gift className="size-6 text-[#00a63e] mb-2" />
@@ -154,38 +156,41 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout }: Profile
         </div>
       </div>
 
-      <div className="px-4 mb-6">
-        <h2 className="text-[16px] text-neutral-950 mb-3 px-2">Tarefas Concluídas</h2>
-        <div className="bg-white rounded-[14px] border border-gray-200 p-4 space-y-3">
-          {tarefasConcluidas.length === 0 ? (
-            <p className="text-[13px] text-[#717182]">Você ainda não concluiu tarefas.</p>
-          ) : (
-            tarefasConcluidas.slice(0, 8).map((task) => (
-              <div key={task.id} className="border-b border-gray-100 pb-3 last:border-b-0 last:pb-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <CheckCircle2 className="size-4 text-[#00a63e]" />
-                  <p className="text-[14px] text-neutral-950 font-medium">{task.titulo}</p>
+      {/* Tarefas Concluídas + Recompensas Resgatadas lado a lado no desktop */}
+      <div className="px-4 mb-6 grid lg:grid-cols-2 gap-5">
+        <div>
+          <h2 className="text-[16px] text-neutral-950 mb-3 px-2">Tarefas Concluídas</h2>
+          <div className="bg-white rounded-[14px] border border-gray-200 p-4 space-y-3">
+            {tarefasConcluidas.length === 0 ? (
+              <p className="text-[13px] text-[#717182]">Você ainda não concluiu tarefas.</p>
+            ) : (
+              tarefasConcluidas.slice(0, 8).map((task) => (
+                <div key={task.id} className="border-b border-gray-100 pb-3 last:border-b-0 last:pb-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <CheckCircle2 className="size-4 text-[#00a63e]" />
+                    <p className="text-[14px] text-neutral-950 font-medium">{task.titulo}</p>
+                  </div>
+                  <p className="text-[12px] text-[#717182]">{task.horta} • {task.moedas} moedas</p>
                 </div>
-                <p className="text-[12px] text-[#717182]">{task.horta} • {task.moedas} moedas</p>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
-      </div>
 
-      <div className="px-4 mb-6">
-        <h2 className="text-[16px] text-neutral-950 mb-3 px-2">Recompensas Resgatadas</h2>
-        <div className="bg-white rounded-[14px] border border-gray-200 p-4 space-y-3">
-          {recompensasResgatadas.length === 0 ? (
-            <p className="text-[13px] text-[#717182]">Você ainda não resgatou recompensas.</p>
-          ) : (
-            recompensasResgatadas.slice(0, 8).map((reward, index) => (
-              <div key={`${reward.id}-${reward.nome}-${index}`} className="border-b border-gray-100 pb-3 last:border-b-0 last:pb-0">
-                <p className="text-[14px] text-neutral-950 font-medium">{reward.nome}</p>
-                <p className="text-[12px] text-[#717182]">{reward.tipo} • {reward.preco} moedas</p>
-              </div>
-            ))
-          )}
+        <div>
+          <h2 className="text-[16px] text-neutral-950 mb-3 px-2">Recompensas Resgatadas</h2>
+          <div className="bg-white rounded-[14px] border border-gray-200 p-4 space-y-3">
+            {recompensasResgatadas.length === 0 ? (
+              <p className="text-[13px] text-[#717182]">Você ainda não resgatou recompensas.</p>
+            ) : (
+              recompensasResgatadas.slice(0, 8).map((reward, index) => (
+                <div key={`${reward.id}-${reward.nome}-${index}`} className="border-b border-gray-100 pb-3 last:border-b-0 last:pb-0">
+                  <p className="text-[14px] text-neutral-950 font-medium">{reward.nome}</p>
+                  <p className="text-[12px] text-[#717182]">{reward.tipo} • {reward.preco} moedas</p>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 

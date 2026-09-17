@@ -196,7 +196,15 @@ export default function RewardsPage() {
         body: JSON.stringify({ ...formRecompensa, id_horta: idHorta }),
       });
 
+
       if (!response.ok) {
+        const errorText = await response.text();
+
+        console.error('Erro real da API:', {
+          status: response.status,
+          resposta: errorText,
+        });
+
         throw new Error('Falha ao salvar recompensa');
       }
 
@@ -205,12 +213,11 @@ export default function RewardsPage() {
       resetRewardForm();
       await fetchData();
     } catch (error) {
-      console.error('Error saving reward:', error);
-      toast.error('Erro ao salvar recompensa');
-    } finally {
-      setIsSavingRecompensa(false);
+    console.error('Error saving reward:', error);
+    toast.error('Erro ao salvar recompensa');
     }
   };
+
 
   const handleDeleteRecompensa = async (id: number) => {
     if (!isAdmin || !token) return;
@@ -236,14 +243,17 @@ export default function RewardsPage() {
 
   const handleEditRecompensa = (reward: Reward) => {
     setEditingRecompensaId(reward.id);
+
     setFormRecompensa({
       nome: reward.nome || reward.titulo || '',
       descricao: reward.descricao || '',
       tipo: reward.tipo || 'Produto',
       preco: Number(reward.preco) || 0,
-      quantidade_disponivel: Number(reward.quantidade_disponivel) || 0,
+      quantidade_disponivel: Number(
+        reward.quantidade_disponivel ?? reward.total ?? 0
+      ),
     });
-    setShowFormRecompensa(true);
+    setShowFormRecompensa(false);
   };
 
   const getCategoryColor = (category: string) => {
@@ -381,7 +391,7 @@ export default function RewardsPage() {
         </div>
       )}
 
-      <div className="space-y-7">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {isLoadingRewards ? (
           <div className="flex justify-center py-8">
             <Loader className="size-5 animate-spin text-[#00a63e]" />
@@ -419,65 +429,192 @@ export default function RewardsPage() {
                 </div>
 
                 <div className="p-6">
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <h3 className="text-[16px] text-neutral-950">{title}</h3>
-                    {isAdmin && (
-                      <div className="flex gap-1">
+                  {editingRecompensaId === reward.id && isAdmin ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-[16px] font-semibold text-neutral-950">
+                          Editar recompensa
+                        </h3>
+
                         <button
-                          onClick={() => handleEditRecompensa(reward)}
-                          className="p-2 hover:bg-blue-50 rounded-lg text-blue-600"
-                          title="Editar"
+                          onClick={() => {
+                            setEditingRecompensaId(null);
+                            resetRewardForm();
+                          }}
+                          className="text-gray-500 hover:text-gray-700 text-lg"
+                          title="Cancelar edição"
                         >
-                          <Edit2 className="size-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRecompensa(reward.id)}
-                          className="p-2 hover:bg-red-50 rounded-lg text-red-600"
-                          title="Deletar"
-                        >
-                          <Trash2 className="size-4" />
+                          ✕
                         </button>
                       </div>
-                    )}
-                  </div>
 
-                  <p className="text-[14px] text-[#717182] mb-4">{reward.descricao}</p>
+                      <input
+                        type="text"
+                        placeholder="Nome"
+                        value={formRecompensa.nome}
+                        onChange={(e) =>
+                          setFormRecompensa({
+                            ...formRecompensa,
+                            nome: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e]"
+                      />
 
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`${getCategoryColor(reward.tipo)} text-[12px] px-2.5 py-1 rounded-lg`}>
-                      {reward.tipo}
-                    </span>
-                    <span className="text-[14px] text-[#4a5565]">{available} disponíveis</span>
-                  </div>
+                      <textarea
+                        placeholder="Descrição"
+                        value={formRecompensa.descricao}
+                        onChange={(e) =>
+                          setFormRecompensa({
+                            ...formRecompensa,
+                            descricao: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e] min-h-20"
+                      />
 
-                  {reward.horta && <p className="text-[12px] text-[#6a7282] mb-4">{reward.horta}</p>}
+                      <select
+                        value={formRecompensa.tipo}
+                        onChange={(e) =>
+                          setFormRecompensa({
+                            ...formRecompensa,
+                            tipo: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                      >
+                        <option value="Produto">Produto</option>
+                        <option value="Workshop">Workshop</option>
+                        <option value="Serviço">Serviço</option>
+                        <option value="Outro">Outro</option>
+                      </select>
 
-                  {isAdmin ? (
-                    <div className="w-full py-2.5 rounded-lg text-[14px] text-center bg-gray-100 text-[#4a5565]">
-                      Modo admin: gerencie pelas ações acima
+                      <div className="grid grid-cols-2 gap-3">
+                        <input
+                          type="number"
+                          placeholder="Custo (moedas)"
+                          value={formRecompensa.preco}
+                          onChange={(e) =>
+                            setFormRecompensa({
+                              ...formRecompensa,
+                              preco: Number(e.target.value),
+                            })
+                          }
+                          className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                        />
+
+                        <input
+                          type="number"
+                          placeholder="Quantidade disponível"
+                          value={formRecompensa.quantidade_disponivel}
+                          onChange={(e) =>
+                            setFormRecompensa({
+                              ...formRecompensa,
+                              quantidade_disponivel: Number(e.target.value),
+                            })
+                          }
+                          className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                        />
+                      </div>
+
+                      <div className="flex gap-3">
+                        <button
+                          onClick={handleSaveRecompensa}
+                          disabled={isSavingRecompensa}
+                          className="flex-1 bg-[#00a63e] text-white text-[14px] py-2 rounded-lg hover:bg-[#008236] disabled:opacity-70"
+                        >
+                          {isSavingRecompensa ? 'Salvando...' : 'Salvar alterações'}
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setEditingRecompensaId(null);
+                            resetRewardForm();
+                          }}
+                          className="flex-1 bg-gray-200 text-[#4a5565] text-[14px] py-2 rounded-lg"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => redeemReward(reward.id)}
-                      disabled={!canAfford}
-                      className={`w-full py-2.5 rounded-lg text-[14px] text-white flex items-center justify-center gap-2 transition-all ${
-                        canAfford
-                          ? 'bg-[#00a63e] hover:bg-[#008236]'
-                          : 'bg-[#030213] opacity-50 cursor-not-allowed'
-                      }`}
-                    >
-                      {canAfford ? (
-                        <>
-                          <Gift className="size-4" />
-                          Resgatar
-                        </>
-                      ) : (
-                        <>
-                          <Lock className="size-4" />
-                          Moedas insuficientes
-                        </>
+                    <>
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <h3 className="text-[16px] text-neutral-950">
+                          {title}
+                        </h3>
+
+                        {isAdmin && (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => handleEditRecompensa(reward)}
+                              className="p-2 hover:bg-blue-50 rounded-lg text-blue-600"
+                              title="Editar"
+                            >
+                              <Edit2 className="size-4" />
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteRecompensa(reward.id)}
+                              className="p-2 hover:bg-red-50 rounded-lg text-red-600"
+                              title="Deletar"
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <p className="text-[14px] text-[#717182] mb-4">
+                        {reward.descricao}
+                      </p>
+
+                      <div className="flex items-center justify-between mb-2">
+                        <span
+                          className={`${getCategoryColor(reward.tipo)} text-[12px] px-2.5 py-1 rounded-lg`}
+                        >
+                          {reward.tipo}
+                        </span>
+
+                        <span className="text-[14px] text-[#4a5565]">
+                          {available} disponíveis
+                        </span>
+                      </div>
+
+                      {reward.horta && (
+                        <p className="text-[12px] text-[#6a7282] mb-4">
+                          {reward.horta}
+                        </p>
                       )}
-                    </button>
+
+                      {isAdmin ? (
+                        <div className="w-full py-2.5 rounded-lg text-[14px] text-center bg-gray-100 text-[#4a5565]">
+                          Modo admin: gerencie pelas ações acima
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => redeemReward(reward.id)}
+                          disabled={!canAfford}
+                          className={`w-full py-2.5 rounded-lg text-[14px] text-white flex items-center justify-center gap-2 transition-all ${
+                            canAfford
+                              ? 'bg-[#00a63e] hover:bg-[#008236]'
+                              : 'bg-[#030213] opacity-50 cursor-not-allowed'
+                          }`}
+                        >
+                          {canAfford ? (
+                            <>
+                              <Gift className="size-4" />
+                              Resgatar
+                            </>
+                          ) : (
+                            <>
+                              <Lock className="size-4" />
+                              Moedas insuficientes
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
