@@ -10,6 +10,7 @@ import RewardsPage from './components/RewardsPage';
 import ProfilePage from './components/ProfilePage';
 import RegisterPage from './components/RegisterPage';
 import AdminProfilePage from './components/AdminProfilePage';
+import Sidebar from './components/Sidebar';
 
 type Page = 'home' | 'tasks' | 'rewards' | 'profile';
 
@@ -26,7 +27,7 @@ interface Task {
   progress?: number;
 }
 
-async function get_coins(id_perfil: Number, token: string){
+async function get_coins(id_perfil: Number, token: string) {
   const coins = await fetch("http://localhost:8080/minhas_moedas", {
     method: 'POST',
     headers: {
@@ -34,14 +35,14 @@ async function get_coins(id_perfil: Number, token: string){
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
     },
-    body: JSON.stringify({id_perfil})
+    body: JSON.stringify({ id_perfil })
   })
   if (!coins.ok) throw new Error('Falha ao buscar moedas');
   const c = await coins.json()
   return c.Saldo
 }
 
-async function get_number_of_completed_tasks(id_perfil: Number, token: string){
+async function get_number_of_completed_tasks(id_perfil: Number, token: string) {
   const tarefas_concluidas = await fetch("http://localhost:8080/tarefas_concluidas", {
     method: 'POST',
     headers: {
@@ -49,7 +50,7 @@ async function get_number_of_completed_tasks(id_perfil: Number, token: string){
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
     },
-    body: JSON.stringify({id_perfil})
+    body: JSON.stringify({ id_perfil })
   })
   if (!tarefas_concluidas.ok) throw new Error('Falha ao buscar tarefas concluidas');
   const t = await tarefas_concluidas.json()
@@ -80,10 +81,10 @@ export default function App() {
   };
 
   useEffect(() => {
-  if (token) {
-    fetchData();
-  }
-}, [token, user?.id_perfil]);
+    if (token) {
+      fetchData();
+    }
+  }, [token, user?.id_perfil]);
 
   if (isLoading) {
     return (
@@ -93,46 +94,52 @@ export default function App() {
     );
   }
 
-    if (!token) {
+  if (!token) {
     return authView === 'login'
       ? <LoginPage onSwitchToRegister={() => setAuthView('register')} />
       : <RegisterPage onSwitchToLogin={() => setAuthView('login')} />;
   }
 
   return (
-    <div className="relative min-h-screen bg-gray-50 mx-auto max-w-md">
+    <div className="relative min-h-screen bg-gray-50 lg:flex">
       <Toaster position="top-center" richColors />
-      {isAdmin && (
-        <div className="fixed top-0 left-0 right-0 bg-[#00a63e] text-white px-4 py-3 text-[12px] text-center max-w-md mx-auto z-50">
-          Modo admin disponivel
+
+      <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} isAdmin={isAdmin} />
+
+      <div className="w-full lg:ml-64">
+        <div
+          className={`mx-auto w-full pb-20 lg:pb-8 ${
+            isAdmin ? 'max-w-none px-4 lg:px-6' : 'max-w-none px-4 sm:px-6 lg:px-8'
+          } ${isAdmin ? 'pt-10' : ''}`}
+        >
+          {currentPage === 'home' && (
+            isAdmin
+              ? <AdminHomePage onNavigate={setCurrentPage} />
+              : <HomePage onNavigate={setCurrentPage} />
+          )}
+          {currentPage === 'tasks' && (
+            <TasksPage />
+          )}
+          {currentPage === 'rewards' && (
+            <RewardsPage />
+          )}
+          {currentPage === 'profile' && (
+            isAdmin
+              ? <AdminProfilePage
+                    onLogout={() => setCurrentPage('home')}
+                    onNavigate={setCurrentPage}
+                  />
+              : <ProfilePage
+                  coins={coins}
+                  tasksCompleted={tasksCompleted}
+                  onLogout={() => setCurrentPage('home')}
+                />
+          )}
         </div>
-      )}
-      {/* Main Content */}
-      <div className={`pb-20 ${isAdmin ? 'pt-10' : ''}`}>
-        {currentPage === 'home' && (
-      isAdmin
-        ? <AdminHomePage onNavigate={setCurrentPage} />
-        : <HomePage onNavigate={setCurrentPage} />
-    )}
-        {currentPage === 'tasks' && (
-          <TasksPage />
-        )}
-        {currentPage === 'rewards' && (
-          <RewardsPage />
-        )}
-        {currentPage === 'profile' && (
-          isAdmin
-            ? <AdminProfilePage onLogout={() => setCurrentPage('home')} />
-            : <ProfilePage
-                coins={coins}
-                tasksCompleted={tasksCompleted}
-                onLogout={() => setCurrentPage('home')}
-              />
-        )}
       </div>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg max-w-md mx-auto">
+      {/* Bottom Navigation - só aparece em mobile */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg max-w-md mx-auto">
         <div className="flex items-center justify-around h-[70px]">
           <button
             onClick={() => setCurrentPage('home')}
