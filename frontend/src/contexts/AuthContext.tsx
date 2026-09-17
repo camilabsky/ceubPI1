@@ -19,9 +19,22 @@ interface AuthContextType {
   user: User | null;
   isAdmin: boolean;
   isLoading: boolean;
+  
   login: (email: string, senha: string) => Promise<void>;
-  register: (nome: string, email: string, senha: string, opts: { id_horta?: number; nome_nova_horta?: string }) => Promise<void>;
+  register: (
+    nome: string,
+    email: string,
+    senha: string,
+    opts: { id_horta?: number; nome_nova_horta?: string }
+  ) => Promise<void>;
+  
+  updateUser: (dados: { nome?: string; email?: string }) => Promise<void>;
   logout: () => void;
+  
+  updatePassword: (
+  senhaAtual: string,
+  novaSenha: string
+) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -110,6 +123,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateUser = async (dados: { nome?: string; email?: string }) => {
+    if (!token) {
+      throw new Error('Usuário não autenticado');
+    }
+
+    const res = await fetch('http://localhost:8080/auth/me', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(dados),
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Erro ao atualizar usuário');
+    }
+
+    setUser(data.user);
+    setToken(data.token);
+    localStorage.setItem('token', data.token);
+  };
+
+const updatePassword = async (
+  senhaAtual: string,
+  novaSenha: string
+) => {
+  const response = await fetch('http://localhost:8080/auth/password', {
+  method: 'PUT',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  },
+  body: JSON.stringify({
+    senhaAtual,
+    novaSenha,
+  }),
+});
+
+const text = await response.text();
+
+console.log('Status:', response.status);
+console.log('Resposta:', text);
+
+let data;
+
+try {
+  data = JSON.parse(text);
+} catch {
+  throw new Error(
+    `O servidor retornou uma resposta inválida: ${text.slice(0, 150)}`
+  );
+}
+
+if (!response.ok) {
+  throw new Error(data.error || 'Erro ao alterar senha');
+}
+};
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -117,8 +191,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-        <AuthContext.Provider value={{ token, user, isAdmin, isLoading, login, register, logout }}>
-      {children}
+        <AuthContext.Provider value={{token,user,isAdmin,isLoading,login,logout,register,updateUser,updatePassword,}}
+>
+        {children}
     </AuthContext.Provider>
   );
 }

@@ -1,5 +1,5 @@
 require('dotenv').config();
-const mysql = require('mysql2');
+const mysql = require('mysql2/promise');
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -233,6 +233,143 @@ app.get('/auth/me', requireAuth, async (req, res) => {
         return res.status(500).send({ error: 'Erro ao carregar usuario' });
     }
 });
+
+app.put('/auth/me', requireAuth, async (req, res) => {
+    try {
+        const { nome, email } = req.body;
+
+        if (nome !== undefined && !nome.trim()) {
+            return res.status(400).send({
+                error: 'O nome é obrigatório'
+            });
+        }
+
+        if (email !== undefined && !email.trim()) {
+            return res.status(400).send({
+                error: 'O e-mail é obrigatório'
+            });
+        }
+
+        const [existingEmail] = await db.query(
+            'SELECT id FROM Usuario WHERE email = ? AND id <> ? LIMIT 1',
+            [email?.trim(), req.user.id]
+        );
+
+        if (email !== undefined && existingEmail.length > 0) {
+            return res.status(409).send({
+                error: 'Este e-mail já está cadastrado'
+            });
+        }
+
+        const [currentRows] = await db.query(
+            'SELECT nome, email FROM Usuario WHERE id = ? LIMIT 1',
+            [req.user.id]
+        );
+
+        if (currentRows.length === 0) {
+            return res.status(404).send({
+                error: 'Usuário não encontrado'
+            });
+        }
+
+        const nomeFinal = nome?.trim() || currentRows[0].nome;
+        const emailFinal = email?.trim() || currentRows[0].email;
+
+        await db.query(
+            'UPDATE Usuario SET nome = ?, email = ? WHERE id = ?',
+            [nomeFinal, emailFinal, req.user.id]
+        );
+
+        const [users] = await db.query(
+            'SELECT id, nome, email, id_perfil FROM Usuario WHERE id = ? LIMIT 1',
+            [req.user.id]
+        );
+
+        const roles = await getUserRoles(req.user.id);
+
+        const newToken = jwt.sign(
+            {
+                id: users[0].id,
+                email: users[0].email,
+                nome: users[0].nome,
+                id_perfil: users[0].id_perfil
+            },
+            JWT_SECRET,
+            { expiresIn: '8h' }
+        );
+
+        return res.send({
+            token: newToken,
+            user: {
+                ...users[0],
+                roles
+            }
+        });
+    } catch (error) {
+        console.error('Erro ao atualizar usuário:', error);
+
+        return res.status(500).send({
+            error: 'Erro ao atualizar usuário'
+        });
+    }
+}); 
+
+    app.put('/auth/password', requireAuth, async (req, res) => {
+    try {
+        const { senhaAtual, novaSenha } = req.body;
+
+        if (!senhaAtual || !novaSenha) {
+        return res.status(400).json({
+            error: 'Preencha a senha atual e a nova senha',
+        });
+        }
+
+        if (novaSenha.length < 6) {
+        return res.status(400).json({
+            error: 'A nova senha deve ter pelo menos 6 caracteres',
+        });
+        }
+
+        const [usuarios] = await pool.query(
+        'SELECT password_hash FROM Usuario WHERE id = ?',
+        [req.user.id]
+        );
+
+        if (usuarios.length === 0) {
+        return res.status(404).json({
+            error: 'Usuário não encontrado',
+        });
+        }
+
+        const senhaCorreta = await bcrypt.compare(
+        senhaAtual,
+        usuarios[0].password_hash
+        );
+
+        if (!senhaCorreta) {
+        return res.status(401).json({
+            error: 'A senha atual está incorreta',
+        });
+        }
+
+        const senhaHash = await bcrypt.hash(novaSenha, 10);
+
+        await pool.query(
+        'UPDATE Usuario SET password_hash = ? WHERE id = ?',
+        [senhaHash, req.user.id]
+        );
+
+        return res.json({
+        message: 'Senha alterada com sucesso',
+        });
+    } catch (error) {
+        console.error('ERRO COMPLETO AO ALTERAR SENHA:', error);
+
+        return res.status(500).json({
+            error: error.message || 'Erro interno ao alterar senha',
+        });
+        }
+            });
 
 app.post('/minhas_tarefas', requireAuth, async (req, res) => {
     try {
