@@ -12,15 +12,16 @@ if (!JWT_SECRET) {
 }
 
 const pool = mysql.createPool({
-    host: 'db',
-    user: 'user',
-    password: 'password',
-    database: 'horta',
-    port: 3306,
-    charset: 'utf8mb4'
+  host: process.env.DB_HOST || 'db',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || 'root',
+  database: process.env.DB_NAME || 'horta',
+  port: Number(process.env.DB_PORT || 3006,),
+  waitForConnections: true,
+  connectionLimit: 10,
 });
 
-const db = pool.promise();
+const db = pool;
 
 app.use(cors({
     origin: ['http://localhost:3000', 'http://0.0.0.0:3000', 'http://localhost:3001']
