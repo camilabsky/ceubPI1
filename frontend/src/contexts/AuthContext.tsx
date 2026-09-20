@@ -4,6 +4,9 @@ interface Role {
   role: 'ADMIN' | 'MEMBER';
   id_horta: number;
   horta_nome: string;
+  latitude: number | null;
+  longitude: number | null;
+  endereco: string | null;
 }
 
 interface User {
@@ -21,12 +24,19 @@ interface AuthContextType {
   isLoading: boolean;
   
   login: (email: string, senha: string) => Promise<void>;
-  register: (
-    nome: string,
-    email: string,
-    senha: string,
-    opts: { id_horta?: number; nome_nova_horta?: string }
-  ) => Promise<void>;
+  // 1. Na interface AuthContextType (linha ~27-29):
+register: (
+  nome: string,
+  email: string,
+  senha: string,
+  opts: {
+    id_horta?: number;
+    nome_nova_horta?: string;
+    latitude?: number;
+    longitude?: number;
+    endereco?: string;
+  }
+) => Promise<void>;
   
   updateUser: (dados: { nome?: string; email?: string }) => Promise<void>;
   logout: () => void;
@@ -95,11 +105,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
     const register = async (
-    nome: string,
-    email: string,
-    senha: string,
-    opts: { id_horta?: number; nome_nova_horta?: string }
-  ) => {
+      nome: string,
+      email: string,
+      senha: string,
+      opts: {
+        id_horta?: number;
+        nome_nova_horta?: string;
+        latitude?: number;
+        longitude?: number;
+        endereco?: string;
+      }
+    ) => {
     setIsLoading(true);
     try {
       const res = await fetch('http://localhost:8080/auth/register', {

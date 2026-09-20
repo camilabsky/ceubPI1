@@ -138,7 +138,7 @@ app.post('/auth/login', async (req, res) => {
 });
 
 app.post('/auth/register', async (req, res) => {
-    const { nome, email, senha, id_horta, nome_nova_horta } = req.body;
+    const { nome, email, senha, id_horta, nome_nova_horta, latitude, longitude, endereco } = req.body;
 
     if (!nome || !email || !senha) {
         return res.status(400).send({ error: 'Nome, email e senha sao obrigatorios' });
@@ -148,6 +148,21 @@ app.post('/auth/register', async (req, res) => {
     }
     if (id_horta && nome_nova_horta) {
         return res.status(400).send({ error: 'Informe apenas id_horta OU nome_nova_horta, nao os dois' });
+    }
+
+    let lat, lng;
+    if (nome_nova_horta) {
+        if (!endereco || !endereco.trim()) {
+            return res.status(400).send({ error: 'Endereco da horta e obrigatorio' });
+        }
+        lat = Number(latitude);
+        lng = Number(longitude);
+        if (Number.isNaN(lat) || lat < -90 || lat > 90) {
+            return res.status(400).send({ error: 'Latitude invalida ou nao informada' });
+        }
+        if (Number.isNaN(lng) || lng < -180 || lng > 180) {
+            return res.status(400).send({ error: 'Longitude invalida ou nao informada' });
+        }
     }
 
     const connection = await db.getConnection();
@@ -173,8 +188,8 @@ app.post('/auth/register', async (req, res) => {
 
         if (nome_nova_horta) {
             const [hortaResult] = await connection.query(
-                'INSERT INTO Horta (nome) VALUES (?)',
-                [nome_nova_horta]
+                'INSERT INTO Horta (nome, latitude, longitude, endereco) VALUES (?, ?, ?, ?)',
+                [nome_nova_horta, lat, lng, endereco.trim()]
             );
             idHortaFinal = hortaResult.insertId;
             papel = 'ADMIN';

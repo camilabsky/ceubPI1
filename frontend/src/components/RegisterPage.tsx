@@ -21,6 +21,10 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
   const [hortas, setHortas] = useState<Horta[]>([]);
   const [idHortaSelecionada, setIdHortaSelecionada] = useState<string>('');
   const [nomeNovaHorta, setNomeNovaHorta] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [endereco, setEndereco] = useState('');
+  const [isFetchingGeoLocation, setIsFetchingGeoLocation] = useState(false);
 
   useEffect(() => {
     fetch('http://localhost:8080/hortas')
@@ -29,26 +33,71 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
       .catch((error) => console.error('Erro ao carregar hortas:', error));
   }, []);
 
+  const handleUseCurrentLocation = () => {
+  if (!navigator.geolocation) {
+    toast.error('Geolocalização não é suportada neste navegador');
+    return;
+  }
+
+  setIsFetchingGeoLocation(true);
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      setLatitude(lat.toFixed(8));
+      setLongitude(lng.toFixed(8));
+
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+        );
+        const data = await res.json();
+        if (data?.display_name) {
+          setEndereco(data.display_name);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar endereço:', error);
+        toast.error('Não foi possível identificar o endereço automaticamente, preencha manualmente');
+      } finally {
+        setIsFetchingGeoLocation(false);
+      }
+    },
+    (error) => {
+      console.error('Erro ao obter localização:', error);
+      toast.error('Não foi possível obter sua localização atual');
+      setIsFetchingGeoLocation(false);
+    }
+  );
+};
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nome || !email || !senha) {
       toast.error('Preencha nome, email e senha');
       return;
     }
-    if (modo === 'existente' && !idHortaSelecionada) {
-      toast.error('Selecione uma horta');
-      return;
-    }
-    if (modo === 'nova' && !nomeNovaHorta) {
-      toast.error('Informe o nome da nova horta');
-      return;
+
+    if (modo === 'nova') {
+      if (!nomeNovaHorta.trim()) {
+        toast.error('Informe o nome da nova horta');
+        return;
+      }
+      if (!latitude || !longitude || !endereco.trim()) {
+        toast.error('É obrigatório informar a localização da horta');
+        return;
+      }
     }
 
     try {
       const opts =
         modo === 'existente'
           ? { id_horta: Number(idHortaSelecionada) }
-          : { nome_nova_horta: nomeNovaHorta };
+          : {
+              nome_nova_horta: nomeNovaHorta,
+              latitude: Number(latitude),
+              longitude: Number(longitude),
+              endereco: endereco.trim(),
+            };
       await register(nome, email, senha, opts);
       toast.success('Cadastro realizado com sucesso!');
     } catch (error: any) {
@@ -140,15 +189,58 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
               </select>
             </div>
           ) : (
-            <div>
-              <label className="block text-[13px] text-[#4a5565] mb-2">Nome da nova horta</label>
-              <input
-                type="text"
-                value={nomeNovaHorta}
-                onChange={(e) => setNomeNovaHorta(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-[14px] outline-none focus:border-[#00a63e]"
-                placeholder="Ex: Horta do Bairro Sul"
-              />
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[13px] text-[#4a5565] mb-2">Nome da nova horta</label>
+                <input
+                  type="text"
+                  value={nomeNovaHorta}
+                  onChange={(e) => setNomeNovaHorta(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-[14px] outline-none focus:border-[#00a63e]"
+                  placeholder="Ex: Horta do Bairro Sul"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[13px] text-[#4a5565] mb-2">
+                  Localização da horta <span className="text-red-500">*</span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={handleUseCurrentLocation}
+                  disabled={isFetchingGeoLocation}
+                  className="w-full mb-3 flex items-center justify-center gap-2 rounded-lg border border-[#00a63e] text-[#00a63e] py-2.5 text-[13px] font-medium disabled:opacity-60"
+                >
+                  {isFetchingGeoLocation ? 'Obtendo localização...' : 'Usar minha localização atual'}
+                </button>
+
+                <textarea
+                  value={endereco}
+                  onChange={(e) => setEndereco(e.target.value)}
+                  placeholder="Endereço da horta"
+                  className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-[14px] outline-none focus:border-[#00a63e] mb-3 min-h-16"
+                />
+
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="number"
+                    step="any"
+                    value={latitude}
+                    onChange={(e) => setLatitude(e.target.value)}
+                    placeholder="Latitude"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#00a63e]"
+                  />
+                  <input
+                    type="number"
+                    step="any"
+                    value={longitude}
+                    onChange={(e) => setLongitude(e.target.value)}
+                    placeholder="Longitude"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#00a63e]"
+                  />
+                </div>
+              </div>
             </div>
           )}
 
