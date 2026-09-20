@@ -6,7 +6,10 @@ CREATE TABLE IF NOT EXISTS Perfil (
 CREATE TABLE IF NOT EXISTS Horta (
   id int AUTO_INCREMENT PRIMARY KEY,
   nome varchar(128) NOT NULL UNIQUE,
-  descricao varchar(255)
+  descricao varchar(255),
+  latitude DECIMAL(10, 8) NULL,
+  longitude DECIMAL(11, 8) NULL,
+  endereco varchar(255) NULL
 );
 
 CREATE TABLE IF NOT EXISTS Usuario (
@@ -32,14 +35,6 @@ CREATE TABLE IF NOT EXISTS UsuarioHortaRole (
   CONSTRAINT fk_usuario_horta_role_horta
   FOREIGN KEY (id_horta)
   REFERENCES Horta(id)
-);
-
-CREATE TABLE IF NOT EXISTS Horta (
-  id int AUTO_INCREMENT PRIMARY KEY,
-  nome varchar(128) NOT NULL UNIQUE,
-  descricao varchar(255),
-  latitude DECIMAL(10, 8) NULL,
-  longitude DECIMAL(11, 8) NULL
 );
 
 CREATE TABLE IF NOT EXISTS Recompensas (
