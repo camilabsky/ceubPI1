@@ -2,6 +2,7 @@ import { ClipboardList, Sprout, LayoutDashboard, Gift, Bell, User as UserIcon, S
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { HortaMap } from './HortaMap';
 
 interface Task {
   id: number;
@@ -58,9 +59,10 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
 
   useEffect(() => {
     fetchAdminData();
-  }, [token]);
+  }, [token, idHorta]);
 
   const hortaNome = user?.roles.find((r) => r.role === 'ADMIN')?.horta_nome || 'sua horta';
+  const hortaAdmin = user?.roles.find((r) => r.role === 'ADMIN');
   const pendentes = adminTasks.filter((t) => !t.concluido);
   const concluidas = adminTasks.filter((t) => t.concluido);
   const totalTasks = adminTasks.length;
@@ -158,6 +160,17 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
             >
               Ver detalhes <ArrowRight className="size-4" />
             </button>
+          </div>
+          
+          {/* Mapa da horta */}
+          <div className="bg-white rounded-[14px] border border-gray-200 p-4">
+            <h2 className="text-[15px] text-neutral-950 font-semibold mb-3">Localização da horta</h2>
+            <HortaMap
+              latitude={hortaAdmin?.latitude}
+              longitude={hortaAdmin?.longitude}
+              nome={hortaNome}
+              endereco={hortaAdmin?.endereco}
+            />
           </div>
 
           {/* Tarefas recentes */}
