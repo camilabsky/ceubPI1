@@ -300,66 +300,87 @@ export default function TasksPage() {
               Criar nova tarefa
             </h3>
 
-            <input
-              type="text"
-              placeholder="Título"
-              value={formData.titulo}
-              onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e]"
-            />
+            <div>
+              <label className="text-[13px] text-[#4a5565] mb-1 block">Título</label>
+              <input
+                type="text"
+                placeholder="Título"
+                value={formData.titulo}
+                onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e]"
+              />
+            </div>
 
-            <textarea
-              placeholder="Descrição"
-              value={formData.descricao}
-              onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e] min-h-16"
-            />
+            <div>
+              <label className="text-[13px] text-[#4a5565] mb-1 block">Descrição</label>
+              <textarea
+                placeholder="Descrição"
+                value={formData.descricao}
+                onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e] min-h-16"
+              />
+            </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <select
-                value={formData.tipo}
-                onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
-              >
-                <option>Manutenção</option>
-                <option>Plantio</option>
-                <option>colheita</option>
-                <option>compostagem</option>
-              </select>
+              <div>
+                <label className="text-[13px] text-[#4a5565] mb-1 block">Categoria</label>
+                <select
+                  value={formData.tipo}
+                  onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                >
+                  <option>Manutenção</option>
+                  <option>Plantio</option>
+                  <option>colheita</option>
+                  <option>compostagem</option>
+                </select>
+              </div>
 
-              <select
-                value={formData.dificuldade}
-                onChange={(e) => setFormData({ ...formData, dificuldade: Number(e.target.value) })}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
-              >
-                <option value={0}>Fácil</option>
-                <option value={1}>Médio</option>
-                <option value={2}>Difícil</option>
-              </select>
+              <div>
+                <label className="text-[13px] text-[#4a5565] mb-1 block">Dificuldade</label>
+                <select
+                  value={formData.dificuldade}
+                  onChange={(e) => setFormData({ ...formData, dificuldade: Number(e.target.value) })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                >
+                  <option value={0}>Fácil</option>
+                  <option value={1}>Médio</option>
+                  <option value={2}>Difícil</option>
+                </select>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-              <input
-                type="number"
-                placeholder="Moedas"
-                value={formData.moedas}
-                onChange={(e) => setFormData({ ...formData, moedas: Number(e.target.value) })}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
-              />
-              <input
-                type="number"
-                placeholder="Mudas"
-                value={formData.mudas}
-                onChange={(e) => setFormData({ ...formData, mudas: Number(e.target.value) })}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
-              />
-              <input
-                type="number"
-                placeholder="Tempo (min)"
-                value={formData.tempo}
-                onChange={(e) => setFormData({ ...formData, tempo: Number(e.target.value) })}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
-              />
+              <div>
+                <label className="text-[13px] text-[#4a5565] mb-1 block">Moedas (recompensa)</label>
+                <input
+                  type="number"
+                  placeholder="Moedas"
+                  value={formData.moedas}
+                  onChange={(e) => setFormData({ ...formData, moedas: Number(e.target.value) })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                />
+              </div>
+              <div>
+                <label className="text-[13px] text-[#4a5565] mb-1 block">Mudas (recompensa)</label>
+                <input
+                  type="number"
+                  placeholder="Mudas"
+                  value={formData.mudas}
+                  onChange={(e) => setFormData({ ...formData, mudas: Number(e.target.value) })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                />
+              </div>
+              <div>
+                <label className="text-[13px] text-[#4a5565] mb-1 block">Tempo (minutos)</label>
+                <input
+                  type="number"
+                  placeholder="Tempo (min)"
+                  value={formData.tempo}
+                  onChange={(e) => setFormData({ ...formData, tempo: Number(e.target.value) })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                />
+              </div>
             </div>
 
             <div className="flex gap-3">
@@ -438,94 +459,115 @@ export default function TasksPage() {
                       </button>
                     </div>
 
-                    <input
-                      type="text"
-                      placeholder="Título"
-                      value={formData.titulo}
-                      onChange={(e) =>
-                        setFormData({ ...formData, titulo: e.target.value })
-                      }
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e]"
-                    />
+                    <div>
+                      <label className="text-[13px] text-[#4a5565] mb-1 block">Título</label>
+                      <input
+                        type="text"
+                        placeholder="Título"
+                        value={formData.titulo}
+                        onChange={(e) =>
+                          setFormData({ ...formData, titulo: e.target.value })
+                        }
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e]"
+                      />
+                    </div>
 
-                    <textarea
-                      placeholder="Descrição"
-                      value={formData.descricao}
-                      onChange={(e) =>
-                        setFormData({ ...formData, descricao: e.target.value })
-                      }
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e] min-h-16"
-                    />
+                    <div>
+                      <label className="text-[13px] text-[#4a5565] mb-1 block">Descrição</label>
+                      <textarea
+                        placeholder="Descrição"
+                        value={formData.descricao}
+                        onChange={(e) =>
+                          setFormData({ ...formData, descricao: e.target.value })
+                        }
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e] min-h-16"
+                      />
+                    </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <select
-                        value={formData.tipo}
-                        onChange={(e) =>
-                          setFormData({ ...formData, tipo: e.target.value })
-                        }
-                        className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
-                      >
-                        <option>Manutenção</option>
-                        <option>Plantio</option>
-                        <option>colheita</option>
-                        <option>compostagem</option>
-                      </select>
+                      <div>
+                        <label className="text-[13px] text-[#4a5565] mb-1 block">Categoria</label>
+                        <select
+                          value={formData.tipo}
+                          onChange={(e) =>
+                            setFormData({ ...formData, tipo: e.target.value })
+                          }
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                        >
+                          <option>Manutenção</option>
+                          <option>Plantio</option>
+                          <option>colheita</option>
+                          <option>compostagem</option>
+                        </select>
+                      </div>
 
-                      <select
-                        value={formData.dificuldade}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            dificuldade: Number(e.target.value),
-                          })
-                        }
-                        className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
-                      >
-                        <option value={0}>Fácil</option>
-                        <option value={1}>Médio</option>
-                        <option value={2}>Difícil</option>
-                      </select>
+                      <div>
+                        <label className="text-[13px] text-[#4a5565] mb-1 block">Dificuldade</label>
+                        <select
+                          value={formData.dificuldade}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              dificuldade: Number(e.target.value),
+                            })
+                          }
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                        >
+                          <option value={0}>Fácil</option>
+                          <option value={1}>Médio</option>
+                          <option value={2}>Difícil</option>
+                        </select>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-3 gap-3">
-                      <input
-                        type="number"
-                        placeholder="Moedas"
-                        value={formData.moedas}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            moedas: Number(e.target.value),
-                          })
-                        }
-                        className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
-                      />
+                      <div>
+                        <label className="text-[13px] text-[#4a5565] mb-1 block">Moedas (recompensa)</label>
+                        <input
+                          type="number"
+                          placeholder="Moedas"
+                          value={formData.moedas}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              moedas: Number(e.target.value),
+                            })
+                          }
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                        />
+                      </div>
 
-                      <input
-                        type="number"
-                        placeholder="Mudas"
-                        value={formData.mudas}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            mudas: Number(e.target.value),
-                          })
-                        }
-                        className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
-                      />
+                      <div>
+                        <label className="text-[13px] text-[#4a5565] mb-1 block">Mudas (recompensa)</label>
+                        <input
+                          type="number"
+                          placeholder="Mudas"
+                          value={formData.mudas}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              mudas: Number(e.target.value),
+                            })
+                          }
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                        />
+                      </div>
 
-                      <input
-                        type="number"
-                        placeholder="Tempo (min)"
-                        value={formData.tempo}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            tempo: Number(e.target.value),
-                          })
-                        }
-                        className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
-                      />
+                      <div>
+                        <label className="text-[13px] text-[#4a5565] mb-1 block">Tempo (minutos)</label>
+                        <input
+                          type="number"
+                          placeholder="Tempo (min)"
+                          value={formData.tempo}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              tempo: Number(e.target.value),
+                            })
+                          }
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                        />
+                      </div>
                     </div>
 
                     <div className="flex gap-3">
@@ -612,12 +654,14 @@ export default function TasksPage() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => acceptTask(task.id)}
-                      className="w-full bg-[#00a63e] text-white text-[14px] py-2.5 rounded-lg hover:bg-[#008236] transition-colors text-center"
-                    >
-                      Aceitar Tarefa
-                    </button>
+                    {!isAdmin && (
+                      <button
+                        onClick={() => acceptTask(task.id)}
+                        className="w-full bg-[#00a63e] text-white text-[14px] py-2.5 rounded-lg hover:bg-[#008236] transition-colors text-center"
+                      >
+                        Aceitar Tarefa
+                      </button>
+                    )}
                   </>
                 )}
               </div>
