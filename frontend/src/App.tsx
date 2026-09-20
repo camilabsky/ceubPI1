@@ -127,7 +127,6 @@ export default function App() {
             isAdmin
               ? <AdminProfilePage
                     onLogout={() => setCurrentPage('home')}
-                    onNavigate={setCurrentPage}
                   />
               : <ProfilePage
                   coins={coins}
