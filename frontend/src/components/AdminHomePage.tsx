@@ -21,8 +21,12 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
 
   const [adminTasks, setAdminTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [recompensasResgatadas, setRecompensasResgatadas] = useState<any[]>([]);
+
+  
 
   const authHeaders = () => ({ Authorization: `Bearer ${token}` });
+  const idHorta = user?.roles.find((r) => r.role === 'ADMIN')?.id_horta || 1;
 
   const fetchAdminData = async () => {
     if (!token) return;
@@ -34,6 +38,16 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
       }
       const tasksData: Task[] = await tasksRes.json();
       setAdminTasks(tasksData);
+
+      const historyRes = await fetch(
+        `http://localhost:8080/admin/horta/historico?id_horta=${idHorta}`,
+        { headers: authHeaders() }
+      );
+      if (!historyRes.ok) {
+        throw new Error('Falha ao carregar historico da horta');
+      }
+      const historyData = await historyRes.json();
+      setRecompensasResgatadas(historyData.recompensas_resgatadas_horta || []);
     } catch (error) {
       console.error('Error fetching admin data:', error);
       toast.error('Erro ao carregar dados do painel');
@@ -122,11 +136,11 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
               <p className="text-[22px] text-neutral-950 font-bold leading-none">—</p>
               <p className="text-[12px] text-[#4a5565] mt-1">Mudas disponíveis</p>
             </div>
-            <div className="bg-white rounded-[14px] border border-gray-200 p-4 opacity-60">
+            <div className="bg-white rounded-[14px] border border-gray-200 p-4">
               <div className="size-9 rounded-full bg-purple-100 flex items-center justify-center mb-3">
                 <Gift className="size-5 text-purple-500" />
               </div>
-              <p className="text-[22px] text-neutral-950 font-bold leading-none">—</p>
+              <p className="text-[22px] text-neutral-950 font-bold leading-none">{recompensasResgatadas.length}</p>
               <p className="text-[12px] text-[#4a5565] mt-1">Recompensas resgatadas</p>
             </div>
           </div>
