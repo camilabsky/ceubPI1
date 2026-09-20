@@ -1,4 +1,4 @@
-import {User,ShieldCheck,ClipboardList,CheckCircle,Sprout,LogOut,Mail,Lock,ChevronRight} from 'lucide-react';
+import {User,ShieldCheck,ClipboardList,CheckCircle,Sprout,LogOut,Mail,Lock,ChevronRight, MapPin} from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
@@ -34,6 +34,12 @@ export default function AdminProfilePage({
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const [newLatitude, setNewLatitude] = useState('');
+  const [newLongitude, setNewLongitude] = useState('');
+  const [isSavingLocation, setIsSavingLocation] = useState(false);
+  const [isFetchingGeoLocation, setIsFetchingGeoLocation] = useState(false);
+  const [newEndereco, setNewEndereco] = useState('');
 
   useEffect(() => {
     const fetchAdminData = async () => {
@@ -120,6 +126,86 @@ export default function AdminProfilePage({
     }
   };
   
+  const handleSaveLocation = async () => {
+  const lat = Number(newLatitude);
+  const lng = Number(newLongitude);
+
+  if (Number.isNaN(lat) || lat < -90 || lat > 90) {
+    toast.error('Latitude inválida');
+    return;
+  }
+  if (Number.isNaN(lng) || lng < -180 || lng > 180) {
+    toast.error('Longitude inválida');
+    return;
+  }
+
+  setIsSavingLocation(true);
+  try {
+    const idHorta = user?.roles.find((r) => r.role === 'ADMIN')?.id_horta;
+    const response = await fetch(
+      `http://localhost:8080/admin/horta?id_horta=${idHorta}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ latitude: lat, longitude: lng, endereco: newEndereco }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Falha ao atualizar localização');
+    }
+
+    toast.success('Localização da horta atualizada');
+    setIsEditingLocation(false);
+  } catch (error) {
+    console.error('Erro ao atualizar localização:', error);
+    toast.error(
+      error instanceof Error ? error.message : 'Erro ao atualizar localização'
+    );
+  } finally {
+    setIsSavingLocation(false);
+  }
+};
+
+const handleUseCurrentLocation = () => {
+  if (!navigator.geolocation) {
+    toast.error('Geolocalização não é suportada neste navegador');
+    return;
+  }
+
+  setIsFetchingGeoLocation(true);
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      setNewLatitude(lat.toFixed(8));
+      setNewLongitude(lng.toFixed(8));
+
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+        );
+        const data = await res.json();
+        if (data?.display_name) {
+          setNewEndereco(data.display_name);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar endereço:', error);
+      } finally {
+        setIsFetchingGeoLocation(false);
+      }
+    },
+    (error) => {
+      console.error('Erro ao obter localização:', error);
+      toast.error('Não foi possível obter sua localização atual');
+      setIsFetchingGeoLocation(false);
+    }
+  );
+};
+
   // alterar e-mail do usuário
   const handleSaveEmail = async () => {
     const email = newEmail.trim();
@@ -344,7 +430,119 @@ export default function AdminProfilePage({
             </div>
           )}
         </div>
+        <div className="p-4 border-b border-gray-100">
+      {!isEditingLocation ? (
+      <button
+        type="button"
+        onClick={() => {
+          const horta = user?.roles.find((r) => r.role === 'ADMIN');
+          setNewLatitude(horta?.latitude != null ? String(horta.latitude) : '');
+          setNewLongitude(horta?.longitude != null ? String(horta.longitude) : '');
+          setNewEndereco(horta?.endereco || '');
+          setIsEditingLocation(true);
+        }}
+        className="w-full flex items-center gap-3 text-left"
+      >
+        <div className="size-9 rounded-full bg-gray-100 flex items-center justify-center">
+          <MapPin className="size-5 text-gray-600" />
+        </div>
 
+        <div className="flex-1 min-w-0">
+          <p className="text-[12px] text-gray-500">
+            Localização
+          </p>
+
+          <p className="text-[14px] text-neutral-950 truncate">
+            {(() => {
+              const horta = user?.roles.find((r) => r.role === 'ADMIN');
+              if (horta?.endereco) return horta.endereco;
+              return horta?.latitude != null && horta?.longitude != null
+                ? `${horta.latitude}, ${horta.longitude}`
+                : 'Não informado';
+            })()}
+          </p>
+        </div>
+
+        <ChevronRight className="size-5 text-gray-400" />
+      </button>
+    ) : (
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="size-9 rounded-full bg-gray-100 flex items-center justify-center">
+            <MapPin className="size-5 text-gray-600" />
+          </div>
+
+          <p className="text-[14px] font-medium text-neutral-950">
+            Alterar localização
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleUseCurrentLocation}
+          disabled={isFetchingGeoLocation}
+          className="w-full flex items-center justify-center gap-2 rounded-lg border border-green-600 text-green-600 py-2 text-[13px] font-medium disabled:opacity-60"
+        >
+          {isFetchingGeoLocation ? 'Obtendo localização...' : 'Usar minha localização atual'}
+        </button>
+
+        <div>
+        <label className="text-[12px] text-gray-500 mb-1 block">Endereço</label>
+        <textarea
+          value={newEndereco}
+          onChange={(event) => setNewEndereco(event.target.value)}
+          placeholder="Endereço da horta"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500 min-h-16"
+        />
+      </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[12px] text-gray-500 mb-1 block">Latitude</label>
+            <input
+              type="number"
+              step="any"
+              value={newLatitude}
+              onChange={(event) => setNewLatitude(event.target.value)}
+              placeholder="-15.79381800"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500"
+            />
+          </div>
+          <div>
+            <label className="text-[12px] text-gray-500 mb-1 block">Longitude</label>
+            <input
+              type="number"
+              step="any"
+              value={newLongitude}
+              onChange={(event) => setNewLongitude(event.target.value)}
+              placeholder="-47.88277800"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setIsEditingLocation(false)}
+            disabled={isSavingLocation}
+            className="flex-1 rounded-lg border border-gray-300 py-2 text-[13px] text-gray-700"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveLocation}
+            disabled={isSavingLocation}
+            className="flex-1 rounded-lg bg-green-600 text-white py-2 text-[13px] font-medium disabled:opacity-70"
+          >
+            {isSavingLocation ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+    )}
+    </div>
+        
         {/* E-mail */}
         <div className="p-4 border-b border-gray-100">
           {!isEditingEmail ? (

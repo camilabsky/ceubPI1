@@ -39,10 +39,10 @@ function tokenFromHeader(authorizationHeader) {
 
 async function getUserRoles(id_usuario) {
     const [roles] = await db.query(
-        `SELECT uhr.papel AS role, uhr.id_horta, h.nome AS horta_nome
-         FROM UsuarioHortaRole uhr
-         LEFT JOIN Horta h ON h.id = uhr.id_horta
-         WHERE uhr.id_usuario = ?`,
+        `SELECT uhr.papel AS role, uhr.id_horta, h.nome AS horta_nome, h.latitude, h.longitude, h.endereco
+        FROM UsuarioHortaRole uhr
+        LEFT JOIN Horta h ON h.id = uhr.id_horta
+        WHERE uhr.id_usuario = ?`,
         [id_usuario]
     );
     return roles;
@@ -850,6 +850,36 @@ app.put('/admin/recompensas/:id', requireAuth, async (req, res) => {
     } catch (error) {
         console.error('Erro em PUT /admin/recompensas/:id:', error);
         return res.status(500).send({ error: 'Erro ao editar recompensa' });
+    }
+});
+
+app.put('/admin/horta', requireAuth, requireHortaAdmin, async (req, res) => {
+    try {
+        const { latitude, longitude, endereco } = req.body;
+
+        if (latitude === undefined || longitude === undefined) {
+            return res.status(400).send({ error: 'Latitude e longitude sao obrigatorias' });
+        }
+
+        const lat = Number(latitude);
+        const lng = Number(longitude);
+
+        if (Number.isNaN(lat) || lat < -90 || lat > 90) {
+            return res.status(400).send({ error: 'Latitude invalida' });
+        }
+        if (Number.isNaN(lng) || lng < -180 || lng > 180) {
+            return res.status(400).send({ error: 'Longitude invalida' });
+        }
+
+        await db.query(
+            'UPDATE Horta SET latitude = ?, longitude = ?, endereco = ? WHERE id = ?',
+            [lat, lng, endereco || null, req.id_horta]
+        );
+
+        return res.send({ message: 'Localizacao da horta atualizada', latitude: lat, longitude: lng, endereco });
+    } catch (error) {
+        console.error('Erro em PUT /admin/horta:', error);
+        return res.status(500).send({ error: 'Erro ao atualizar localizacao da horta' });
     }
 });
 
