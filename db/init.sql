@@ -34,6 +34,14 @@ CREATE TABLE IF NOT EXISTS UsuarioHortaRole (
   REFERENCES Horta(id)
 );
 
+CREATE TABLE IF NOT EXISTS Horta (
+  id int AUTO_INCREMENT PRIMARY KEY,
+  nome varchar(128) NOT NULL UNIQUE,
+  descricao varchar(255),
+  latitude DECIMAL(10, 8) NULL,
+  longitude DECIMAL(11, 8) NULL
+);
+
 CREATE TABLE IF NOT EXISTS Recompensas (
   id int AUTO_INCREMENT PRIMARY KEY,
   nome varchar(128),
