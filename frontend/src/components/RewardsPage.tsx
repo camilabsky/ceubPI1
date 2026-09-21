@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
 import { Sprout, Lock, Gift, PlusCircle, Edit2, Trash2, Loader } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
@@ -62,7 +63,7 @@ export default function RewardsPage() {
       throw new Error('Sessão expirada');
     }
 
-    const response = await fetch('http://localhost:8080/minhas_moedas', {
+    const response = await fetch(`${API_URL}/minhas_moedas`, {
       method: 'POST',
       headers: {
         Accept: 'application/json',
@@ -79,7 +80,7 @@ export default function RewardsPage() {
   };
 
   const fetchRewards = async () => {
-    const endpoint = isAdmin ? 'http://localhost:8080/recompensas' : 'http://localhost:8080/recompensas_disponiveis';
+    const endpoint = isAdmin ? `${API_URL}/recompensas` : `${API_URL}/recompensas_disponiveis`;
     const headers: Record<string, string> = {};
 
     if (isAdmin && token) {
@@ -104,7 +105,7 @@ export default function RewardsPage() {
 
       if (isAdmin && token) {
         const historyResponse = await fetch(
-          `http://localhost:8080/admin/horta/historico?id_horta=${idHorta}`,
+          `${API_URL}/admin/horta/historico?id_horta=${idHorta}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
@@ -135,7 +136,7 @@ export default function RewardsPage() {
       return;
     }
     try {
-      const response = await fetch('http://localhost:8080/resgatar_recompensa', {
+      const response = await fetch(`${API_URL}/resgatar_recompensa`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -184,8 +185,8 @@ export default function RewardsPage() {
     try {
       const method = editingRecompensaId ? 'PUT' : 'POST';
       const url = editingRecompensaId
-        ? `http://localhost:8080/admin/recompensas/${editingRecompensaId}`
-        : 'http://localhost:8080/admin/recompensas';
+        ? `${API_URL}/admin/recompensas/${editingRecompensaId}`
+        : `${API_URL}/admin/recompensas`;
 
       const response = await fetch(url, {
         method,
@@ -224,7 +225,7 @@ export default function RewardsPage() {
     if (!window.confirm('Tem certeza que deseja deletar esta recompensa?')) return;
 
     try {
-      const response = await fetch(`http://localhost:8080/admin/recompensas/${id}`, {
+      const response = await fetch(`${API_URL}/admin/recompensas/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });

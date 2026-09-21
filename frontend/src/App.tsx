@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import { useState, useEffect } from 'react';
 import { Home, ListTodo, Gift, User } from 'lucide-react';
 import { Toaster } from './components/ui/sonner';
@@ -28,7 +29,7 @@ interface Task {
 }
 
 async function get_coins(id_perfil: Number, token: string) {
-  const coins = await fetch("http://localhost:8080/minhas_moedas", {
+  const coins = await fetch(`${API_URL}/minhas_moedas`, {
     method: 'POST',
     headers: {
       'Accept': 'application/json',
@@ -43,7 +44,7 @@ async function get_coins(id_perfil: Number, token: string) {
 }
 
 async function get_number_of_completed_tasks(id_perfil: Number, token: string) {
-  const tarefas_concluidas = await fetch("http://localhost:8080/tarefas_concluidas", {
+  const tarefas_concluidas = await fetch(`${API_URL}/tarefas_concluidas`, {
     method: 'POST',
     headers: {
       'Accept': 'application/json',

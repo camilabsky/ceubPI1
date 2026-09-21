@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import {User,ShieldCheck,ClipboardList,CheckCircle,Sprout,LogOut,Mail,Lock,ChevronRight, MapPin} from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
@@ -48,7 +49,7 @@ export default function AdminProfilePage({
       setIsLoading(true);
 
       try {
-        const tasksRes = await fetch('http://localhost:8080/admin/tarefas', {
+        const tasksRes = await fetch(`${API_URL}/admin/tarefas`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -143,7 +144,7 @@ export default function AdminProfilePage({
   try {
     const idHorta = user?.roles.find((r) => r.role === 'ADMIN')?.id_horta;
     const response = await fetch(
-      `http://localhost:8080/admin/horta?id_horta=${idHorta}`,
+      `${API_URL}/admin/horta?id_horta=${idHorta}`,
       {
         method: 'PUT',
         headers: {

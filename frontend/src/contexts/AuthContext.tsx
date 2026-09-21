@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 interface Role {
@@ -68,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUser = async () => {
     try {
-      const res = await fetch('http://localhost:8080/auth/me', {
+      const res = await fetch(`${API_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('Failed to fetch user');
@@ -86,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, senha: string) => {
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:8080/auth/login', {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, senha })
@@ -118,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ) => {
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:8080/auth/register', {
+      const res = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome, email, senha, ...opts })
@@ -144,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Usuário não autenticado');
     }
 
-    const res = await fetch('http://localhost:8080/auth/me', {
+    const res = await fetch(`${API_URL}/auth/me`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -168,7 +169,7 @@ const updatePassword = async (
   senhaAtual: string,
   novaSenha: string
 ) => {
-  const response = await fetch('http://localhost:8080/auth/password', {
+  const response = await fetch(`${API_URL}/auth/password`, {
   method: 'PUT',
   headers: {
     'Content-Type': 'application/json',

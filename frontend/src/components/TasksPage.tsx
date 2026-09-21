@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { MapPin, Clock, Sprout, PlusCircle, Edit2, Trash2, Loader } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
@@ -61,8 +62,8 @@ export default function TasksPage() {
     setIsLoadingTasks(true);
     try {
       const tasksUrl = isAdmin && token
-        ? 'http://localhost:8080/admin/tarefas'
-        : 'http://localhost:8080/tarefas_disponiveis';
+        ? `${API_URL}/admin/tarefas`
+        : `${API_URL}/tarefas_disponiveis`;
       const tasksResponse = await fetch(
         tasksUrl,
         isAdmin && token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
@@ -75,7 +76,7 @@ export default function TasksPage() {
 
       if (isAdmin && token) {
         const historyResponse = await fetch(
-          `http://localhost:8080/admin/horta/historico?id_horta=${idHorta}`,
+          `${API_URL}/admin/horta/historico?id_horta=${idHorta}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
@@ -106,7 +107,7 @@ export default function TasksPage() {
       return;
     }
     try {
-      const response = await fetch('http://localhost:8080/aceitar_tarefa', {
+      const response = await fetch(`${API_URL}/aceitar_tarefa`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -158,8 +159,8 @@ export default function TasksPage() {
     try {
       const method = editingId ? 'PUT' : 'POST';
       const url = editingId
-        ? `http://localhost:8080/admin/tarefas/${editingId}`
-        : 'http://localhost:8080/admin/tarefas';
+        ? `${API_URL}/admin/tarefas/${editingId}`
+        : `${API_URL}/admin/tarefas`;
 
       const response = await fetch(url, {
         method,
@@ -191,7 +192,7 @@ export default function TasksPage() {
     if (!window.confirm('Tem certeza que deseja deletar esta tarefa?')) return;
 
     try {
-      const response = await fetch(`http://localhost:8080/admin/tarefas/${id}`, {
+      const response = await fetch(`${API_URL}/admin/tarefas/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });

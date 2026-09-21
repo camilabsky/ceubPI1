@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
 import { UserPlus, Sprout } from 'lucide-react';
 import { toast } from 'sonner';
@@ -27,7 +28,7 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
   const [isFetchingGeoLocation, setIsFetchingGeoLocation] = useState(false);
 
   useEffect(() => {
-    fetch('http://localhost:8080/hortas')
+    fetch(`${API_URL}/hortas`)
       .then((res) => res.json())
       .then((data) => setHortas(data))
       .catch((error) => console.error('Erro ao carregar hortas:', error));

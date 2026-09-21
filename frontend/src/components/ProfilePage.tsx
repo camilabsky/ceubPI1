@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { TrendingUp, Sprout, Award, LogOut, CheckCircle2, Gift} from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
@@ -29,7 +30,7 @@ interface RewardRedeemed {
 }
 
 async function getMudas(idPerfil: number) {
-  const mudas = await fetch('http://localhost:8080/minhas_mudas', {
+  const mudas = await fetch(`${API_URL}/minhas_mudas`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -71,7 +72,7 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, isAdmin =
           return;
         }
 
-        const response = await fetch('http://localhost:8080/me/historico', {
+        const response = await fetch(`${API_URL}/me/historico`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!response.ok) throw new Error('Falha ao carregar historico');

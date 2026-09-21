@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { TrendingUp, Sprout, Play } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
@@ -42,9 +43,9 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     setIsLoading(true);
     try {
       const [tasksRes, coinsRes, completedRes] = await Promise.all([
-        fetch('http://localhost:8080/minhas_tarefas', { method: 'POST', headers: authHeaders() }),
-        fetch('http://localhost:8080/minhas_moedas', { method: 'POST', headers: authHeaders() }),
-        fetch('http://localhost:8080/tarefas_concluidas', { method: 'POST', headers: authHeaders() }),
+        fetch(`${API_URL}/minhas_tarefas`, { method: 'POST', headers: authHeaders() }),
+        fetch(`${API_URL}/minhas_moedas`, { method: 'POST', headers: authHeaders() }),
+        fetch(`${API_URL}/tarefas_concluidas`, { method: 'POST', headers: authHeaders() }),
       ]);
 
       if (!tasksRes.ok || !coinsRes.ok || !completedRes.ok) {
@@ -99,7 +100,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const completeTask = async (idTarefa: number, task: Task) => {
     if (!token) return;
     try {
-      const response = await fetch('http://localhost:8080/concluir_tarefa', {
+      const response = await fetch(`${API_URL}/concluir_tarefa`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ id_tarefa: idTarefa }),

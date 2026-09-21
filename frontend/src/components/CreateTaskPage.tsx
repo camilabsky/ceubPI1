@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState } from 'react';
 import { ArrowLeft, PlusCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -47,7 +48,7 @@ export default function CreateTaskPage({ onBack, onCreated }: CreateTaskPageProp
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('http://localhost:8080/criar_tarefa', {
+      const response = await fetch(`${API_URL}/criar_tarefa`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',

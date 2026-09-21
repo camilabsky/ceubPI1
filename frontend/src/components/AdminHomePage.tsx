@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { ClipboardList, Sprout, LayoutDashboard, Gift, Bell, User as UserIcon, Settings, ArrowRight, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
@@ -33,7 +34,7 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
     if (!token) return;
     setIsLoading(true);
     try {
-      const tasksRes = await fetch('http://localhost:8080/admin/tarefas', { headers: authHeaders() });
+      const tasksRes = await fetch(`${API_URL}/admin/tarefas`, { headers: authHeaders() });
       if (!tasksRes.ok) {
         throw new Error('Falha ao carregar tarefas da horta');
       }
@@ -41,7 +42,7 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
       setAdminTasks(tasksData);
 
       const historyRes = await fetch(
-        `http://localhost:8080/admin/horta/historico?id_horta=${idHorta}`,
+        `${API_URL}/admin/horta/historico?id_horta=${idHorta}`,
         { headers: authHeaders() }
       );
       if (!historyRes.ok) {
