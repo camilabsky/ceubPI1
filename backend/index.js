@@ -4,12 +4,16 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
 
 const app = express();
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
     throw new Error('JWT_SECRET nao definido no .env');
 }
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'db',
@@ -228,6 +232,71 @@ app.post('/auth/register', async (req, res) => {
         return res.status(500).send({ error: 'Erro ao cadastrar usuario' });
     } finally {
         connection.release();
+    }
+});
+
+app.post('/auth/google', async (req, res) => {
+    if (!googleClient) {
+        return res.status(500).send({ error: 'Login com Google nao configurado' });
+    }
+
+    const { credential } = req.body;
+    if (!credential) {
+        return res.status(400).send({ error: 'Credential e obrigatorio' });
+    }
+
+    try {
+        const ticket = await googleClient.verifyIdToken({
+            idToken: credential,
+            audience: GOOGLE_CLIENT_ID,
+        });
+        const payload = ticket.getPayload();
+        const email = payload.email;
+        const nome = payload.name || email;
+
+        if (!payload.email_verified) {
+            return res.status(401).send({ error: 'Email do Google nao verificado' });
+        }
+
+        const [existing] = await db.query(
+            'SELECT id, nome, email, ativo, id_perfil FROM Usuario WHERE email = ? LIMIT 1',
+            [email]
+        );
+
+        let user;
+        if (existing.length > 0) {
+            if (!existing[0].ativo) {
+                return res.status(401).send({ error: 'Usuario inativo' });
+            }
+            user = existing[0];
+        } else {
+            const [result] = await db.query(
+                'INSERT INTO Usuario (nome, email, password_hash, ativo) VALUES (?, ?, NULL, true)',
+                [nome, email]
+            );
+            user = { id: result.insertId, nome, email, id_perfil: null };
+        }
+
+        const roles = await getUserRoles(user.id);
+        const token = jwt.sign(
+            { id: user.id, email: user.email, nome: user.nome, id_perfil: user.id_perfil },
+            JWT_SECRET,
+            { expiresIn: '8h' }
+        );
+
+        return res.send({
+            token,
+            user: {
+                id: user.id,
+                nome: user.nome,
+                email: user.email,
+                id_perfil: user.id_perfil,
+                roles
+            }
+        });
+    } catch (error) {
+        console.error('Erro no /auth/google:', error);
+        return res.status(401).send({ error: 'Token do Google invalido' });
     }
 });
 
