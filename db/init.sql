@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS Usuario (
   id int AUTO_INCREMENT PRIMARY KEY,
   nome varchar(128) NOT NULL,
   email varchar(128) NOT NULL UNIQUE,
-  password_hash varchar(255) NOT NULL,
+  password_hash varchar(255) NULL,
   ativo boolean default true,
   id_perfil int NULL,
   CONSTRAINT fk_usuario_perfil
