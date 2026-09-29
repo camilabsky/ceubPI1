@@ -835,6 +835,99 @@ app.get('/admin/horta/historico', requireAuth, requireHortaAdmin, async (req, re
     }
 });
 
+app.post('/hortas', requireAuth, async (req, res) => {
+    const { nome, descricao, latitude, longitude, endereco } = req.body;
+
+    if (!nome || !nome.trim()) {
+        return res.status(400).send({ error: 'Nome da horta e obrigatorio' });
+    }
+    if (nome.trim().length > 128) {
+        return res.status(400).send({ error: 'Nome da horta deve ter no maximo 128 caracteres' });
+    }
+    if (descricao && descricao.length > 255) {
+        return res.status(400).send({ error: 'Descricao deve ter no maximo 255 caracteres' });
+    }
+    if (!endereco || !endereco.trim()) {
+        return res.status(400).send({ error: 'Endereco da horta e obrigatorio' });
+    }
+
+    const lat = latitude === '' || latitude == null ? NaN : Number(latitude);
+    const lng = longitude === '' || longitude == null ? NaN : Number(longitude);
+    if (Number.isNaN(lat) || lat < -90 || lat > 90) {
+        return res.status(400).send({ error: 'Latitude invalida ou nao informada' });
+    }
+    if (Number.isNaN(lng) || lng < -180 || lng > 180) {
+        return res.status(400).send({ error: 'Longitude invalida ou nao informada' });
+    }
+
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const [hortaResult] = await connection.query(
+            'INSERT INTO Horta (nome, descricao, latitude, longitude, endereco) VALUES (?, ?, ?, ?, ?)',
+            [nome.trim(), descricao && descricao.trim() ? descricao.trim() : null, lat, lng, endereco.trim()]
+        );
+        const id_horta = hortaResult.insertId;
+
+        await connection.query(
+            'INSERT INTO UsuarioHortaRole (id_usuario, id_horta, papel) VALUES (?, ?, ?)',
+            [req.user.id, id_horta, 'ADMIN']
+        );
+
+        await connection.commit();
+
+        const roles = await getUserRoles(req.user.id);
+        return res.status(201).send({
+            id_horta,
+            user: { id: req.user.id, nome: req.user.nome, email: req.user.email, id_perfil: req.user.id_perfil ?? null, roles }
+        });
+    } catch (error) {
+        await connection.rollback();
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(409).send({ error: 'Ja existe uma horta com este nome' });
+        }
+        console.error('Erro em POST /hortas:', error);
+        return res.status(500).send({ error: 'Erro ao criar horta' });
+    } finally {
+        connection.release();
+    }
+});
+
+app.post('/hortas/:id/entrar', requireAuth, async (req, res) => {
+    const id_horta = Number(req.params.id);
+    if (!Number.isInteger(id_horta) || id_horta <= 0) {
+        return res.status(400).send({ error: 'Horta invalida' });
+    }
+
+    try {
+        const [hortaRows] = await db.query('SELECT id FROM Horta WHERE id = ? LIMIT 1', [id_horta]);
+        if (hortaRows.length === 0) {
+            return res.status(404).send({ error: 'Horta nao encontrada' });
+        }
+
+        const [existing] = await db.query(
+            'SELECT 1 FROM UsuarioHortaRole WHERE id_usuario = ? AND id_horta = ? LIMIT 1',
+            [req.user.id, id_horta]
+        );
+        if (existing.length === 0) {
+            await db.query(
+                'INSERT INTO UsuarioHortaRole (id_usuario, id_horta, papel) VALUES (?, ?, ?)',
+                [req.user.id, id_horta, 'MEMBER']
+            );
+        }
+
+        const roles = await getUserRoles(req.user.id);
+        return res.status(200).send({
+            id_horta,
+            user: { id: req.user.id, nome: req.user.nome, email: req.user.email, id_perfil: req.user.id_perfil ?? null, roles }
+        });
+    } catch (error) {
+        console.error('Erro em POST /hortas/:id/entrar:', error);
+        return res.status(500).send({ error: 'Erro ao entrar na horta' });
+    }
+});
+
 app.post('/resgatar_recompensa', requireAuth, async (req, res) => {
     const conn = await db.getConnection();
     try {
