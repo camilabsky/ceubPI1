@@ -23,7 +23,8 @@ interface AuthContextType {
   user: User | null;
   isAdmin: boolean;
   isLoading: boolean;
-    loginWithGoogle: (credential: string) => Promise<void>;
+      loginWithGoogle: (credential: string) => Promise<void>;
+      applyUser: (user: User) => void;
 
   
   login: (email: string, senha: string) => Promise<void>;
@@ -227,6 +228,10 @@ if (!response.ok) {
     }
   };
 
+    const applyUser = (novoUser: User) => {
+    setUser(novoUser);
+  };
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -234,7 +239,7 @@ if (!response.ok) {
   };
 
   return (
-        <AuthContext.Provider value={{token,user,isAdmin,isLoading,login,logout,register,updateUser,updatePassword,loginWithGoogle}}
+        <AuthContext.Provider value={{token,user,isAdmin,isLoading,login,logout,register,updateUser,updatePassword,loginWithGoogle,applyUser}}
 >
         {children}
     </AuthContext.Provider>
