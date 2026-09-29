@@ -562,9 +562,14 @@ app.post('/concluir_tarefa', requireAuth, async (req, res) => {
     }
 });
 
-app.get('/tarefas_disponiveis', async (req, res) => {
+app.get('/tarefas_disponiveis', requireAuth, async (req, res) => {
     try {
-        const [results] = await db.query('SELECT * FROM Tarefas WHERE id_perfil IS NULL AND deleted_at IS NULL');
+        const [results] = await db.query(
+            `SELECT t.* FROM Tarefas t
+             WHERE t.id_perfil IS NULL AND t.deleted_at IS NULL
+               AND t.id_horta IN (SELECT id_horta FROM UsuarioHortaRole WHERE id_usuario = ?)`,
+            [req.user.id]
+        );
         return res.send(results);
     } catch (error) {
         console.error('Erro em /tarefas_disponiveis:', error);
@@ -601,13 +606,21 @@ app.get('/admin/tarefas', requireAuth, async (req, res) => {
 
 app.post('/aceitar_tarefa', requireAuth, async (req, res) => {
     try {
-        const id_tarefa = Number(req.body.id_tarefa);
+                const id_tarefa = Number(req.body.id_tarefa);
+        if (!Number.isInteger(id_tarefa) || id_tarefa <= 0) {
+            return res.status(400).send({ error: 'id_tarefa invalido' });
+        }
+        if (!req.user.id_perfil) {
+            return res.status(403).send({ error: 'Perfil nao encontrado, saia e entre novamente' });
+        }
         const [results] = await db.query(
-            'UPDATE Tarefas SET id_perfil = ? WHERE id = ? AND id_perfil IS NULL',
-            [req.user.id_perfil, id_tarefa]
+            `UPDATE Tarefas SET id_perfil = ?
+             WHERE id = ? AND id_perfil IS NULL AND deleted_at IS NULL
+               AND id_horta IN (SELECT id_horta FROM UsuarioHortaRole WHERE id_usuario = ?)`,
+            [req.user.id_perfil, id_tarefa, req.user.id]
         );
         if (results.affectedRows === 0) {
-            return res.status(409).send({ error: 'Tarefa ja foi aceita por outra pessoa' });
+            return res.status(409).send({ error: 'Tarefa indisponivel (ja aceita, inexistente ou de outra horta)' });
         }
         return res.send(results);
     } catch (error) {
