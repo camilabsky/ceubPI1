@@ -147,9 +147,7 @@ app.post('/auth/register', async (req, res) => {
     if (!nome || !email || !senha) {
         return res.status(400).send({ error: 'Nome, email e senha sao obrigatorios' });
     }
-    if (!id_horta && !nome_nova_horta) {
-        return res.status(400).send({ error: 'Informe id_horta (horta existente) ou nome_nova_horta (horta nova)' });
-    }
+
     if (id_horta && nome_nova_horta) {
         return res.status(400).send({ error: 'Informe apenas id_horta OU nome_nova_horta, nao os dois' });
     }
@@ -181,9 +179,15 @@ app.post('/auth/register', async (req, res) => {
             return res.status(409).send({ error: 'Ja existe um usuario com este email' });
         }
 
+        const [perfilResult] = await connection.query(
+            'INSERT INTO Perfil (nome) VALUES (?)',
+            [nome.slice(0, 64)]
+        );
+        const id_perfil = perfilResult.insertId;
+
         const [userResult] = await connection.query(
-            'INSERT INTO Usuario (nome, email, password_hash) VALUES (?, ?, ?)',
-            [nome, email, senhaHash]
+            'INSERT INTO Usuario (nome, email, password_hash, id_perfil) VALUES (?, ?, ?, ?)',
+            [nome, email, senhaHash, id_perfil]
         );
         const id_usuario = userResult.insertId;
 
@@ -197,31 +201,34 @@ app.post('/auth/register', async (req, res) => {
             );
             idHortaFinal = hortaResult.insertId;
             papel = 'ADMIN';
-        } else {
+        } else if (id_horta) {
             const [hortaRows] = await connection.query('SELECT id FROM Horta WHERE id = ? LIMIT 1', [id_horta]);
+
             if (hortaRows.length === 0) {
                 await connection.rollback();
                 return res.status(404).send({ error: 'Horta nao encontrada' });
             }
         }
 
-        await connection.query(
-            'INSERT INTO UsuarioHortaRole (id_usuario, id_horta, papel) VALUES (?, ?, ?)',
-            [id_usuario, idHortaFinal, papel]
-        );
+                if (idHortaFinal) {
+            await connection.query(
+                'INSERT INTO UsuarioHortaRole (id_usuario, id_horta, papel) VALUES (?, ?, ?)',
+                [id_usuario, idHortaFinal, papel]
+            );
+        }
 
         await connection.commit();
 
         const roles = await getUserRoles(id_usuario);
         const token = jwt.sign(
-            { id: id_usuario, email, nome, id_perfil: null },
+            { id: id_usuario, email, nome, id_perfil },
             JWT_SECRET,
             { expiresIn: '8h' }
         );
 
         return res.status(201).send({
             token,
-            user: { id: id_usuario, nome, email, id_perfil: null, roles }
+            user: { id: id_usuario, nome, email, id_perfil, roles }
         });
     } catch (error) {
         await connection.rollback();
@@ -270,11 +277,26 @@ app.post('/auth/google', async (req, res) => {
             }
             user = existing[0];
         } else {
-            const [result] = await db.query(
-                'INSERT INTO Usuario (nome, email, password_hash, ativo) VALUES (?, ?, NULL, true)',
-                [nome, email]
-            );
-            user = { id: result.insertId, nome, email, id_perfil: null };
+            const conn = await db.getConnection();
+            try {
+                await conn.beginTransaction();
+                const [perfilResult] = await conn.query(
+                    'INSERT INTO Perfil (nome) VALUES (?)',
+                    [nome.slice(0, 64)]
+                );
+                const id_perfil = perfilResult.insertId;
+                const [result] = await conn.query(
+                    'INSERT INTO Usuario (nome, email, password_hash, ativo, id_perfil) VALUES (?, ?, NULL, true, ?)',
+                    [nome, email, id_perfil]
+                );
+                await conn.commit();
+                user = { id: result.insertId, nome, email, id_perfil };
+            } catch (e) {
+                await conn.rollback();
+                throw e;
+            } finally {
+                conn.release();
+            }
         }
 
         const roles = await getUserRoles(user.id);
