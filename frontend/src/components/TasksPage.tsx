@@ -66,7 +66,7 @@ export default function TasksPage() {
         : `${API_URL}/tarefas_disponiveis`;
       const tasksResponse = await fetch(
         tasksUrl,
-        isAdmin && token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+            token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
       if (!tasksResponse.ok) {
         throw new Error('Falha ao carregar tarefas');
