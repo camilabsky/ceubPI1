@@ -23,6 +23,8 @@ interface AuthContextType {
   user: User | null;
   isAdmin: boolean;
   isLoading: boolean;
+    loginWithGoogle: (credential: string) => Promise<void>;
+
   
   login: (email: string, senha: string) => Promise<void>;
   // 1. Na interface AuthContextType (linha ~27-29):
@@ -201,6 +203,30 @@ if (!response.ok) {
 }
 };
 
+  const loginWithGoogle = async (credential: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Login com Google falhou');
+      }
+      const data = await res.json();
+      setToken(data.token);
+      setUser(data.user);
+      localStorage.setItem('token', data.token);
+    } catch (error) {
+      console.error('Erro no login com Google:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -208,7 +234,7 @@ if (!response.ok) {
   };
 
   return (
-        <AuthContext.Provider value={{token,user,isAdmin,isLoading,login,logout,register,updateUser,updatePassword,}}
+        <AuthContext.Provider value={{token,user,isAdmin,isLoading,login,logout,register,updateUser,updatePassword,loginWithGoogle}}
 >
         {children}
     </AuthContext.Provider>
