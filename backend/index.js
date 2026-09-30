@@ -549,13 +549,17 @@ app.post('/concluir_tarefa', requireAuth, async (req, res) => {
     try {
         const id_tarefa = Number(req.body.id_tarefa);
         const [results] = await db.query(
-            'UPDATE Tarefas SET concluido = true WHERE id = ? AND id_perfil = ?',
+            'UPDATE Tarefas SET concluido = true, completed_at = COALESCE(completed_at, NOW()), xp_recebido = COALESCE(xp_recebido, xp), moedas_recebidas = COALESCE(moedas_recebidas, moedas) WHERE id = ? AND id_perfil = ?',
             [id_tarefa, req.user.id_perfil]
         );
         if (results.affectedRows === 0) {
             return res.status(403).send({ error: 'Tarefa nao pertence a este usuario ou nao existe' });
         }
-        return res.send(results);
+        const [awardRows] = await db.query(
+            'SELECT moedas_recebidas AS moedas, xp_recebido AS xp FROM Tarefas WHERE id = ? LIMIT 1',
+            [id_tarefa]
+        );
+        return res.send({ ...results, ...(awardRows[0] || {}) });
     } catch (error) {
         console.error('Erro em /concluir_tarefa:', error);
         return res.status(500).send({ error: 'Erro ao concluir tarefa' });
@@ -579,7 +583,14 @@ app.get('/tarefas_disponiveis', requireAuth, async (req, res) => {
 
 app.get('/hortas', async (req, res) => {
     try {
-        const [results] = await db.query('SELECT id, nome FROM Horta ORDER BY nome ASC');
+        const [results] = await db.query(
+            `SELECT h.id, h.nome, h.descricao, h.latitude, h.longitude, h.endereco,
+                    COUNT(CASE WHEN uhr.papel = 'MEMBER' THEN 1 END) AS participantes
+             FROM Horta h
+             LEFT JOIN UsuarioHortaRole uhr ON uhr.id_horta = h.id
+             GROUP BY h.id, h.nome, h.descricao, h.latitude, h.longitude, h.endereco
+             ORDER BY h.nome ASC`
+        );
         return res.send(results);
     } catch (error) {
         console.error('Erro em /hortas:', error);
@@ -665,7 +676,7 @@ app.post('/criar_tarefa', async (req, res) => {
 
 app.post('/admin/tarefas', requireAuth, requireHortaAdmin, async (req, res) => {
     try {
-        const { titulo, tipo, descricao, dificuldade, moedas, mudas, tempo } = req.body;
+        const { titulo, tipo, descricao, dificuldade, moedas, xp, mudas, tempo } = req.body;
         if (!titulo || !tipo || !descricao) {
             return res.status(400).send({ error: 'Campos obrigatorios ausentes' });
         }
@@ -675,10 +686,15 @@ app.post('/admin/tarefas', requireAuth, requireHortaAdmin, async (req, res) => {
             return res.status(404).send({ error: 'Horta nao encontrada' });
         }
 
+        const xp_num = Number(xp ?? 50);
+        if (!Number.isInteger(xp_num) || xp_num < 0 || xp_num > 10000) {
+            return res.status(400).send({ error: 'XP deve ser um numero inteiro entre 0 e 10000' });
+        }
+
         const [results] = await db.query(
             `INSERT INTO Tarefas
-             (titulo, tipo, horta, descricao, dificuldade, moedas, mudas, tempo, id_horta, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (titulo, tipo, horta, descricao, dificuldade, moedas, xp, mudas, tempo, id_horta, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 titulo,
                 tipo,
@@ -686,6 +702,7 @@ app.post('/admin/tarefas', requireAuth, requireHortaAdmin, async (req, res) => {
                 descricao,
                 Number(dificuldade) || 0,
                 Number(moedas) || 0,
+                xp_num,
                 Number(mudas) || 0,
                 Number(tempo) || 1,
                 req.id_horta,
@@ -719,14 +736,19 @@ app.put('/admin/tarefas/:id', requireAuth, async (req, res) => {
         const descricao = req.body.descricao ?? current.descricao;
         const dificuldade = req.body.dificuldade ?? current.dificuldade;
         const moedas = req.body.moedas ?? current.moedas;
+        const xp = req.body.xp ?? current.xp ?? 50;
         const mudas = req.body.mudas ?? current.mudas;
         const tempo = req.body.tempo ?? current.tempo;
+        const xp_num = Number(xp);
+        if (!Number.isInteger(xp_num) || xp_num < 0 || xp_num > 10000) {
+            return res.status(400).send({ error: 'XP deve ser um numero inteiro entre 0 e 10000' });
+        }
 
         await db.query(
             `UPDATE Tarefas
-             SET titulo = ?, tipo = ?, descricao = ?, dificuldade = ?, moedas = ?, mudas = ?, tempo = ?, updated_at = NOW()
+             SET titulo = ?, tipo = ?, descricao = ?, dificuldade = ?, moedas = ?, xp = ?, mudas = ?, tempo = ?, updated_at = NOW()
              WHERE id = ?`,
-            [titulo, tipo, descricao, dificuldade, moedas, mudas, tempo, id]
+            [titulo, tipo, descricao, dificuldade, moedas, xp_num, mudas, tempo, id]
         );
 
         return res.send({ message: 'Tarefa atualizada' });
@@ -815,25 +837,153 @@ app.get('/me/historico', requireAuth, async (req, res) => {
     }
 });
 
+app.get('/me/gamificacao', requireAuth, async (req, res) => {
+    try {
+        const id_perfil = Number(req.user.id_perfil);
+        const [tarefas] = await db.query(
+            `SELECT id, titulo, horta, id_horta, COALESCE(moedas_recebidas, moedas) AS moedas, mudas, COALESCE(xp_recebido, xp) AS xp, completed_at,
+                    DATE_FORMAT(completed_at, '%Y-%m') AS completed_month,
+                    DATE_FORMAT(completed_at, '%Y-%m-%d') AS completed_day
+             FROM Tarefas
+             WHERE id_perfil = ? AND concluido = true AND deleted_at IS NULL
+             ORDER BY completed_at ASC, id ASC`,
+            [id_perfil]
+        );
+        const [resgates] = await db.query(
+            `SELECT pr.id_recompensa, r.nome, pr.redeemed_at,
+                    COALESCE(pr.redeemed_price, r.preco) AS preco
+             FROM PerfilRecompensas pr
+             JOIN Recompensas r ON r.id = pr.id_recompensa
+             WHERE pr.id_perfil = ?
+             ORDER BY pr.redeemed_at ASC, pr.id_recompensa ASC`,
+            [id_perfil]
+        );
+        const [hortas] = await db.query(
+            `SELECT h.id, h.nome, uhr.papel,
+                    COUNT(DISTINCT t.id) AS tarefas_concluidas,
+                    (SELECT COUNT(*) FROM UsuarioHortaRole membros
+                     WHERE membros.id_horta = h.id AND membros.papel = 'MEMBER') AS participantes
+             FROM UsuarioHortaRole uhr
+             JOIN Horta h ON h.id = uhr.id_horta
+             LEFT JOIN Tarefas t ON t.id_horta = h.id AND t.id_perfil = ?
+                  AND t.concluido = true AND t.deleted_at IS NULL
+             WHERE uhr.id_usuario = ?
+             GROUP BY h.id, h.nome, uhr.papel
+             ORDER BY h.nome ASC`,
+            [id_perfil, req.user.id]
+        );
+
+        const taskDates = [...new Set(tarefas.map((task) => task.completed_day).filter(Boolean))].sort();
+        const dayNumber = (day) => Date.parse(`${day}T00:00:00Z`);
+        let currentStreak = 0;
+        let maxStreak = 0;
+        let streakRun = 0;
+        let previousDay = null;
+        let fiveDayUnlock = null;
+        for (const day of taskDates) {
+            streakRun = previousDay && dayNumber(day) - dayNumber(previousDay) === 86400000 ? streakRun + 1 : 1;
+            maxStreak = Math.max(maxStreak, streakRun);
+            if (streakRun >= 5 && !fiveDayUnlock) fiveDayUnlock = day;
+            previousDay = day;
+        }
+        if (taskDates.length) {
+            const today = new Date().toISOString().slice(0, 10);
+            const gap = dayNumber(today) - dayNumber(taskDates[taskDates.length - 1]);
+            if (gap === 0 || gap === 86400000) {
+                currentStreak = 1;
+                for (let index = taskDates.length - 1; index > 0; index -= 1) {
+                    if (dayNumber(taskDates[index]) - dayNumber(taskDates[index - 1]) !== 86400000) break;
+                    currentStreak += 1;
+                }
+            }
+        }
+
+        const tasksByGarden = new Map();
+        for (const task of tarefas) {
+            if (task.id_horta == null) continue;
+            const items = tasksByGarden.get(Number(task.id_horta)) || [];
+            items.push(task);
+            tasksByGarden.set(Number(task.id_horta), items);
+        }
+        let twentyGardenUnlocked = false;
+        let twentyGardenUnlock = null;
+        for (const items of tasksByGarden.values()) {
+            if (items.length >= 20) {
+                twentyGardenUnlocked = true;
+                const unlock = items[19].completed_day;
+                if (unlock && (!twentyGardenUnlock || unlock < twentyGardenUnlock)) twentyGardenUnlock = unlock;
+            }
+        }
+        const achievements = [
+            { id: 'first-task', name: 'Primeira muda', description: 'Conclua sua primeira tarefa', icon: '🌱', xp: 50, unlocked: tarefas.length >= 1, unlocked_at: tarefas[0]?.completed_at ?? null },
+            { id: 'ten-tasks', name: '10 tarefas', description: 'Conclua 10 tarefas', icon: '🏅', xp: 100, unlocked: tarefas.length >= 10, unlocked_at: tarefas[9]?.completed_at ?? null },
+            { id: 'five-day-streak', name: '5 dias seguidos', description: 'Participe por 5 dias consecutivos', icon: '🔥', xp: 150, unlocked: maxStreak >= 5, unlocked_at: fiveDayUnlock },
+            { id: 'garden-guardian', name: 'Guardião da horta', description: 'Conclua 20 tarefas em uma mesma horta', icon: '🏡', xp: 200, unlocked: twentyGardenUnlocked, unlocked_at: twentyGardenUnlock },
+        ];
+        const taskXp = tarefas.reduce((total, task) => total + (Number(task.xp) || 0), 0);
+        const achievementXp = achievements.filter((achievement) => achievement.unlocked).reduce((total, achievement) => total + achievement.xp, 0);
+        const totalXp = taskXp + achievementXp;
+        const mudasPlantadas = tarefas.reduce((total, task) => total + (Number(task.mudas) || 0), 0);
+        const mesAtual = new Date().toISOString().slice(0, 7);
+        const mudasEsteMes = tarefas.reduce((total, task) => total + (task.completed_month === mesAtual ? Number(task.mudas) || 0 : 0), 0);
+        const events = [
+            ...tarefas.map((task) => ({
+                id: `task-${task.id}`, kind: 'task', title: 'Tarefa concluída', description: task.titulo,
+                xp: Number(task.xp) || 0, coins: Number(task.moedas) || 0, occurred_at: task.completed_at,
+            })),
+            ...resgates.map((reward, index) => ({
+                id: `reward-${reward.id_recompensa}-${index}`, kind: 'reward', title: 'Recompensa resgatada', description: reward.nome,
+                xp: 0, coins: -(Number(reward.preco) || 0), occurred_at: reward.redeemed_at,
+            })),
+            ...achievements.filter((achievement) => achievement.unlocked).map((achievement) => ({
+                id: `achievement-${achievement.id}`, kind: 'achievement', title: 'Conquista desbloqueada', description: achievement.name,
+                xp: achievement.xp, coins: 0, occurred_at: achievement.unlocked_at,
+            })),
+        ].sort((a, b) => {
+            if (!a.occurred_at && !b.occurred_at) return 0;
+            if (!a.occurred_at) return 1;
+            if (!b.occurred_at) return -1;
+            return new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime();
+        });
+
+        return res.send({
+            level: Math.floor(totalXp / 500) + 1,
+            xp: totalXp % 500,
+            xp_to_next_level: 500,
+            total_xp: totalXp,
+            tarefas_concluidas: tarefas.length,
+            mudas_plantadas: mudasPlantadas,
+            mudas_este_mes: mudasEsteMes,
+            sequencia_dias: currentStreak,
+            achievements,
+            events,
+            hortas,
+        });
+    } catch (error) {
+        console.error('Erro em /me/gamificacao:', error);
+        return res.status(500).send({ error: 'Erro ao carregar gamificacao do usuario' });
+    }
+});
+
 app.get('/admin/horta/historico', requireAuth, requireHortaAdmin, async (req, res) => {
     try {
         const [tarefasConcluidas] = await db.query(
-            `SELECT t.id, t.titulo, t.tipo, t.horta, t.moedas, t.tempo, p.nome AS perfil_nome
+            `SELECT t.id, t.titulo, t.tipo, t.horta, COALESCE(t.moedas_recebidas, t.moedas) AS moedas, COALESCE(t.xp_recebido, t.xp) AS xp, t.tempo, t.completed_at, p.nome AS perfil_nome
              FROM Tarefas t
              LEFT JOIN Perfil p ON p.id = t.id_perfil
              WHERE t.id_horta = ? AND t.concluido = true AND t.deleted_at IS NULL
-             ORDER BY t.id DESC
+             ORDER BY t.completed_at DESC, t.id DESC
              LIMIT 100`,
             [req.id_horta]
         );
 
         const [recompensasResgatadas] = await db.query(
-            `SELECT r.id, r.nome, r.tipo, r.preco, p.nome AS perfil_nome
+            `SELECT r.id, r.nome, r.tipo, r.preco, pr.redeemed_at, p.nome AS perfil_nome
              FROM PerfilRecompensas pr
              JOIN Recompensas r ON r.id = pr.id_recompensa
              LEFT JOIN Perfil p ON p.id = pr.id_perfil
              WHERE r.id_horta = ? AND pr.id_perfil IS NOT NULL AND r.deleted_at IS NULL
-             ORDER BY r.id DESC
+             ORDER BY pr.redeemed_at DESC, r.id DESC
              LIMIT 100`,
             [req.id_horta]
         );
@@ -974,8 +1124,8 @@ app.post('/resgatar_recompensa', requireAuth, async (req, res) => {
         }
 
         const [results] = await conn.query(
-            'UPDATE PerfilRecompensas SET id_perfil = ? WHERE id_perfil IS NULL AND id_recompensa = ? LIMIT 1',
-            [id_perfil, id_recompensa]
+            'UPDATE PerfilRecompensas SET id_perfil = ?, redeemed_at = NOW(), redeemed_price = ? WHERE id_perfil IS NULL AND id_recompensa = ? LIMIT 1',
+            [id_perfil, preco, id_recompensa]
         );
         if (results.affectedRows === 0) {
             await conn.rollback();
@@ -1101,7 +1251,46 @@ app.delete('/admin/recompensas/:id', requireAuth, async (req, res) => {
     }
 });
 
+async function ensureGamificationSchema() {
+    const [earnedCoinsColumns] = await db.query("SHOW COLUMNS FROM Tarefas LIKE 'moedas_recebidas'");
+    if (earnedCoinsColumns.length === 0) await db.query('ALTER TABLE Tarefas ADD COLUMN moedas_recebidas int NULL');
+    const [xpColumns] = await db.query("SHOW COLUMNS FROM Tarefas LIKE 'xp'");
+    if (xpColumns.length === 0) await db.query('ALTER TABLE Tarefas ADD COLUMN xp int NOT NULL DEFAULT 50');
+    const [xpReceivedColumns] = await db.query("SHOW COLUMNS FROM Tarefas LIKE 'xp_recebido'");
+    if (xpReceivedColumns.length === 0) await db.query('ALTER TABLE Tarefas ADD COLUMN xp_recebido int NULL');
+    const [taskColumns] = await db.query("SHOW COLUMNS FROM Tarefas LIKE 'completed_at'");
+    if (taskColumns.length === 0) await db.query('ALTER TABLE Tarefas ADD COLUMN completed_at datetime NULL');
+    const [rewardColumns] = await db.query("SHOW COLUMNS FROM PerfilRecompensas LIKE 'redeemed_at'");
+    if (rewardColumns.length === 0) await db.query('ALTER TABLE PerfilRecompensas ADD COLUMN redeemed_at datetime NULL');
+    const [priceColumns] = await db.query("SHOW COLUMNS FROM PerfilRecompensas LIKE 'redeemed_price'");
+    if (priceColumns.length === 0) await db.query('ALTER TABLE PerfilRecompensas ADD COLUMN redeemed_price int NULL');
+    await db.query(`UPDATE Tarefas
+                    SET xp_recebido = COALESCE(xp_recebido, xp),
+                        moedas_recebidas = COALESCE(moedas_recebidas, moedas)
+                    WHERE concluido = true`);
+    await db.query(`CREATE OR REPLACE VIEW SaldoPerfil AS
+        SELECT COALESCE(t.total_moedas, 0) - COALESCE(r.total_gasto, 0) AS Saldo, p.id AS id_perfil
+        FROM Perfil p
+        LEFT JOIN (
+            SELECT id_perfil, SUM(COALESCE(moedas_recebidas, moedas)) AS total_moedas
+            FROM Tarefas
+            WHERE concluido
+            GROUP BY id_perfil
+        ) t ON p.id = t.id_perfil
+        LEFT JOIN (
+            SELECT pr.id_perfil, SUM(COALESCE(pr.redeemed_price, rec.preco)) AS total_gasto
+            FROM PerfilRecompensas pr
+            JOIN Recompensas rec ON pr.id_recompensa = rec.id
+            GROUP BY pr.id_perfil
+        ) r ON p.id = r.id_perfil`);
+}
+
 const port = 8080;
-app.listen(port, () => {
-    console.log(`⚡️[bootup]: Server is running at port: ${port}`);
+ensureGamificationSchema().then(() => {
+    app.listen(port, () => {
+        console.log(`⚡️[bootup]: Server is running at port: ${port}`);
+    });
+}).catch((error) => {
+    console.error('Erro ao preparar dados de gamificacao:', error);
+    process.exit(1);
 });

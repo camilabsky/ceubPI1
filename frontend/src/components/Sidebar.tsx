@@ -1,6 +1,6 @@
-import { Home, ListTodo, Gift, User, Sprout } from 'lucide-react';
+import { Home, ListTodo, Gift, User, Sprout, Compass } from 'lucide-react';
 
-type Page = 'home' | 'tasks' | 'rewards' | 'profile';
+type Page = 'home' | 'explore' | 'tasks' | 'rewards' | 'profile';
 
 interface SidebarProps {
   currentPage: Page;
@@ -11,16 +11,20 @@ interface SidebarProps {
 export default function Sidebar({ currentPage, onNavigate, isAdmin }: SidebarProps) {
   const items: { page: Page; label: string; icon: typeof Home }[] = [
     { page: 'home', label: 'Início', icon: Home },
-    { page: 'tasks', label: 'Tarefas', icon: ListTodo },
+    ...(!isAdmin ? [{ page: 'explore' as Page, label: 'Explorar', icon: Compass }] : []),
+    { page: 'tasks', label: isAdmin ? 'Tarefas' : 'Minhas tarefas', icon: ListTodo },
     { page: 'rewards', label: 'Recompensas', icon: Gift },
     { page: 'profile', label: 'Perfil', icon: User },
   ];
 
   return (
     <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:w-64 bg-white border-r border-gray-200 px-4 py-6 z-40">
-      <div className="flex items-center gap-2 mb-8 px-2">
-        <Sprout className="size-6 text-[#00a63e]" />
-        <span className="text-[16px] font-bold text-neutral-950">Horta</span>
+      <div className="mb-8 px-2">
+        <div className="flex items-center gap-2">
+          <Sprout className="size-6 text-[#00a63e]" />
+          <span className="text-[18px] font-bold tracking-tight text-neutral-950">Couve</span>
+        </div>
+        <p className="ml-8 mt-0.5 text-[11px] text-[#7a867d]">Comunidade &amp; cultivo</p>
       </div>
 
       {isAdmin && (

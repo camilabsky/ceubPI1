@@ -63,11 +63,15 @@ CREATE TABLE IF NOT EXISTS Tarefas (
   id_perfil int,
   concluido boolean default false,
   moedas int,
+  moedas_recebidas int NULL,
+  xp int NOT NULL DEFAULT 50,
+  xp_recebido int NULL,
   mudas int,
   tempo int,
   id_horta int NULL,
   created_by int NULL,
   updated_at datetime NULL,
+  completed_at datetime NULL,
   deleted_at datetime NULL,
   CONSTRAINT fk_perfil_tarefas
   FOREIGN KEY (id_perfil)
@@ -79,6 +83,8 @@ CREATE TABLE IF NOT EXISTS Tarefas (
 CREATE TABLE IF NOT EXISTS PerfilRecompensas (
   id_perfil int,
   id_recompensa int,
+  redeemed_at datetime NULL,
+  redeemed_price int NULL,
   CONSTRAINT fk_perfil_recompensas
   FOREIGN KEY (id_perfil)
   REFERENCES Perfil(id),
@@ -349,13 +355,13 @@ SELECT
   p.id as id_perfil
 FROM Perfil p
 LEFT JOIN (
-  SELECT id_perfil, SUM(moedas) AS total_moedas
+  SELECT id_perfil, SUM(COALESCE(moedas_recebidas, moedas)) AS total_moedas
   FROM Tarefas
   WHERE concluido
   GROUP BY id_perfil
 ) t ON p.id = t.id_perfil
 LEFT JOIN (
-  SELECT pr.id_perfil, SUM(rec.preco) AS total_gasto
+  SELECT pr.id_perfil, SUM(COALESCE(pr.redeemed_price, rec.preco)) AS total_gasto
   FROM PerfilRecompensas pr
   JOIN Recompensas rec ON pr.id_recompensa = rec.id
   GROUP BY pr.id_perfil

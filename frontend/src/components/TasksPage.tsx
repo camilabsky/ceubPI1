@@ -1,5 +1,5 @@
 import { API_URL } from '../config';
-import { MapPin, Clock, Sprout, PlusCircle, Edit2, Trash2, Loader } from 'lucide-react';
+import { MapPin, Clock, Sprout, PlusCircle, Edit2, Trash2, Loader, Award } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import {
@@ -21,6 +21,7 @@ interface Task {
   tipo: string;
   dificuldade: number;
   moedas: number;
+  xp: number;
   mudas: number;
   tempo: number;
 }
@@ -31,6 +32,7 @@ interface AdminTaskDone {
   tipo: string;
   horta: string;
   moedas: number;
+  xp: number;
   perfil_nome?: string;
 }
 
@@ -41,6 +43,7 @@ export default function TasksPage() {
 
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [acceptedTaskTitle, setAcceptedTaskTitle] = useState('');
+  const [acceptedTaskRewards, setAcceptedTaskRewards] = useState({ xp: 0, moedas: 0 });
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
 
@@ -54,6 +57,7 @@ export default function TasksPage() {
     tipo: 'Manutenção',
     dificuldade: 0,
     moedas: 50,
+    xp: 50,
     mudas: 0,
     tempo: 30,
   });
@@ -128,6 +132,7 @@ export default function TasksPage() {
 
       const accepted = tasks.find((task) => task.id === idTarefa);
       setAcceptedTaskTitle(accepted?.titulo || 'Tarefa');
+      setAcceptedTaskRewards({ xp: Number(accepted?.xp) || 0, moedas: Number(accepted?.moedas) || 0 });
       setShowConfirmDialog(true);
       await fetchData();
     } catch (error) {
@@ -143,6 +148,7 @@ export default function TasksPage() {
       tipo: 'Manutenção',
       dificuldade: 0,
       moedas: 50,
+      xp: 50,
       mudas: 0,
       tempo: 30,
     });
@@ -172,7 +178,8 @@ export default function TasksPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Falha ao salvar tarefa');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Falha ao salvar tarefa');
       }
 
       toast.success(editingId ? 'Tarefa atualizada' : 'Tarefa criada com sucesso');
@@ -181,7 +188,7 @@ export default function TasksPage() {
       await fetchData();
     } catch (error) {
       console.error('Error saving task:', error);
-      toast.error('Erro ao salvar tarefa');
+      toast.error(error instanceof Error ? error.message : 'Erro ao salvar tarefa');
     } finally {
       setIsSavingTask(false);
     }
@@ -218,6 +225,7 @@ export default function TasksPage() {
       tipo: task.tipo,
       dificuldade: Number(task.dificuldade) || 0,
       moedas: Number(task.moedas) || 0,
+      xp: Number(task.xp) || 0,
       mudas: Number(task.mudas) || 0,
       tempo: Number(task.tempo) || 30,
     });
@@ -259,7 +267,10 @@ export default function TasksPage() {
             <AlertDialogTitle className="text-center">Tarefa Aceita! 🎉</AlertDialogTitle>
             <AlertDialogDescription className="text-center">
               <span className="block mb-2">&quot;{acceptedTaskTitle}&quot;</span>
-              Agora está em <span className="text-[#00a63e]">Minhas Tarefas</span>. Boa sorte!
+              Agora está em <span className="text-[#00a63e]">Minhas Tarefas</span>. Ao concluir, você recebe:
+              <span className="mt-3 flex justify-center gap-2 text-[12px] font-semibold text-[#16803d]">
+                <span>+{acceptedTaskRewards.xp} XP</span><span>·</span><span>+{acceptedTaskRewards.moedas} moedas</span>
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -300,6 +311,7 @@ export default function TasksPage() {
             <h3 className="text-[16px] text-neutral-950 font-semibold">
               Criar nova tarefa
             </h3>
+            <p className="-mt-2 text-[12px] text-[#66736a]">Exemplo: 50 moedas + 50 XP. Ajuste os valores desta missão; o participante verá a recompensa antes de aceitá-la.</p>
 
             <div>
               <label className="text-[13px] text-[#4a5565] mb-1 block">Título</label>
@@ -351,7 +363,7 @@ export default function TasksPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div>
                 <label className="text-[13px] text-[#4a5565] mb-1 block">Moedas (recompensa)</label>
                 <input
@@ -359,6 +371,18 @@ export default function TasksPage() {
                   placeholder="Moedas"
                   value={formData.moedas}
                   onChange={(e) => setFormData({ ...formData, moedas: Number(e.target.value) })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                />
+              </div>
+              <div>
+                <label className="text-[13px] text-[#4a5565] mb-1 block">XP ao concluir</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={10000}
+                  placeholder="XP"
+                  value={formData.xp}
+                  onChange={(e) => setFormData({ ...formData, xp: Number(e.target.value) })}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
                 />
               </div>
@@ -416,7 +440,7 @@ export default function TasksPage() {
                   <div key={`done-${task.id}`} className="border-b border-gray-100 pb-2 last:border-b-0 last:pb-0">
                     <p className="text-[13px] text-neutral-950 font-medium">{task.titulo}</p>
                     <p className="text-[12px] text-[#717182]">
-                      {task.perfil_nome || 'Sem perfil'} • {task.tipo} • {task.moedas} moedas
+                      {task.perfil_nome || 'Sem perfil'} • {task.tipo} • +{task.xp} XP • +{task.moedas} moedas
                     </p>
                   </div>
                 ))
@@ -521,7 +545,7 @@ export default function TasksPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                       <div>
                         <label className="text-[13px] text-[#4a5565] mb-1 block">Moedas (recompensa)</label>
                         <input
@@ -534,6 +558,19 @@ export default function TasksPage() {
                               moedas: Number(e.target.value),
                             })
                           }
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[13px] text-[#4a5565] mb-1 block">XP ao concluir</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={10000}
+                          placeholder="XP"
+                          value={formData.xp}
+                          onChange={(e) => setFormData({ ...formData, xp: Number(e.target.value) })}
                           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
                         />
                       </div>
@@ -600,11 +637,17 @@ export default function TasksPage() {
                       </h3>
 
                       <div className="flex items-center gap-2">
+                        <div className="bg-[#f4f0ff] rounded-[10px] px-3 py-1.5 flex items-center gap-1">
+                          <Award className="size-4 text-[#7953a9]" />
+                          <span className="text-[15px] text-[#7953a9] font-bold">{task.xp}</span>
+                          <span className="text-[10px] font-semibold text-[#7953a9]">XP</span>
+                        </div>
                         <div className="bg-green-50 rounded-[10px] px-3 py-1.5 flex items-center gap-1">
                           <Sprout className="size-4 text-[#00a63e]" />
                           <span className="text-[16px] text-[#00a63e] font-bold">
                             {task.moedas}
                           </span>
+                          <span className="text-[10px] font-semibold text-[#16803d]">moedas</span>
                         </div>
 
                         {isAdmin && (

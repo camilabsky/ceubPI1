@@ -12,8 +12,10 @@ import ProfilePage from './components/ProfilePage';
 import RegisterPage from './components/RegisterPage';
 import AdminProfilePage from './components/AdminProfilePage';
 import Sidebar from './components/Sidebar';
+import OnboardingPage from './components/OnboardingPage';
+import ExplorePage from './components/ExplorePage';
 
-type Page = 'home' | 'tasks' | 'rewards' | 'profile';
+type Page = 'home' | 'explore' | 'tasks' | 'rewards' | 'profile';
 
 interface Task {
   id: number;
@@ -87,6 +89,10 @@ export default function App() {
     }
   }, [token, user?.id_perfil]);
 
+  useEffect(() => {
+    if (isAdmin && currentPage === 'explore') setCurrentPage('home');
+  }, [isAdmin, currentPage]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -96,6 +102,14 @@ export default function App() {
   }
 
   if (!token) {
+      if (user && user.roles.length === 0) {
+    return (
+      <>
+        <Toaster position="top-center" richColors />
+        <OnboardingPage />
+      </>
+    );
+  }
     return authView === 'login'
       ? <LoginPage onSwitchToRegister={() => setAuthView('register')} />
       : <RegisterPage onSwitchToLogin={() => setAuthView('login')} />;
@@ -118,6 +132,7 @@ export default function App() {
               ? <AdminHomePage onNavigate={setCurrentPage} />
               : <HomePage onNavigate={setCurrentPage} />
           )}
+          {currentPage === 'explore' && !isAdmin && <ExplorePage />}
           {currentPage === 'tasks' && (
             <TasksPage />
           )}
@@ -133,6 +148,7 @@ export default function App() {
                   coins={coins}
                   tasksCompleted={tasksCompleted}
                   onLogout={() => setCurrentPage('home')}
+                  onNavigate={setCurrentPage}
                 />
           )}
         </div>

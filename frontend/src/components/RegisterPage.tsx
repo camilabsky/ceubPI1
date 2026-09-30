@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   ArrowRight, Sprout, Eye, EyeOff, User, Mail, Lock, UserPlus,
   Leaf, Trophy, Users, Home,
@@ -6,6 +6,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import hortaLoginImg from '../assets/hortalogin.png';
+import HortaFields, { HORTA_VAZIA, validarHorta, type HortaDraft } from './HortaFields';
 
 interface RegisterPageProps {
   onSwitchToLogin: () => void;
@@ -22,6 +23,9 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [showSenha, setShowSenha] = useState(false);
   const [showConfirmar, setShowConfirmar] = useState(false);
+  const [escolha, setEscolha] = useState<'participar' | 'criar'>('participar');
+  const [horta, setHorta] = useState<HortaDraft>(HORTA_VAZIA);
+  const enviando = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,11 +42,32 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
       return;
     }
 
+    if (escolha === 'criar') {
+      const erro = validarHorta(horta);
+      if (erro) {
+        toast.error(erro);
+        return;
+      }
+    }
+
+    if (enviando.current) return;
+    enviando.current = true;
     try {
-      await register(nome, email, senha, {});
+      const opts =
+        escolha === 'criar'
+          ? {
+              nome_nova_horta: horta.nome.trim(),
+              latitude: Number(horta.lat),
+              longitude: Number(horta.lng),
+              endereco: horta.endereco.trim(),
+            }
+          : {};
+      await register(nome, email, senha, opts);
       toast.success('Cadastro realizado com sucesso!');
     } catch (error: any) {
       toast.error(error.message || 'Erro ao cadastrar');
+    } finally {
+      enviando.current = false;
     }
   };
 
@@ -209,15 +234,24 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
             </div>
           </div>
 
-          {/* Cards informativos: a escolha real acontece depois do cadastro */}
+          {/* A escolha define o perfil e o destino da conta já no cadastro. */}
           <div className="w-full xl:w-1/2 border-t xl:border-t-0 xl:border-l border-[#E2E8E3] px-6 py-8 lg:p-10 flex flex-col justify-center">
             <h3 className="text-[18px] text-[#17201A] font-bold mb-1">Como você quer participar?</h3>
             <p className="text-[13px] text-[#66736A] mb-5">
-              Depois de criar sua conta, escolha o caminho que mais combina com você.
+              Escolha o caminho que mais combina com você.
             </p>
 
             <div className="space-y-4">
-              <div className="rounded-xl border border-[#E2E8E3] bg-[#F0FDF4] p-4 flex items-center gap-3">
+              <button
+                type="button"
+                aria-pressed={escolha === 'participar'}
+                onClick={() => setEscolha('participar')}
+                className={`w-full text-left rounded-xl border p-4 flex items-center gap-3 transition-colors ${
+                  escolha === 'participar'
+                    ? 'border-[#16A34A] bg-[#F0FDF4]'
+                    : 'border-[#E2E8E3] bg-white hover:border-[#16A34A]/50'
+                }`}
+              >
                 <div className="bg-[#16A34A]/10 rounded-lg p-2">
                   <Leaf className="size-6 text-[#16A34A]" />
                 </div>
@@ -228,9 +262,18 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                   </p>
                 </div>
                 <ArrowRight className="size-4 text-[#16A34A]" />
-              </div>
+              </button>
 
-              <div className="rounded-xl border border-[#E2E8E3] bg-white p-4 flex items-center gap-3">
+              <button
+                type="button"
+                aria-pressed={escolha === 'criar'}
+                onClick={() => setEscolha('criar')}
+                className={`w-full text-left rounded-xl border p-4 flex items-center gap-3 transition-colors ${
+                  escolha === 'criar'
+                    ? 'border-[#16A34A] bg-[#F0FDF4]'
+                    : 'border-[#E2E8E3] bg-white hover:border-[#16A34A]/50'
+                }`}
+              >
                 <div className="bg-[#16A34A]/10 rounded-lg p-2">
                   <Home className="size-6 text-[#16A34A]" />
                 </div>
@@ -241,8 +284,14 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                   </p>
                 </div>
                 <ArrowRight className="size-4 text-[#16A34A]" />
-              </div>
+              </button>
             </div>
+                  {escolha === 'criar' && (
+              <div className="mt-6 border-t border-[#E2E8E3] pt-5">
+                <h4 className="mb-4 text-[15px] font-bold text-[#17201A]">Dados da sua horta</h4>
+                <HortaFields value={horta} onChange={setHorta} mostrarDescricao={false} />
+              </div>
+            )}
           </div>
         </div>
       </div>

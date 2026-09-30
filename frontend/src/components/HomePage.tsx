@@ -1,7 +1,7 @@
+import { useEffect, useMemo, useState } from 'react';
 import { API_URL } from '../config';
-import { TrendingUp, Sprout, Play } from 'lucide-react';
+import { ArrowRight, Award, CheckCircle2, Clock3, Coins, Flame, Leaf, LoaderCircle, MapPin, Play, Sprout, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import { useState, useEffect } from 'react';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -16,25 +16,56 @@ import { useAuth } from '../contexts/AuthContext';
 interface Task {
   id: number;
   titulo: string;
+  descricao: string;
   tipo: string;
+  horta: string;
   dificuldade: number;
   moedas: number;
-  progress?: number;
+  xp: number;
+  mudas: number;
+  tempo: number;
+}
+
+interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  unlocked: boolean;
+}
+
+interface GamificationData {
+  level: number;
+  xp: number;
+  xp_to_next_level: number;
+  tarefas_concluidas: number;
+  sequencia_dias: number;
+  mudas_este_mes: number;
+  achievements: Achievement[];
+  hortas: { id: number; nome: string }[];
 }
 
 interface HomePageProps {
-  onNavigate: (page: 'home' | 'tasks' | 'rewards' | 'profile') => void;
+  onNavigate: (page: 'home' | 'explore' | 'tasks' | 'rewards' | 'profile') => void;
 }
+
+const difficultyNames = ['Fácil', 'Médio', 'Difícil'];
+const missionImages = [
+  'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=760&q=85',
+  'https://images.unsplash.com/photo-1466692476868-aef1dfb1e735?auto=format&fit=crop&w=760&q=85',
+  'https://images.unsplash.com/photo-1492496913980-501348b61469?auto=format&fit=crop&w=760&q=85',
+];
 
 export default function HomePage({ onNavigate }: HomePageProps) {
   const { token, user } = useAuth();
-
   const [inProgressTasks, setInProgressTasks] = useState<Task[]>([]);
-  const [showCompletionDialog, setShowCompletionDialog] = useState(false);
-  const [completedTaskInfo, setCompletedTaskInfo] = useState({ title: '', coins: 0 });
+  const [availableTasks, setAvailableTasks] = useState<Task[]>([]);
   const [coins, setCoins] = useState(0);
-  const [tasksCompleted, setTasksCompleted] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
+  const [stats, setStats] = useState<GamificationData | null>(null);
+  const [showCompletionDialog, setShowCompletionDialog] = useState(false);
+  const [completedTaskInfo, setCompletedTaskInfo] = useState({ title: '', coins: 0, xp: 0 });
+  const [isLoading, setIsLoading] = useState(true);
+  const [workingTaskId, setWorkingTaskId] = useState<number | null>(null);
 
   const authHeaders = () => ({ Authorization: `Bearer ${token}` });
 
@@ -42,182 +73,210 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     if (!token) return;
     setIsLoading(true);
     try {
-      const [tasksRes, coinsRes, completedRes] = await Promise.all([
+      const [mineRes, availableRes, coinsRes, progressRes] = await Promise.all([
         fetch(`${API_URL}/minhas_tarefas`, { method: 'POST', headers: authHeaders() }),
+        fetch(`${API_URL}/tarefas_disponiveis`, { headers: authHeaders() }),
         fetch(`${API_URL}/minhas_moedas`, { method: 'POST', headers: authHeaders() }),
-        fetch(`${API_URL}/tarefas_concluidas`, { method: 'POST', headers: authHeaders() }),
+        fetch(`${API_URL}/me/gamificacao`, { headers: authHeaders() }),
       ]);
-
-      if (!tasksRes.ok || !coinsRes.ok || !completedRes.ok) {
-        throw new Error('Falha ao carregar dados da home');
-      }
-
-      const [tasksData, coinsData, completedData] = await Promise.all([
-        tasksRes.json(),
-        coinsRes.json(),
-        completedRes.json(),
+      if (!mineRes.ok || !availableRes.ok || !coinsRes.ok || !progressRes.ok) throw new Error('Não foi possível carregar seu painel.');
+      const [mine, available, balance, progress] = await Promise.all([
+        mineRes.json(), availableRes.json(), coinsRes.json(), progressRes.json(),
       ]);
-
-      setInProgressTasks(tasksData);
-      setCoins(Number(coinsData.Saldo) || 0);
-      setTasksCompleted(Number(completedData[0]?.Total) || 0);
+      setInProgressTasks(mine);
+      setAvailableTasks(available);
+      setCoins(Number(balance.Saldo) || 0);
+      setStats(progress as GamificationData);
     } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('Erro ao carregar dados da home');
+      console.error('Erro ao carregar a página inicial:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao carregar seu painel.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [token]);
+  useEffect(() => { fetchData(); }, [token]);
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'Manutenção':
-        return 'bg-[#eceef2] text-[#030213]';
-      case 'compostagem':
-        return 'bg-[#424141] text-[#fbfbfb]';
-      case 'Plantio':
-        return 'bg-[#030213] text-white';
-      case 'colheita':
-        return 'bg-[#eceef2] text-[#030213]';
-      default:
-        return 'bg-gray-200 text-gray-800';
+  const taskCountsByHorta = useMemo(() => new Set((stats?.hortas ?? []).map((horta) => horta.id)).size, [stats?.hortas]);
+  const visibleAchievements = (stats?.achievements ?? []).slice(0, 3);
+  const firstName = user?.nome?.trim().split(/\s+/)[0] || 'Cultivador';
+  const xp = stats?.xp ?? 0;
+  const xpTarget = stats?.xp_to_next_level ?? 500;
+  const progressPercent = Math.min(100, (xp / xpTarget) * 100);
+
+  const acceptTask = async (task: Task) => {
+    if (!token) return;
+    setWorkingTaskId(task.id);
+    try {
+      const response = await fetch(`${API_URL}/aceitar_tarefa`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_tarefa: task.id }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Não foi possível aceitar esta tarefa.');
+      toast.success('Tarefa adicionada às suas atividades.');
+      await fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao aceitar tarefa.');
+    } finally {
+      setWorkingTaskId(null);
     }
   };
 
-  const getDifficultyColor = (difficulty: number) => {
-    const colors = [
-      'bg-[#00c950] text-white font-semibold',
-      'bg-[#f0b100] text-white font-semibold',
-      'bg-[#fb2c36] text-white font-semibold',
-    ];
-    return colors[difficulty] || colors[0];
-  };
-
-  const completeTask = async (idTarefa: number, task: Task) => {
+  const completeTask = async (task: Task) => {
     if (!token) return;
+    setWorkingTaskId(task.id);
     try {
       const response = await fetch(`${API_URL}/concluir_tarefa`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ id_tarefa: idTarefa }),
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_tarefa: task.id }),
       });
-
-      if (!response.ok) {
-        throw new Error('Falha ao concluir tarefa');
-      }
-
-      setCompletedTaskInfo({ title: task.titulo, coins: task.moedas });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Não foi possível concluir esta tarefa.');
+      setCompletedTaskInfo({
+        title: task.titulo,
+        coins: Number(result.moedas ?? task.moedas) || 0,
+        xp: Number(result.xp ?? task.xp) || 0,
+      });
       setShowCompletionDialog(true);
       await fetchData();
     } catch (error) {
-      console.error('Error completing task:', error);
-      toast.error('Erro ao concluir tarefa');
+      toast.error(error instanceof Error ? error.message : 'Erro ao concluir tarefa.');
+    } finally {
+      setWorkingTaskId(null);
     }
   };
 
-  const primeiroNome = user?.nome?.split(' ')[0] || 'Voluntário';
+  const difficultyClass = (difficulty: number) => difficulty === 0
+    ? 'bg-[#edf7ee] text-[#218044]'
+    : difficulty === 1
+      ? 'bg-[#fff6e7] text-[#9a6a13]'
+      : 'bg-[#fff0ed] text-[#a84a37]';
+
+  const TaskCard = ({ task, available = false }: { task: Task; available?: boolean }) => (
+    <article className="group flex h-full flex-col overflow-hidden rounded-xl border border-[#e5eae5] bg-white transition hover:-translate-y-0.5 hover:border-[#b8d9bf] hover:shadow-[0_8px_24px_#17371d12]">
+      <div className="relative h-[112px] overflow-hidden bg-[#dfeadf]">
+        <img src={missionImages[task.id % missionImages.length]} alt="Canteiros de horta comunitária" loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#15321d]/55 via-transparent to-[#15321d]/5" />
+        <span className={`absolute bottom-2.5 left-3 rounded-full px-2.5 py-1 text-[10px] font-semibold shadow-sm ${available ? 'bg-white/95 text-[#218044]' : 'bg-white/95 text-[#66736a]'}`}>{available ? 'Disponível' : 'Em andamento'}</span>
+      </div>
+      <div className="flex flex-1 flex-col p-3.5">
+        <h3 className="line-clamp-1 text-[14px] font-semibold leading-5 text-[#202b22]">{task.titulo}</h3>
+        <p className="mt-1.5 flex items-center gap-1.5 truncate text-[11px] text-[#728076]"><MapPin className="size-3.5 shrink-0 text-[#3d9860]" />{task.horta || 'Horta comunitária'}</p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+          <span className={`rounded-md px-2 py-1 font-semibold ${difficultyClass(task.dificuldade)}`}>{difficultyNames[task.dificuldade] || 'Fácil'}</span>
+          <span className="inline-flex items-center gap-1 rounded-md bg-[#f5f7f5] px-2 py-1 text-[#66736a]"><Clock3 className="size-3" />{task.tempo} min</span>
+        </div>
+        <div className="mt-2.5 flex items-center gap-1.5 text-[10px]">
+          <span className="inline-flex items-center gap-1 rounded-md bg-[#f4f0ff] px-2 py-1 font-semibold text-[#7953a9]"><Award className="size-3" />+{task.xp} XP</span>
+          <span className="inline-flex items-center gap-1 rounded-md bg-[#edf7ee] px-2 py-1 font-semibold text-[#218044]"><Sprout className="size-3" />+{task.moedas} moedas</span>
+        </div>
+        <div className="mt-auto pt-3">
+          {!available && <div className="mb-2.5 flex items-center gap-2 text-[10px] font-medium text-[#728076]"><span className="size-1.5 rounded-full bg-[#37a45b]" />Sua participação está em andamento</div>}
+        <button
+          onClick={() => available ? acceptTask(task) : completeTask(task)}
+          disabled={workingTaskId === task.id}
+          className={`flex h-9 w-full items-center justify-center gap-2 rounded-lg text-[12px] font-semibold transition disabled:opacity-60 ${available ? 'border border-[#cae4cf] bg-[#f8fcf8] text-[#16803d] hover:bg-[#eff8f0]' : 'bg-[#168a3c] text-white hover:bg-[#117331]'}`}
+        >
+          {workingTaskId === task.id ? <LoaderCircle className="size-3.5 animate-spin" /> : available ? <><CheckCircle2 className="size-3.5" />Aceitar tarefa</> : <><Play className="size-3.5" />Concluir tarefa</>}
+        </button>
+        </div>
+      </div>
+    </article>
+  );
 
   return (
     <>
       <AlertDialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
-        <AlertDialogContent className="max-w-[90%] sm:max-w-md rounded-2xl">
+        <AlertDialogContent className="max-w-[90%] rounded-2xl sm:max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-center">Tarefa Concluída! 🎉</AlertDialogTitle>
+            <AlertDialogTitle className="text-center">Contribuição registrada 🎉</AlertDialogTitle>
             <AlertDialogDescription className="text-center">
-              <span className="block mb-3">&quot;{completedTaskInfo.title}&quot;</span>
-              <div className="bg-green-50 rounded-xl p-4 inline-flex items-center gap-2">
-                <Sprout className="size-6 text-[#00a63e]" />
-                <span className="text-[24px] text-[#00a63e] font-bold">+{completedTaskInfo.coins}</span>
-                <span className="text-[16px] text-[#00a63e]">moedas</span>
-              </div>
+              <span className="mb-3 block">{completedTaskInfo.title}</span>
+              <span className="inline-flex items-center gap-2 rounded-xl bg-[#f5f8f5] p-3 text-[13px] font-bold">
+                <span className="text-[#7953a9]">+{completedTaskInfo.xp} XP</span><span className="text-[#aab2aa]">·</span><span className="text-[#218044]">+{completedTaskInfo.coins} moedas</span>
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <Button onClick={() => setShowCompletionDialog(false)} className="w-full bg-[#00a63e] hover:bg-[#008236]">
-              Ótimo!
-            </Button>
-          </AlertDialogFooter>
+          <AlertDialogFooter><Button onClick={() => setShowCompletionDialog(false)} className="w-full bg-[#168a3c] hover:bg-[#117331]">Continuar</Button></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="min-h-screen bg-gray-50 pb-4">
-        <div className="relative bg-gradient-to-br from-[#00a63e] to-[#008236] px-6 pt-12 pb-8 rounded-b-[20px]">
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <p className="text-white/90 text-[24px] mb-1">Olá,</p>
-              <h1 className="text-white text-[24px] font-bold">{primeiroNome}!</h1>
-              <p className="text-white/90 text-[16px] mt-1">Continue cultivando sua comunidade</p>
+      <main className="min-h-screen bg-[#f7f9f7] px-4 pb-10 pt-7 text-[#17201a] sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl space-y-5">
+          <header className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+            <div className="flex items-center gap-3">
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-full border-4 border-white bg-[#e4f3e5] text-[18px] font-bold text-[#16803d] shadow-sm">{firstName.charAt(0).toLocaleUpperCase('pt-BR')}</div>
+              <div>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#16803d]">Couve <span className="mx-1 text-[#b4c1b6]">/</span> Comunidade</p>
+              <h1 className="text-[26px] font-bold leading-tight tracking-[-0.03em] text-[#1c2b20]">Olá, {firstName}! <span aria-hidden="true">👋</span></h1>
+              <p className="mt-1 text-[13px] text-[#6c786f]">Continue cultivando sua comunidade.</p>
+              </div>
             </div>
-            <div className="bg-white/20 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center gap-2">
-              <Sprout className="size-5 text-white" />
-              <span className="text-white text-[16px] font-bold">{coins}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-4 mt-4">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
-              <TrendingUp className="size-6 text-[#00a63e] mb-2" />
-              <p className="text-[11px] text-[#4a5565] text-center mb-1">Tarefas Completas</p>
-              <p className="text-[18px] text-neutral-950">{tasksCompleted}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-4 mt-6">
-          <div className="flex items-center justify-between mb-4 px-2">
-            <h2 className="text-[16px] text-neutral-950">Minhas Tarefas</h2>
-            <button onClick={() => onNavigate('tasks')} className="text-[14px] text-[#00a63e]">
-              Ver todas
+            <button onClick={() => onNavigate('rewards')} className="inline-flex w-fit items-center gap-2 rounded-full border border-[#dcebdc] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#34453a] shadow-sm transition hover:border-[#b9dabb] hover:bg-[#f8fcf8]">
+              <span className="flex size-6 items-center justify-center rounded-full bg-[#fff2c7]"><Coins className="size-3.5 text-[#bd8514]" /></span>
+              {coins} moedas
+              <ArrowRight className="size-3.5 text-[#7b8a7d]" />
             </button>
+          </header>
+
+          <section className="relative isolate overflow-hidden rounded-[20px] bg-gradient-to-r from-[#087a3c] via-[#078c42] to-[#0a7540] px-5 py-5 text-white shadow-[0_10px_28px_#087a3c22] sm:px-6">
+            <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-24 -z-10 size-64 rounded-full border-[30px] border-white/[0.06]" />
+            <div aria-hidden="true" className="pointer-events-none absolute right-36 -bottom-28 -z-10 size-48 rounded-full bg-[#b5e783]/[0.08] blur-2xl" />
+            <div className="relative grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)] lg:items-center">
+              <div>
+                <div className="flex items-center gap-2"><span className="flex size-8 items-center justify-center rounded-full bg-white/15"><Sprout className="size-4 text-[#d2ee9e]" /></span><span className="text-[12px] font-semibold text-white/90">Nível {stats?.level ?? 1} <span className="mx-1 text-white/50">·</span> Cultivador</span></div>
+                <div className="mt-4 flex items-end justify-between gap-3"><p className="text-[19px] font-bold">Seu próximo nível começa aqui</p><p className="whitespace-nowrap text-[11px] font-semibold text-[#e2f3c2]">{xp} / {xpTarget} XP</p></div>
+                <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-black/20"><div className="h-full rounded-full bg-gradient-to-r from-[#c8ec79] to-[#e6f6ad] shadow-[0_0_12px_#d8f69c88] transition-all" style={{ width: `${progressPercent}%` }} /></div>
+                <p className="mt-2 text-[10px] text-white/75">Conclua missões para ganhar XP e evoluir.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="flex items-center gap-2.5 rounded-xl border border-white/15 bg-white/10 px-3.5 py-3 backdrop-blur-sm"><span className="flex size-9 items-center justify-center rounded-full bg-[#f8d767]/20"><Coins className="size-[18px] text-[#ffe18a]" /></span><div><p className="text-[18px] font-bold leading-5">{coins}</p><p className="mt-1 text-[10px] text-white/75">moedas</p></div></div>
+                <div className="flex items-center gap-2.5 rounded-xl border border-white/15 bg-white/10 px-3.5 py-3 backdrop-blur-sm"><span className="flex size-9 items-center justify-center rounded-full bg-[#ffb45d]/20"><Flame className="size-[18px] text-[#ffd092]" /></span><div><p className="text-[16px] font-bold leading-5">{stats?.sequencia_dias ?? 0} dias</p><p className="mt-1 text-[10px] text-white/75">de sequência</p></div></div>
+              </div>
+            </div>
+          </section>
+
+          <section className="grid grid-cols-2 overflow-hidden rounded-xl border border-[#e4e9e4] bg-white sm:grid-cols-4">
+            <div className="flex items-center gap-2.5 border-b border-r border-[#edf0ed] px-3.5 py-3 sm:border-b-0"><span className="flex size-8 items-center justify-center rounded-full bg-[#e9f6eb]"><CheckCircle2 className="size-4 text-[#3c9656]" /></span><div><p className="text-[15px] font-bold leading-4">{stats?.tarefas_concluidas ?? 0}</p><p className="mt-0.5 text-[10px] text-[#77837a]">Tarefas concluídas</p></div></div>
+            <div className="flex items-center gap-2.5 border-b border-[#edf0ed] px-3.5 py-3 sm:border-b-0 sm:border-r"><span className="flex size-8 items-center justify-center rounded-full bg-[#fff6df]"><Coins className="size-4 text-[#bd8514]" /></span><div><p className="text-[15px] font-bold leading-4">{coins}</p><p className="mt-0.5 text-[10px] text-[#77837a]">Moedas disponíveis</p></div></div>
+            <div className="flex items-center gap-2.5 border-r border-[#edf0ed] px-3.5 py-3"><span className="flex size-8 items-center justify-center rounded-full bg-[#f2edfc]"><Award className="size-4 text-[#7953a9]" /></span><div><p className="text-[15px] font-bold leading-4">{xp} XP</p><p className="mt-0.5 text-[10px] text-[#77837a]">XP neste nível</p></div></div>
+            <div className="flex items-center gap-2.5 px-3.5 py-3"><span className="flex size-8 items-center justify-center rounded-full bg-[#fff0e3]"><Flame className="size-4 text-[#d57d28]" /></span><div><p className="text-[15px] font-bold leading-4">{stats?.sequencia_dias ?? 0} dias</p><p className="mt-0.5 text-[10px] text-[#77837a]">Sequência atual</p></div></div>
+          </section>
+
+          <section>
+            <div className="mb-3 flex items-end justify-between gap-3">
+              <div><h2 className="text-[17px] font-bold text-[#202b22]">Minhas tarefas</h2><p className="mt-0.5 text-[12px] text-[#738076]">Continue contribuindo para sua horta.</p></div>
+              <button onClick={() => onNavigate('tasks')} className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#16803d] hover:underline">Ver todas <ArrowRight className="size-3.5" /></button>
+            </div>
+            {isLoading ? <div className="flex h-36 items-center justify-center gap-2 rounded-xl border border-[#e4e9e4] bg-white text-[12px] text-[#738076]"><LoaderCircle className="size-4 animate-spin" />Carregando tarefas...</div> : inProgressTasks.length === 0 ? <div className="flex flex-col items-center rounded-xl border border-dashed border-[#dce5dc] bg-white px-5 py-8 text-center"><div className="flex size-10 items-center justify-center rounded-full bg-[#eff7f0] text-[#16803d]"><Leaf className="size-5" /></div><p className="mt-2 text-[13px] font-semibold text-[#26362a]">Você ainda não aceitou nenhuma tarefa</p><p className="mt-1 max-w-sm text-[11px] text-[#78847b]">Encontre uma atividade e comece a contribuir com sua comunidade.</p><button onClick={() => onNavigate('tasks')} className="mt-3 rounded-lg bg-[#168a3c] px-3.5 py-2 text-[11px] font-semibold text-white hover:bg-[#117331]">Explorar tarefas</button></div> : <div className="grid gap-3 lg:grid-cols-3">{inProgressTasks.slice(0, 3).map((task) => <TaskCard key={task.id} task={task} />)}</div>}
+          </section>
+
+          <section>
+            <div className="mb-3 flex items-end justify-between gap-3">
+              <div><h2 className="text-[16px] font-bold text-[#202b22]">Tarefas disponíveis para você</h2><p className="mt-0.5 text-[11px] text-[#738076]">Escolha uma missão aberta nas hortas das quais participa.</p></div>
+              <button onClick={() => onNavigate('tasks')} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#16803d] hover:underline">Ver todas <ArrowRight className="size-3.5" /></button>
+            </div>
+            {isLoading ? <div className="h-28 animate-pulse rounded-xl border border-[#e4e9e4] bg-white" /> : availableTasks.length === 0 ? <div className="flex items-center gap-3 rounded-xl border border-[#e4e9e4] bg-white px-4 py-4"><div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#f3f6f3]"><Leaf className="size-4 text-[#6a9272]" /></div><div><p className="text-[12px] font-semibold text-[#34453a]">Nenhuma tarefa aberta no momento</p><p className="mt-0.5 text-[11px] text-[#77837a]">Novas atividades aparecerão aqui quando forem publicadas nas suas hortas.</p></div></div> : <div className="grid gap-3 lg:grid-cols-3">{availableTasks.slice(0, 3).map((task) => <TaskCard key={task.id} task={task} available />)}</div>}
+          </section>
+
+          <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+            <section className="rounded-xl border border-[#e4e9e4] bg-white p-4">
+              <div className="mb-3 flex items-center justify-between"><div><h2 className="text-[14px] font-bold text-[#202b22]">Suas conquistas</h2><p className="mt-0.5 text-[10px] text-[#77837a]">Condições especiais reconhecem sua participação.</p></div><button onClick={() => onNavigate('profile')} className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#16803d] hover:underline">Ver todas <ArrowRight className="size-3" /></button></div>
+              {visibleAchievements.length > 0 ? <div className="grid gap-2 sm:grid-cols-3">{visibleAchievements.map((achievement) => <div key={achievement.id} className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 ${achievement.unlocked ? 'border-[#e2eee3] bg-[#f8fcf8]' : 'border-[#eceeec] bg-[#fafbfa]'}`}><span className={`flex size-8 shrink-0 items-center justify-center rounded-full text-[16px] ${achievement.unlocked ? 'bg-[#eaf6eb]' : 'bg-[#f0f1f0] grayscale'}`}>{achievement.unlocked ? achievement.icon : '🔒'}</span><div className="min-w-0"><p className={`truncate text-[10px] font-semibold ${achievement.unlocked ? 'text-[#34453a]' : 'text-[#77837a]'}`}>{achievement.name}</p><p className="text-[9px] text-[#849087]">{achievement.unlocked ? 'Desbloqueada' : achievement.description}</p></div></div>)}</div> : <p className="rounded-lg bg-[#f8faf8] px-3 py-4 text-center text-[11px] text-[#77837a]">Suas conquistas aparecerão aqui conforme você participa das atividades.</p>}
+            </section>
+
+            <section className="rounded-xl border border-[#e4e9e4] bg-white p-4">
+              <div className="flex items-center gap-2"><div className="flex size-8 items-center justify-center rounded-full bg-[#eff7f0]"><Users className="size-4 text-[#398650]" /></div><div><h2 className="text-[14px] font-bold text-[#202b22]">Seu impacto</h2><p className="text-[10px] text-[#77837a]">Sua contribuição ajuda a comunidade a crescer.</p></div></div>
+              <div className="mt-3 grid grid-cols-3 divide-x divide-[#edf0ed] text-center"><div className="px-1"><p className="text-[16px] font-bold text-[#398650]">{taskCountsByHorta}</p><p className="mt-0.5 text-[9px] leading-3 text-[#77837a]">hortas</p></div><div className="px-1"><p className="text-[16px] font-bold text-[#bd8514]">{stats?.tarefas_concluidas ?? 0}</p><p className="mt-0.5 text-[9px] leading-3 text-[#77837a]">tarefas realizadas</p></div><div className="px-1"><p className="text-[16px] font-bold text-[#648344]">{stats?.mudas_este_mes ?? 0}</p><p className="mt-0.5 text-[9px] leading-3 text-[#77837a]">mudas este mês</p></div></div>
+            </section>
           </div>
 
-          {isLoading ? null : inProgressTasks.length === 0 ? (
-            <div className="bg-white rounded-[14px] border border-gray-200 p-6 text-center">
-              <p className="text-[14px] text-[#717182]">Você não tem tarefas em andamento</p>
-              <button onClick={() => onNavigate('tasks')} className="mt-3 text-[14px] text-[#00a63e]">
-                Ver tarefas disponíveis
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {inProgressTasks.map((task) => (
-                <div key={task.id} className="bg-white rounded-[14px] border border-gray-200 p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <h3 className="text-[16px] text-neutral-950 flex-1">{task.titulo}</h3>
-                    <div className="bg-green-50 rounded-[10px] px-3 py-1.5 flex items-center gap-1">
-                      <Sprout className="size-4 text-[#00a63e]" />
-                      <span className="text-[16px] text-[#00a63e] font-bold">{task.moedas}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 mb-3">
-                    <span className={`${getCategoryColor(task.tipo)} text-[12px] px-2.5 py-1 rounded-lg`}>
-                      {task.tipo}
-                    </span>
-                    <span className={`${getDifficultyColor(task.dificuldade)} text-[11px] px-2.5 py-1 rounded-lg`}>
-                      {['Fácil', 'Médio', 'Difícil'][task.dificuldade] || 'Fácil'}
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => completeTask(task.id, task)}
-                    className="w-full bg-[#00a63e] text-white text-[14px] py-2.5 rounded-lg hover:bg-[#008236] transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Play className="size-4" />
-                    Concluir Tarefa
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+          <p className="flex items-center justify-center gap-2 pb-1 text-center text-[10px] text-[#849087]"><Sprout className="size-3.5 text-[#53a064]" />Tarefas geram XP e moedas · XP aumenta seu nível · moedas podem ser trocadas por recompensas.</p>
         </div>
-      </div>
+      </main>
     </>
   );
 }
