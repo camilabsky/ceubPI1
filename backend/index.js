@@ -5,6 +5,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
+const { ACHIEVEMENTS, getAchievementProgress, getActiveStreak, getLevelInfo, getNextStreak } = require('./gamification');
 
 const app = express();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -546,23 +547,71 @@ app.post('/minhas_recompensas', requireAuth, async (req, res) => {
 });
 
 app.post('/concluir_tarefa', requireAuth, async (req, res) => {
+    const conn = await db.getConnection();
     try {
         const id_tarefa = Number(req.body.id_tarefa);
-        const [results] = await db.query(
-            'UPDATE Tarefas SET concluido = true, completed_at = COALESCE(completed_at, NOW()), xp_recebido = COALESCE(xp_recebido, xp), moedas_recebidas = COALESCE(moedas_recebidas, moedas) WHERE id = ? AND id_perfil = ?',
+        if (!Number.isInteger(id_tarefa) || id_tarefa <= 0 || !req.user.id_perfil) {
+            return res.status(400).send({ error: 'Tarefa invalida' });
+        }
+
+        await conn.beginTransaction();
+        await ensureGamificationProfile(conn, req.user.id_perfil);
+        const [taskRows] = await conn.query(
+            'SELECT * FROM Tarefas WHERE id = ? AND id_perfil = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
             [id_tarefa, req.user.id_perfil]
         );
-        if (results.affectedRows === 0) {
+        if (taskRows.length === 0) {
+            await conn.rollback();
             return res.status(403).send({ error: 'Tarefa nao pertence a este usuario ou nao existe' });
         }
-        const [awardRows] = await db.query(
-            'SELECT moedas_recebidas AS moedas, xp_recebido AS xp FROM Tarefas WHERE id = ? LIMIT 1',
-            [id_tarefa]
+        if (taskRows[0].concluido) {
+            await conn.rollback();
+            return res.status(409).send({ error: 'Esta tarefa ja foi concluida' });
+        }
+
+        const taskXp = Math.max(0, Math.floor(Number(taskRows[0].xp) || 0));
+        const taskCoins = Math.max(0, Math.floor(Number(taskRows[0].moedas) || 0));
+        const [clockRows] = await conn.query("SELECT DATE_FORMAT(CURRENT_DATE(), '%Y-%m-%d') AS today");
+        const today = normalizeSqlDate(clockRows[0]?.today);
+        const [streakRows] = await conn.query('SELECT streak_days, last_activity_date FROM PerfilGamificacao WHERE id_perfil = ? LIMIT 1 FOR UPDATE', [req.user.id_perfil]);
+        const currentStreak = getNextStreak(streakRows[0]?.streak_days, normalizeSqlDate(streakRows[0]?.last_activity_date), today);
+
+        await conn.query(
+            `UPDATE Tarefas SET concluido = true, completed_at = NOW(), xp_recebido = ?, moedas_recebidas = ?,
+                completion_review_status = 'approved', completion_ai_status = 'not_requested'
+             WHERE id = ? AND id_perfil = ? AND concluido = false`,
+            [taskXp, taskCoins, id_tarefa, req.user.id_perfil]
         );
-        return res.send({ ...results, ...(awardRows[0] || {}) });
+        await conn.query(
+            'UPDATE PerfilGamificacao SET xp_total = GREATEST(0, xp_total + ?), streak_days = ?, last_activity_date = ? WHERE id_perfil = ?',
+            [taskXp, currentStreak, today, req.user.id_perfil]
+        );
+
+        const tasks = await getCompletedTasksForGamification(conn, req.user.id_perfil);
+        const newlyUnlocked = await awardEligibleAchievements(conn, req.user.id_perfil, tasks, currentStreak);
+        const [profileRows] = await conn.query('SELECT xp_total, streak_days FROM PerfilGamificacao WHERE id_perfil = ? LIMIT 1', [req.user.id_perfil]);
+        const [balanceRows] = await conn.query('SELECT GREATEST(0, COALESCE(Saldo, 0)) AS Saldo FROM SaldoPerfil WHERE id_perfil = ?', [req.user.id_perfil]);
+        const levelInfo = getLevelInfo(profileRows[0]?.xp_total);
+        const previousLevel = getLevelInfo(Math.max(0, Number(profileRows[0]?.xp_total || 0) - taskXp - newlyUnlocked.reduce((total, achievement) => total + achievement.xp, 0))).level;
+
+        await conn.commit();
+        return res.send({
+            ok: true,
+            moedas: taskCoins,
+            xp: taskXp,
+            saldo: Math.max(0, Number(balanceRows[0]?.Saldo) || 0),
+            ...levelInfo,
+            level_up: levelInfo.level > previousLevel,
+            sequencia_dias: Number(profileRows[0]?.streak_days) || 0,
+            conquistas_desbloqueadas: newlyUnlocked.map((achievement) => ({ id: achievement.id, name: achievement.name, xp: achievement.xp })),
+            verification_status: 'approved',
+        });
     } catch (error) {
+        await conn.rollback();
         console.error('Erro em /concluir_tarefa:', error);
         return res.status(500).send({ error: 'Erro ao concluir tarefa' });
+    } finally {
+        conn.release();
     }
 });
 
@@ -686,7 +735,11 @@ app.post('/admin/tarefas', requireAuth, requireHortaAdmin, async (req, res) => {
             return res.status(404).send({ error: 'Horta nao encontrada' });
         }
 
+        const moedas_num = Number(moedas ?? 0);
         const xp_num = Number(xp ?? 50);
+        if (!Number.isInteger(moedas_num) || moedas_num < 0) {
+            return res.status(400).send({ error: 'Moedas deve ser um numero inteiro igual ou maior que zero' });
+        }
         if (!Number.isInteger(xp_num) || xp_num < 0 || xp_num > 10000) {
             return res.status(400).send({ error: 'XP deve ser um numero inteiro entre 0 e 10000' });
         }
@@ -701,7 +754,7 @@ app.post('/admin/tarefas', requireAuth, requireHortaAdmin, async (req, res) => {
                 hortaRows[0].nome,
                 descricao,
                 Number(dificuldade) || 0,
-                Number(moedas) || 0,
+                moedas_num,
                 xp_num,
                 Number(mudas) || 0,
                 Number(tempo) || 1,
@@ -740,6 +793,10 @@ app.put('/admin/tarefas/:id', requireAuth, async (req, res) => {
         const mudas = req.body.mudas ?? current.mudas;
         const tempo = req.body.tempo ?? current.tempo;
         const xp_num = Number(xp);
+        const moedas_num = Number(moedas);
+        if (!Number.isInteger(moedas_num) || moedas_num < 0) {
+            return res.status(400).send({ error: 'Moedas deve ser um numero inteiro igual ou maior que zero' });
+        }
         if (!Number.isInteger(xp_num) || xp_num < 0 || xp_num > 10000) {
             return res.status(400).send({ error: 'XP deve ser um numero inteiro entre 0 e 10000' });
         }
@@ -748,7 +805,7 @@ app.put('/admin/tarefas/:id', requireAuth, async (req, res) => {
             `UPDATE Tarefas
              SET titulo = ?, tipo = ?, descricao = ?, dificuldade = ?, moedas = ?, xp = ?, mudas = ?, tempo = ?, updated_at = NOW()
              WHERE id = ?`,
-            [titulo, tipo, descricao, dificuldade, moedas, xp_num, mudas, tempo, id]
+            [titulo, tipo, descricao, dificuldade, moedas_num, xp_num, mudas, tempo, id]
         );
 
         return res.send({ message: 'Tarefa atualizada' });
@@ -811,7 +868,7 @@ app.get('/me/historico', requireAuth, async (req, res) => {
         const [tarefasConcluidas] = await db.query(
             `SELECT id, titulo, descricao, tipo, horta, moedas, tempo
              FROM Tarefas
-             WHERE id_perfil = ? AND concluido = true AND deleted_at IS NULL
+             WHERE id_perfil = ? AND concluido = true
              ORDER BY id DESC
              LIMIT 50`,
             [id_perfil]
@@ -838,27 +895,40 @@ app.get('/me/historico', requireAuth, async (req, res) => {
 });
 
 app.get('/me/gamificacao', requireAuth, async (req, res) => {
+    const conn = await db.getConnection();
     try {
         const id_perfil = Number(req.user.id_perfil);
-        const [tarefas] = await db.query(
-            `SELECT id, titulo, horta, id_horta, COALESCE(moedas_recebidas, moedas) AS moedas, mudas, COALESCE(xp_recebido, xp) AS xp, completed_at,
-                    DATE_FORMAT(completed_at, '%Y-%m') AS completed_month,
-                    DATE_FORMAT(completed_at, '%Y-%m-%d') AS completed_day
-             FROM Tarefas
-             WHERE id_perfil = ? AND concluido = true AND deleted_at IS NULL
-             ORDER BY completed_at ASC, id ASC`,
+        if (!id_perfil) return res.status(403).send({ error: 'Perfil nao encontrado' });
+
+        await conn.beginTransaction();
+        let gamification = await ensureGamificationProfile(conn, id_perfil);
+        const [clockRows] = await conn.query("SELECT DATE_FORMAT(CURRENT_DATE(), '%Y-%m-%d') AS today, DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01') AS period_start, LAST_DAY(CURRENT_DATE()) AS period_end, DATE_FORMAT(CURRENT_DATE(), '%Y-%m') AS current_month");
+        const today = normalizeSqlDate(clockRows[0]?.today);
+        const tasks = await getCompletedTasksForGamification(conn, id_perfil);
+        const historicalStreak = streakSummary(tasks.map((task) => task.completed_day));
+
+        if (!gamification.last_activity_date && historicalStreak.distinctDays.length) {
+            const lastDay = historicalStreak.distinctDays[historicalStreak.distinctDays.length - 1];
+            await conn.query(
+                'UPDATE PerfilGamificacao SET streak_days = ?, last_activity_date = ? WHERE id_perfil = ?',
+                [historicalStreak.lastRun, lastDay, id_perfil]
+            );
+            gamification = { ...gamification, streak_days: historicalStreak.lastRun, last_activity_date: lastDay };
+        }
+        const currentStreak = getActiveStreak(gamification.streak_days, normalizeSqlDate(gamification.last_activity_date), today);
+        await awardEligibleAchievements(conn, id_perfil, tasks, currentStreak);
+
+        const [achievementRows] = await conn.query(
+            'SELECT achievement_key, xp_awarded, unlocked_at FROM ConquistasPerfil WHERE id_perfil = ?',
             [id_perfil]
         );
-        const [resgates] = await db.query(
-            `SELECT pr.id_recompensa, r.nome, pr.redeemed_at,
-                    COALESCE(pr.redeemed_price, r.preco) AS preco
-             FROM PerfilRecompensas pr
-             JOIN Recompensas r ON r.id = pr.id_recompensa
-             WHERE pr.id_perfil = ?
-             ORDER BY pr.redeemed_at ASC, pr.id_recompensa ASC`,
-            [id_perfil]
-        );
-        const [hortas] = await db.query(
+        const unlocked = new Map(achievementRows.map((row) => [row.achievement_key, row]));
+        const achievements = ACHIEVEMENTS.map((achievement) => {
+            const record = unlocked.get(achievement.id);
+            return { ...achievement, unlocked: Boolean(record), unlocked_at: record?.unlocked_at ?? null };
+        });
+
+        const [gardens] = await conn.query(
             `SELECT h.id, h.nome, uhr.papel,
                     COUNT(DISTINCT t.id) AS tarefas_concluidas,
                     (SELECT COUNT(*) FROM UsuarioHortaRole membros
@@ -873,71 +943,85 @@ app.get('/me/gamificacao', requireAuth, async (req, res) => {
             [id_perfil, req.user.id]
         );
 
-        const taskDates = [...new Set(tarefas.map((task) => task.completed_day).filter(Boolean))].sort();
-        const dayNumber = (day) => Date.parse(`${day}T00:00:00Z`);
-        let currentStreak = 0;
-        let maxStreak = 0;
-        let streakRun = 0;
-        let previousDay = null;
-        let fiveDayUnlock = null;
-        for (const day of taskDates) {
-            streakRun = previousDay && dayNumber(day) - dayNumber(previousDay) === 86400000 ? streakRun + 1 : 1;
-            maxStreak = Math.max(maxStreak, streakRun);
-            if (streakRun >= 5 && !fiveDayUnlock) fiveDayUnlock = day;
-            previousDay = day;
-        }
-        if (taskDates.length) {
-            const today = new Date().toISOString().slice(0, 10);
-            const gap = dayNumber(today) - dayNumber(taskDates[taskDates.length - 1]);
-            if (gap === 0 || gap === 86400000) {
-                currentStreak = 1;
-                for (let index = taskDates.length - 1; index > 0; index -= 1) {
-                    if (dayNumber(taskDates[index]) - dayNumber(taskDates[index - 1]) !== 86400000) break;
-                    currentStreak += 1;
-                }
+        const communityChallenges = [];
+        for (const garden of gardens) {
+            const goalTasks = Math.max(5, (Number(garden.participantes) || 0) * 2);
+            await conn.query(
+                `INSERT IGNORE INTO DesafioComunitario (id_horta, period_start, period_end, goal_tasks)
+                 VALUES (?, ?, ?, ?)`,
+                [garden.id, clockRows[0].period_start, clockRows[0].period_end, goalTasks]
+            );
+            const [challengeRows] = await conn.query(
+                `SELECT d.id, d.id_horta, h.nome, d.period_start, d.period_end, d.goal_tasks, d.completed_at,
+                        (SELECT COUNT(*) FROM Tarefas t WHERE t.id_horta = d.id_horta AND t.concluido = true
+                         AND DATE(t.completed_at) BETWEEN d.period_start AND d.period_end) AS completed_tasks
+                 FROM DesafioComunitario d JOIN Horta h ON h.id = d.id_horta
+                 WHERE d.id_horta = ? AND d.period_start = ? LIMIT 1`,
+                [garden.id, clockRows[0].period_start]
+            );
+            if (!challengeRows.length) continue;
+            const challenge = challengeRows[0];
+            if (!challenge.completed_at && Number(challenge.completed_tasks) >= Number(challenge.goal_tasks)) {
+                await conn.query('UPDATE DesafioComunitario SET completed_at = NOW() WHERE id = ? AND completed_at IS NULL', [challenge.id]);
+                challenge.completed_at = new Date();
             }
+            communityChallenges.push({
+                id: challenge.id,
+                id_horta: challenge.id_horta,
+                nome: challenge.nome,
+                starts_at: challenge.period_start,
+                ends_at: challenge.period_end,
+                goal_tasks: Number(challenge.goal_tasks) || 0,
+                completed_tasks: Number(challenge.completed_tasks) || 0,
+                completed: Boolean(challenge.completed_at),
+            });
         }
 
-        const tasksByGarden = new Map();
-        for (const task of tarefas) {
-            if (task.id_horta == null) continue;
-            const items = tasksByGarden.get(Number(task.id_horta)) || [];
-            items.push(task);
-            tasksByGarden.set(Number(task.id_horta), items);
-        }
-        let twentyGardenUnlocked = false;
-        let twentyGardenUnlock = null;
-        for (const items of tasksByGarden.values()) {
-            if (items.length >= 20) {
-                twentyGardenUnlocked = true;
-                const unlock = items[19].completed_day;
-                if (unlock && (!twentyGardenUnlock || unlock < twentyGardenUnlock)) twentyGardenUnlock = unlock;
-            }
-        }
-        const achievements = [
-            { id: 'first-task', name: 'Primeira muda', description: 'Conclua sua primeira tarefa', icon: '🌱', xp: 50, unlocked: tarefas.length >= 1, unlocked_at: tarefas[0]?.completed_at ?? null },
-            { id: 'ten-tasks', name: '10 tarefas', description: 'Conclua 10 tarefas', icon: '🏅', xp: 100, unlocked: tarefas.length >= 10, unlocked_at: tarefas[9]?.completed_at ?? null },
-            { id: 'five-day-streak', name: '5 dias seguidos', description: 'Participe por 5 dias consecutivos', icon: '🔥', xp: 150, unlocked: maxStreak >= 5, unlocked_at: fiveDayUnlock },
-            { id: 'garden-guardian', name: 'Guardião da horta', description: 'Conclua 20 tarefas em uma mesma horta', icon: '🏡', xp: 200, unlocked: twentyGardenUnlocked, unlocked_at: twentyGardenUnlock },
-        ];
-        const taskXp = tarefas.reduce((total, task) => total + (Number(task.xp) || 0), 0);
-        const achievementXp = achievements.filter((achievement) => achievement.unlocked).reduce((total, achievement) => total + achievement.xp, 0);
-        const totalXp = taskXp + achievementXp;
-        const mudasPlantadas = tarefas.reduce((total, task) => total + (Number(task.mudas) || 0), 0);
-        const mesAtual = new Date().toISOString().slice(0, 7);
-        const mudasEsteMes = tarefas.reduce((total, task) => total + (task.completed_month === mesAtual ? Number(task.mudas) || 0 : 0), 0);
+        const [leaderboardRows] = await conn.query(
+             `SELECT p.id, p.nome, COALESCE(pg.xp_total, 0) AS xp_total,
+                    COUNT(DISTINCT t.id) AS tarefas_concluidas
+             FROM UsuarioHortaRole member
+             JOIN UsuarioHortaRole mine ON mine.id_horta = member.id_horta AND mine.id_usuario = ?
+             JOIN Usuario u ON u.id = member.id_usuario AND u.ativo = true
+             JOIN Perfil p ON p.id = u.id_perfil
+             LEFT JOIN PerfilGamificacao pg ON pg.id_perfil = p.id
+             LEFT JOIN Tarefas t ON t.id_perfil = p.id AND t.concluido = true
+             WHERE member.papel = 'MEMBER'
+             GROUP BY p.id, p.nome, pg.xp_total
+             ORDER BY xp_total DESC, tarefas_concluidas DESC, p.nome ASC
+             LIMIT 5`,
+            [req.user.id]
+        );
+        const leaderboard = leaderboardRows.map((member, index) => ({
+            position: index + 1,
+            id_perfil: Number(member.id),
+            nome: member.nome,
+            xp: Math.max(0, Number(member.xp_total) || 0),
+            tarefas_concluidas: Number(member.tarefas_concluidas) || 0,
+            is_you: Number(member.id) === id_perfil,
+        }));
+
+        const [resgates] = await conn.query(
+            `SELECT pr.id_recompensa, r.nome, pr.redeemed_at,
+                    GREATEST(0, COALESCE(pr.redeemed_price, r.preco, 0)) AS preco
+             FROM PerfilRecompensas pr
+             JOIN Recompensas r ON r.id = pr.id_recompensa
+             WHERE pr.id_perfil = ?
+             ORDER BY pr.redeemed_at ASC, pr.id_recompensa ASC`,
+            [id_perfil]
+        );
+        const [balanceRows] = await conn.query('SELECT GREATEST(0, COALESCE(Saldo, 0)) AS Saldo FROM SaldoPerfil WHERE id_perfil = ?', [id_perfil]);
+        const [profileRows] = await conn.query('SELECT xp_total, streak_days, last_activity_date FROM PerfilGamificacao WHERE id_perfil = ?', [id_perfil]);
+        const profileGamification = profileRows[0] || { xp_total: 0, streak_days: 0, last_activity_date: null };
+        const levelInfo = getLevelInfo(profileGamification.xp_total);
+        const mudasPlantadas = tasks.reduce((total, task) => total + Math.max(0, Number(task.mudas) || 0), 0);
+        const mudasEsteMes = tasks.reduce((total, task) => total + (task.completed_month === clockRows[0].current_month ? Math.max(0, Number(task.mudas) || 0) : 0), 0);
         const events = [
-            ...tarefas.map((task) => ({
-                id: `task-${task.id}`, kind: 'task', title: 'Tarefa concluída', description: task.titulo,
-                xp: Number(task.xp) || 0, coins: Number(task.moedas) || 0, occurred_at: task.completed_at,
-            })),
-            ...resgates.map((reward, index) => ({
-                id: `reward-${reward.id_recompensa}-${index}`, kind: 'reward', title: 'Recompensa resgatada', description: reward.nome,
-                xp: 0, coins: -(Number(reward.preco) || 0), occurred_at: reward.redeemed_at,
-            })),
+            ...tasks.map((task) => ({ id: `task-${task.id}`, kind: 'task', title: 'Tarefa concluída', description: task.titulo, xp: Number(task.xp) || 0, coins: Number(task.moedas) || 0, occurred_at: task.completed_at })),
+            ...resgates.map((reward, index) => ({ id: `reward-${reward.id_recompensa}-${index}`, kind: 'reward', title: 'Recompensa resgatada', description: reward.nome, xp: 0, coins: -(Number(reward.preco) || 0), occurred_at: reward.redeemed_at })),
             ...achievements.filter((achievement) => achievement.unlocked).map((achievement) => ({
                 id: `achievement-${achievement.id}`, kind: 'achievement', title: 'Conquista desbloqueada', description: achievement.name,
-                xp: achievement.xp, coins: 0, occurred_at: achievement.unlocked_at,
+                xp: Number(unlocked.get(achievement.id)?.xp_awarded) || achievement.xp, coins: 0, occurred_at: achievement.unlocked_at,
             })),
         ].sort((a, b) => {
             if (!a.occurred_at && !b.occurred_at) return 0;
@@ -946,22 +1030,28 @@ app.get('/me/gamificacao', requireAuth, async (req, res) => {
             return new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime();
         });
 
+        await conn.commit();
         return res.send({
-            level: Math.floor(totalXp / 500) + 1,
-            xp: totalXp % 500,
-            xp_to_next_level: 500,
-            total_xp: totalXp,
-            tarefas_concluidas: tarefas.length,
+            ...levelInfo,
+            level_names: ['Semente', 'Broto', 'Muda', 'Cultivador', 'Jardineiro', 'Guardião'],
+            moedas: Math.max(0, Number(balanceRows[0]?.Saldo) || 0),
+            tarefas_concluidas: tasks.length,
             mudas_plantadas: mudasPlantadas,
             mudas_este_mes: mudasEsteMes,
             sequencia_dias: currentStreak,
             achievements,
             events,
-            hortas,
+            hortas: gardens,
+            community_challenges: communityChallenges,
+            leaderboard,
+            impact: { tasks_completed: tasks.length, gardens_count: gardens.length, seedlings_planted: mudasPlantadas },
         });
     } catch (error) {
+        await conn.rollback();
         console.error('Erro em /me/gamificacao:', error);
         return res.status(500).send({ error: 'Erro ao carregar gamificacao do usuario' });
+    } finally {
+        conn.release();
     }
 });
 
@@ -1102,6 +1192,7 @@ app.post('/resgatar_recompensa', requireAuth, async (req, res) => {
         }
 
         await conn.beginTransaction();
+        await ensureGamificationProfile(conn, id_perfil);
 
         const [recompensas] = await conn.query(
             'SELECT preco FROM Recompensas WHERE id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
@@ -1111,13 +1202,17 @@ app.post('/resgatar_recompensa', requireAuth, async (req, res) => {
             await conn.rollback();
             return res.status(404).send({ error: 'Recompensa nao encontrada ou invalida' });
         }
-        const preco = recompensas[0].preco;
+        const preco = Number(recompensas[0].preco);
+        if (!Number.isInteger(preco) || preco < 0) {
+            await conn.rollback();
+            return res.status(400).send({ error: 'O custo da recompensa deve ser um numero inteiro igual ou maior que zero' });
+        }
 
         const [saldos] = await conn.query(
             'SELECT Saldo FROM SaldoPerfil WHERE id_perfil = ?',
             [id_perfil]
         );
-        const saldo = saldos.length > 0 ? saldos[0].Saldo : 0;
+        const saldo = Math.max(0, Number(saldos[0]?.Saldo) || 0);
         if (saldo < preco) {
             await conn.rollback();
             return res.status(402).send({ error: 'Saldo insuficiente' });
@@ -1149,12 +1244,17 @@ app.post('/admin/recompensas', requireAuth, requireHortaAdmin, async (req, res) 
         if (!nome || !descricao || !tipo) {
             return res.status(400).send({ error: 'Campos obrigatorios ausentes' });
         }
+        const preco_num = Number(preco);
+        const quantidade_num = Number(quantidade_disponivel);
+        if (!Number.isInteger(preco_num) || preco_num < 0 || !Number.isInteger(quantidade_num) || quantidade_num < 0) {
+            return res.status(400).send({ error: 'Preco e quantidade devem ser numeros inteiros iguais ou maiores que zero' });
+        }
 
         const [results] = await db.query(
             `INSERT INTO Recompensas
              (nome, descricao, tipo, preco, src, quantidade_disponivel, id_horta, created_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [nome, descricao, tipo, Number(preco) || 0, src || null, Number(quantidade_disponivel) || 0, req.id_horta, req.user.id]
+            [nome, descricao, tipo, preco_num, src || null, quantidade_num, req.id_horta, req.user.id]
         );
 
         return res.status(201).send({ id: results.insertId, message: 'Recompensa criada pelo admin' });
@@ -1178,6 +1278,12 @@ app.put('/admin/recompensas/:id', requireAuth, async (req, res) => {
             return res.status(403).send({ error: 'Apenas admin da horta pode editar' });
         }
 
+        const preco_num = Number(req.body.preco ?? current.preco);
+        const quantidade_num = Number(req.body.quantidade_disponivel ?? current.quantidade_disponivel);
+        if (!Number.isInteger(preco_num) || preco_num < 0 || !Number.isInteger(quantidade_num) || quantidade_num < 0) {
+            return res.status(400).send({ error: 'Preco e quantidade devem ser numeros inteiros iguais ou maiores que zero' });
+        }
+
         await db.query(
             `UPDATE Recompensas
              SET nome = ?, descricao = ?, tipo = ?, preco = ?, src = ?, quantidade_disponivel = ?, updated_at = NOW()
@@ -1186,9 +1292,9 @@ app.put('/admin/recompensas/:id', requireAuth, async (req, res) => {
                 req.body.nome ?? current.nome,
                 req.body.descricao ?? current.descricao,
                 req.body.tipo ?? current.tipo,
-                req.body.preco ?? current.preco,
+                preco_num,
                 req.body.src ?? current.src,
-                req.body.quantidade_disponivel ?? current.quantidade_disponivel,
+                quantidade_num,
                 id
             ]
         );
@@ -1264,12 +1370,63 @@ async function ensureGamificationSchema() {
     if (rewardColumns.length === 0) await db.query('ALTER TABLE PerfilRecompensas ADD COLUMN redeemed_at datetime NULL');
     const [priceColumns] = await db.query("SHOW COLUMNS FROM PerfilRecompensas LIKE 'redeemed_price'");
     if (priceColumns.length === 0) await db.query('ALTER TABLE PerfilRecompensas ADD COLUMN redeemed_price int NULL');
+    const completionColumns = [
+        ['completion_photo_url', 'varchar(512) NULL'],
+        ['completion_latitude', 'DECIMAL(10, 8) NULL'],
+        ['completion_longitude', 'DECIMAL(11, 8) NULL'],
+        ['completion_review_status', "varchar(24) NOT NULL DEFAULT 'approved'"],
+        ['completion_ai_status', "varchar(24) NOT NULL DEFAULT 'not_requested'"],
+        ['completion_review_note', 'varchar(512) NULL'],
+        ['completion_reviewed_by', 'int NULL'],
+        ['completion_reviewed_at', 'datetime NULL'],
+    ];
+    for (const [column, definition] of completionColumns) {
+        const [columns] = await db.query('SHOW COLUMNS FROM Tarefas LIKE ?', [column]);
+        if (columns.length === 0) await db.query(`ALTER TABLE Tarefas ADD COLUMN ${column} ${definition}`);
+    }
+    await db.query(`CREATE TABLE IF NOT EXISTS PerfilGamificacao (
+        id_perfil int PRIMARY KEY,
+        xp_total int NOT NULL DEFAULT 0,
+        streak_days int NOT NULL DEFAULT 0,
+        last_activity_date date NULL,
+        created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT fk_gamificacao_perfil FOREIGN KEY (id_perfil) REFERENCES Perfil(id)
+    )`);
+    await db.query(`CREATE TABLE IF NOT EXISTS ConquistasPerfil (
+        id int AUTO_INCREMENT PRIMARY KEY,
+        id_perfil int NOT NULL,
+        achievement_key varchar(48) NOT NULL,
+        xp_awarded int NOT NULL DEFAULT 0,
+        unlocked_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_perfil_conquista (id_perfil, achievement_key),
+        CONSTRAINT fk_conquista_perfil FOREIGN KEY (id_perfil) REFERENCES Perfil(id)
+    )`);
+    await db.query(`CREATE TABLE IF NOT EXISTS DesafioComunitario (
+        id int AUTO_INCREMENT PRIMARY KEY,
+        id_horta int NOT NULL,
+        period_start date NOT NULL,
+        period_end date NOT NULL,
+        goal_tasks int NOT NULL,
+        completed_at datetime NULL,
+        created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_horta_desafio_periodo (id_horta, period_start),
+        CONSTRAINT fk_desafio_horta FOREIGN KEY (id_horta) REFERENCES Horta(id)
+    )`);
     await db.query(`UPDATE Tarefas
-                    SET xp_recebido = COALESCE(xp_recebido, xp),
-                        moedas_recebidas = COALESCE(moedas_recebidas, moedas)
-                    WHERE concluido = true`);
+                    SET xp = GREATEST(0, COALESCE(xp, 0)),
+                        moedas = GREATEST(0, COALESCE(moedas, 0)),
+                        xp_recebido = GREATEST(0, COALESCE(xp_recebido, xp, 0)),
+                        moedas_recebidas = GREATEST(0, COALESCE(moedas_recebidas, moedas, 0))
+                    WHERE concluido = true OR xp < 0 OR moedas < 0`);
+    await db.query('UPDATE Recompensas SET preco = 0 WHERE preco < 0');
+    await db.query('UPDATE PerfilRecompensas SET redeemed_price = 0 WHERE redeemed_price < 0');
+    await db.query(`INSERT IGNORE INTO PerfilGamificacao (id_perfil, xp_total)
+        SELECT p.id, COALESCE((SELECT SUM(GREATEST(0, COALESCE(t.xp_recebido, t.xp, 0)))
+            FROM Tarefas t WHERE t.id_perfil = p.id AND t.concluido = true), 0)
+        FROM Perfil p`);
     await db.query(`CREATE OR REPLACE VIEW SaldoPerfil AS
-        SELECT COALESCE(t.total_moedas, 0) - COALESCE(r.total_gasto, 0) AS Saldo, p.id AS id_perfil
+        SELECT GREATEST(0, COALESCE(t.total_moedas, 0) - COALESCE(r.total_gasto, 0)) AS Saldo, p.id AS id_perfil
         FROM Perfil p
         LEFT JOIN (
             SELECT id_perfil, SUM(COALESCE(moedas_recebidas, moedas)) AS total_moedas
@@ -1283,6 +1440,87 @@ async function ensureGamificationSchema() {
             JOIN Recompensas rec ON pr.id_recompensa = rec.id
             GROUP BY pr.id_perfil
         ) r ON p.id = r.id_perfil`);
+}
+
+function normalizeSqlDate(value) {
+    if (!value) return null;
+    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    return String(value).slice(0, 10);
+}
+
+function streakSummary(days) {
+    const distinctDays = [...new Set(days.filter(Boolean).map(normalizeSqlDate))].sort();
+    let longest = 0;
+    let current = 0;
+    let previous = null;
+    let fiveDayUnlock = null;
+    for (const day of distinctDays) {
+        current = previous ? getNextStreak(current, previous, day) : 1;
+        longest = Math.max(longest, current);
+        if (current >= 5 && !fiveDayUnlock) fiveDayUnlock = day;
+        previous = day;
+    }
+    return { distinctDays, longest, lastRun: current, fiveDayUnlock };
+}
+
+async function ensureGamificationProfile(conn, idPerfil) {
+    let [rows] = await conn.query('SELECT * FROM PerfilGamificacao WHERE id_perfil = ? LIMIT 1 FOR UPDATE', [idPerfil]);
+    if (rows.length === 0) {
+        const [xpRows] = await conn.query(
+            `SELECT COALESCE(SUM(GREATEST(0, COALESCE(xp_recebido, xp, 0))), 0) AS total_xp
+             FROM Tarefas WHERE id_perfil = ? AND concluido = true`,
+            [idPerfil]
+        );
+        await conn.query('INSERT IGNORE INTO PerfilGamificacao (id_perfil, xp_total) VALUES (?, ?)', [idPerfil, xpRows[0]?.total_xp || 0]);
+        [rows] = await conn.query('SELECT * FROM PerfilGamificacao WHERE id_perfil = ? LIMIT 1 FOR UPDATE', [idPerfil]);
+    }
+    return rows[0];
+}
+
+async function getCompletedTasksForGamification(conn, idPerfil) {
+    const [tasks] = await conn.query(
+        `SELECT id, titulo, id_horta, GREATEST(0, COALESCE(xp_recebido, xp, 0)) AS xp,
+                GREATEST(0, COALESCE(moedas_recebidas, moedas, 0)) AS moedas,
+                GREATEST(0, COALESCE(mudas, 0)) AS mudas, completed_at,
+                DATE_FORMAT(completed_at, '%Y-%m-%d') AS completed_day,
+                DATE_FORMAT(completed_at, '%Y-%m') AS completed_month
+         FROM Tarefas WHERE id_perfil = ? AND concluido = true
+         ORDER BY completed_at ASC, id ASC`,
+        [idPerfil]
+    );
+    return tasks;
+}
+
+async function awardEligibleAchievements(conn, idPerfil, tasks, currentStreak) {
+    const days = streakSummary(tasks.map((task) => task.completed_day));
+    const unlockedByProgress = getAchievementProgress(tasks, Math.max(days.longest, currentStreak));
+    const unlockDates = {
+        'first-task': tasks[0]?.completed_at ?? null,
+        'ten-tasks': tasks[9]?.completed_at ?? null,
+        'five-day-streak': days.fiveDayUnlock,
+    };
+    const gardenCounts = new Map();
+    for (const task of tasks) {
+        if (task.id_horta == null) continue;
+        const gardenId = Number(task.id_horta);
+        const count = (gardenCounts.get(gardenId) || 0) + 1;
+        gardenCounts.set(gardenId, count);
+        if (count === 20 && !unlockDates['garden-guardian']) unlockDates['garden-guardian'] = task.completed_at;
+    }
+
+    const newlyUnlocked = [];
+    for (const achievement of ACHIEVEMENTS) {
+        if (!unlockedByProgress[achievement.id]) continue;
+        const [result] = await conn.query(
+            'INSERT IGNORE INTO ConquistasPerfil (id_perfil, achievement_key, xp_awarded, unlocked_at) VALUES (?, ?, ?, COALESCE(?, NOW()))',
+            [idPerfil, achievement.id, achievement.xp, unlockDates[achievement.id] || null]
+        );
+        if (result.affectedRows > 0) {
+            await conn.query('UPDATE PerfilGamificacao SET xp_total = GREATEST(0, xp_total + ?) WHERE id_perfil = ?', [achievement.xp, idPerfil]);
+            newlyUnlocked.push(achievement);
+        }
+    }
+    return newlyUnlocked;
 }
 
 const port = 8080;

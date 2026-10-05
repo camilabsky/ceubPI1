@@ -72,6 +72,14 @@ CREATE TABLE IF NOT EXISTS Tarefas (
   created_by int NULL,
   updated_at datetime NULL,
   completed_at datetime NULL,
+  completion_photo_url varchar(512) NULL,
+  completion_latitude DECIMAL(10, 8) NULL,
+  completion_longitude DECIMAL(11, 8) NULL,
+  completion_review_status varchar(24) NOT NULL DEFAULT 'approved',
+  completion_ai_status varchar(24) NOT NULL DEFAULT 'not_requested',
+  completion_review_note varchar(512) NULL,
+  completion_reviewed_by int NULL,
+  completion_reviewed_at datetime NULL,
   deleted_at datetime NULL,
   CONSTRAINT fk_perfil_tarefas
   FOREIGN KEY (id_perfil)
@@ -80,6 +88,39 @@ CREATE TABLE IF NOT EXISTS Tarefas (
   FOREIGN KEY (id_horta)
   REFERENCES Horta(id)
 );
+
+CREATE TABLE IF NOT EXISTS PerfilGamificacao (
+  id_perfil int PRIMARY KEY,
+  xp_total int NOT NULL DEFAULT 0,
+  streak_days int NOT NULL DEFAULT 0,
+  last_activity_date date NULL,
+  created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_gamificacao_perfil FOREIGN KEY (id_perfil) REFERENCES Perfil(id)
+);
+
+CREATE TABLE IF NOT EXISTS ConquistasPerfil (
+  id int AUTO_INCREMENT PRIMARY KEY,
+  id_perfil int NOT NULL,
+  achievement_key varchar(48) NOT NULL,
+  xp_awarded int NOT NULL DEFAULT 0,
+  unlocked_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_perfil_conquista (id_perfil, achievement_key),
+  CONSTRAINT fk_conquista_perfil FOREIGN KEY (id_perfil) REFERENCES Perfil(id)
+);
+
+CREATE TABLE IF NOT EXISTS DesafioComunitario (
+  id int AUTO_INCREMENT PRIMARY KEY,
+  id_horta int NOT NULL,
+  period_start date NOT NULL,
+  period_end date NOT NULL,
+  goal_tasks int NOT NULL,
+  completed_at datetime NULL,
+  created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_horta_desafio_periodo (id_horta, period_start),
+  CONSTRAINT fk_desafio_horta FOREIGN KEY (id_horta) REFERENCES Horta(id)
+);
+
 CREATE TABLE IF NOT EXISTS PerfilRecompensas (
   id_perfil int,
   id_recompensa int,
@@ -351,7 +392,7 @@ ON Recompensas.id = cnt.id_recompensa;
 
 CREATE VIEW SaldoPerfil AS
 SELECT
-  COALESCE(t.total_moedas, 0) - COALESCE(r.total_gasto, 0) AS Saldo, 
+  GREATEST(0, COALESCE(t.total_moedas, 0) - COALESCE(r.total_gasto, 0)) AS Saldo,
   p.id as id_perfil
 FROM Perfil p
 LEFT JOIN (

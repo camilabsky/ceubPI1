@@ -32,6 +32,25 @@ interface ProfileEvent {
   occurred_at: string | null;
 }
 
+interface CommunityChallenge {
+  id: number;
+  id_horta: number;
+  nome: string;
+  goal_tasks: number;
+  completed_tasks: number;
+  ends_at: string;
+  completed: boolean;
+}
+
+interface CommunityMember {
+  position: number;
+  id_perfil: number;
+  nome: string;
+  xp: number;
+  tarefas_concluidas: number;
+  is_you: boolean;
+}
+
 interface Garden {
   id: number;
   nome: string;
@@ -42,15 +61,21 @@ interface Garden {
 
 interface GamificationData {
   level: number;
+  level_name: string;
   xp: number;
   xp_to_next_level: number;
   total_xp: number;
+  is_max_level: boolean;
+  moedas: number;
   tarefas_concluidas: number;
   mudas_plantadas: number;
   sequencia_dias: number;
   achievements: Achievement[];
   events: ProfileEvent[];
   hortas: Garden[];
+  community_challenges: CommunityChallenge[];
+  leaderboard: CommunityMember[];
+  impact: { tasks_completed: number; gardens_count: number; seedlings_planted: number };
 }
 
 type Tab = 'achievements' | 'gardens' | 'history';
@@ -66,7 +91,6 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
   const { logout, token, user, updateUser } = useAuth();
   const [tab, setTab] = useState<Tab>('achievements');
   const [data, setData] = useState<GamificationData | null>(null);
-  const [saldo, setSaldo] = useState(coins);
   const [isLoading, setIsLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState(user?.nome ?? '');
@@ -79,18 +103,11 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
       if (!token) return;
       setIsLoading(true);
       try {
-        const [response, saldoResponse] = await Promise.all([
-          fetch(`${API_URL}/me/gamificacao`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`${API_URL}/minhas_moedas`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }),
-        ]);
+        const response = await fetch(`${API_URL}/me/gamificacao`, { headers: { Authorization: `Bearer ${token}` } });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || 'Falha ao carregar seu perfil.');
         if (active) {
           setData(result as GamificationData);
-          if (saldoResponse.ok) {
-            const saldoData = await saldoResponse.json();
-            setSaldo(Number(saldoData.Saldo) || 0);
-          }
         }
       } catch (error) {
         if (active) toast.error(error instanceof Error ? error.message : 'Erro ao carregar perfil.');
@@ -118,6 +135,7 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
   };
 
   const level = data?.level ?? 1;
+  const levelName = data?.level_name ?? 'Semente';
   const xp = data?.xp ?? 0;
   const xpTarget = data?.xp_to_next_level ?? 500;
   const progress = Math.min(100, (xp / xpTarget) * 100);
@@ -126,6 +144,8 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
   const achievements = data?.achievements ?? [];
   const events = data?.events ?? [];
   const gardens = data?.hortas ?? [];
+  const communityChallenges = data?.community_challenges ?? [];
+  const saldo = Math.max(0, Number(data?.moedas ?? coins) || 0);
   const tabItems: { id: Tab; label: string; icon: typeof Award }[] = [
     { id: 'achievements', label: 'Conquistas', icon: Award },
     { id: 'gardens', label: 'Minhas hortas', icon: Leaf },
@@ -142,7 +162,7 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
               <div className="min-w-0">
                 <p className="text-[12px] font-medium text-white/80">Perfil da comunidade</p>
                 <h1 className="mt-0.5 truncate text-[22px] font-bold">{user?.nome || 'Usuário'}</h1>
-                <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold"><Sprout className="size-3.5" /> Nível {level}</span>
+                <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold"><Sprout className="size-3.5" /> Nível {level} · {levelName}</span>
               </div>
             </div>
           <div className="flex items-center gap-2 self-start">
@@ -153,18 +173,29 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
 
           <div className="mt-5 grid gap-4 border-t border-white/20 pt-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
             <div>
-              <div className="mb-2 flex items-center justify-between gap-4 text-[12px]"><span className="font-semibold">Progresso para o nível {level + 1}</span><span className="whitespace-nowrap font-medium text-white/90">{xp} / {xpTarget} XP</span></div>
+              <div className="mb-2 flex items-center justify-between gap-4 text-[12px]"><span className="font-semibold">{data?.is_max_level ? 'Nível máximo alcançado' : `Progresso para o nível ${level + 1}`}</span><span className="whitespace-nowrap font-medium text-white/90">{xp} / {xpTarget} XP</span></div>
               <div className="h-2.5 overflow-hidden rounded-full bg-black/15"><div className="h-full rounded-full bg-[#c9f27a] transition-all" style={{ width: `${progress}%` }} /></div>
-              <p className="mt-1.5 text-[10px] text-white/75">Tarefas geram XP e moedas · XP aumenta seu nível · moedas são usadas em Recompensas</p>
+              <p className="mt-1.5 text-[10px] text-white/75">Cada tarefa concluída fortalece sua comunidade e soma XP e moedas. Recompensas usam apenas moedas.</p>
             </div>
             <div className="flex items-center gap-2 rounded-xl bg-white/10 px-3.5 py-2.5 text-[12px] font-semibold"><Flame className="size-4 text-[#ffe7a3]" /><span>{streak} {streak === 1 ? 'dia' : 'dias'} de sequência</span></div>
           </div>
         </section>
 
-        <section className="mt-4 grid grid-cols-2 gap-3">
-          <div className="flex items-center gap-3 rounded-[14px] border border-gray-200 bg-white p-4"><div className="flex size-9 items-center justify-center rounded-full bg-green-50"><CheckCircle2 className="size-[18px] text-[#00a63e]" /></div><div><p className="text-[20px] font-bold leading-5 text-neutral-950">{completed}</p><p className="mt-1 text-[11px] text-[#66736a]">Tarefas concluídas</p></div></div>
-          <div className="flex items-center gap-3 rounded-[14px] border border-gray-200 bg-white p-4"><div className="flex size-9 items-center justify-center rounded-full bg-lime-50"><Sprout className="size-[18px] text-[#5a8b34]" /></div><div><p className="text-[20px] font-bold leading-5 text-neutral-950">{data?.mudas_plantadas ?? 0}</p><p className="mt-1 text-[11px] text-[#66736a]">Mudas plantadas</p></div></div>
+        <section className="mt-4 grid grid-cols-3 gap-2 sm:gap-3" aria-label="Seu impacto na comunidade">
+          <div className="rounded-[14px] border border-gray-200 bg-white p-3 sm:p-4"><div className="flex size-8 items-center justify-center rounded-full bg-green-50"><CheckCircle2 className="size-4 text-[#00a63e]" /></div><p className="mt-2 text-[19px] font-bold leading-5 text-neutral-950">{completed}</p><p className="mt-1 text-[10px] text-[#66736a] sm:text-[11px]">Tarefas concluídas</p></div>
+          <div className="rounded-[14px] border border-gray-200 bg-white p-3 sm:p-4"><div className="flex size-8 items-center justify-center rounded-full bg-lime-50"><Sprout className="size-4 text-[#5a8b34]" /></div><p className="mt-2 text-[19px] font-bold leading-5 text-neutral-950">{data?.impact?.seedlings_planted ?? data?.mudas_plantadas ?? 0}</p><p className="mt-1 text-[10px] text-[#66736a] sm:text-[11px]">Mudas plantadas</p></div>
+          <div className="rounded-[14px] border border-gray-200 bg-white p-3 sm:p-4"><div className="flex size-8 items-center justify-center rounded-full bg-blue-50"><Users className="size-4 text-[#4285d4]" /></div><p className="mt-2 text-[19px] font-bold leading-5 text-neutral-950">{data?.impact?.gardens_count ?? gardens.length}</p><p className="mt-1 text-[10px] text-[#66736a] sm:text-[11px]">Hortas</p></div>
         </section>
+
+        {communityChallenges.length > 0 && <section className="mt-3 rounded-[14px] border border-[#dcebdd] bg-[#f5faf5] p-4">
+          <div className="mb-3 flex items-center gap-2"><span className="flex size-8 items-center justify-center rounded-full bg-white text-[#38844c]"><Users className="size-4" /></span><div><h2 className="text-[13px] font-bold text-[#26362a]">Desafio da comunidade</h2><p className="text-[10px] text-[#77837a]">Progresso coletivo nas tarefas deste mês.</p></div></div>
+          <div className="grid gap-2 sm:grid-cols-2">{communityChallenges.slice(0, 2).map((challenge) => {
+            const percent = Math.min(100, challenge.goal_tasks > 0 ? challenge.completed_tasks / challenge.goal_tasks * 100 : 0);
+            return <div key={challenge.id} className="rounded-lg border border-[#e4ece4] bg-white p-3"><div className="flex items-center justify-between gap-2"><p className="truncate text-[11px] font-semibold text-[#34453a]">{challenge.nome}</p><span className="shrink-0 text-[10px] font-semibold text-[#16803d]">{challenge.completed ? 'Concluído' : `${challenge.completed_tasks}/${challenge.goal_tasks}`}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#edf1ed]"><div className="h-full rounded-full bg-[#4eaa64]" style={{ width: `${percent}%` }} /></div></div>;
+          })}</div>
+        </section>}
+
+        {!!data?.leaderboard?.length && <section className="mt-3 rounded-[14px] border border-gray-200 bg-white p-4"><div className="mb-3 flex items-center gap-2"><Users className="size-4 text-[#16803d]" /><div><h2 className="text-[13px] font-bold text-[#26362a]">Destaques da comunidade</h2><p className="text-[10px] text-[#77837a]">Participantes das hortas em comum, ordenados pelo XP acumulado.</p></div></div><ol className="grid gap-2 sm:grid-cols-2">{data.leaderboard.map((member) => <li key={member.id_perfil} className={`flex items-center justify-between rounded-lg px-3 py-2 text-[11px] ${member.is_you ? 'bg-[#eff8ef] font-semibold text-[#16803d]' : 'bg-[#f8faf8] text-[#526056]'}`}><span>{member.position}. {member.nome}{member.is_you ? ' · você' : ''}</span><span>{member.xp} XP · {member.tarefas_concluidas} tarefas</span></li>)}</ol></section>}
 
         <section className="mt-5 overflow-hidden rounded-[14px] border border-gray-200 bg-white">
           <div className="flex gap-1 overflow-x-auto border-b border-gray-100 px-3 pt-2 sm:px-5" role="tablist" aria-label="Seções do perfil">

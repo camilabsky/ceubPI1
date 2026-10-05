@@ -302,6 +302,8 @@ export default function RewardsPage() {
         </div>
       </div>
 
+      {!isAdmin && <p className="-mt-3 mb-5 rounded-lg border border-[#e3eadc] bg-[#f7faf4] px-3.5 py-2.5 text-[11px] text-[#687669]">Escolha a recompensa que faz sentido para você. O custo é descontado do seu saldo; seus níveis e XP continuam ligados às tarefas concluídas.</p>}
+
       {isAdmin && showFormRecompensa && (
         <div className="bg-white rounded-[14px] border border-gray-200 p-5 space-y-4 mb-5">
           <h3 className="text-[16px] text-neutral-950 font-semibold">

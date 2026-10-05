@@ -1,7 +1,7 @@
 import { API_URL } from '../config';
 import { MapPin, Clock, Sprout, PlusCircle, Edit2, Trash2, Loader, Award } from 'lucide-react';
 import { toast } from 'sonner';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -45,6 +45,8 @@ export default function TasksPage() {
   const [acceptedTaskTitle, setAcceptedTaskTitle] = useState('');
   const [acceptedTaskRewards, setAcceptedTaskRewards] = useState({ xp: 0, moedas: 0 });
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskCategory, setTaskCategory] = useState('Todas');
+  const [taskOrder, setTaskOrder] = useState<'recommended' | 'xp' | 'easy'>('recommended');
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
 
   const [showFormTask, setShowFormTask] = useState(false);
@@ -104,6 +106,16 @@ export default function TasksPage() {
   useEffect(() => {
     fetchData();
   }, [isAdmin, token, idHorta]);
+
+  const taskCategories = useMemo(() => ['Todas', ...Array.from(new Set(tasks.map((task) => task.tipo).filter(Boolean)))], [tasks]);
+  const visibleTasks = useMemo(() => {
+    const filtered = tasks.filter((task) => taskCategory === 'Todas' || task.tipo === taskCategory);
+    return [...filtered].sort((a, b) => taskOrder === 'xp'
+      ? Number(b.xp || 0) - Number(a.xp || 0)
+      : taskOrder === 'easy'
+        ? Number(a.dificuldade || 0) - Number(b.dificuldade || 0)
+        : Number(b.moedas || 0) + Number(b.xp || 0) - Number(a.moedas || 0) - Number(a.xp || 0));
+  }, [tasks, taskCategory, taskOrder]);
 
   const acceptTask = async (idTarefa: number) => {
     if (!token) {
@@ -460,7 +472,9 @@ export default function TasksPage() {
               <p className="text-[14px] text-[#717182]">Volte mais tarde para ver novas tarefas.</p>
             </div>
           ) : (
-            tasks.map((task) => (
+            <>
+            {!isAdmin && <div className="flex flex-col gap-2 rounded-xl border border-[#dce9d9] bg-[#f7fbf6] p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[12px] font-semibold text-[#34453a]">Escolha como quer contribuir</p><p className="text-[10px] text-[#718075]">Filtre por categoria ou organize pelas recompensas.</p></div><div className="flex gap-2"><select aria-label="Filtrar por categoria" value={taskCategory} onChange={(event) => setTaskCategory(event.target.value)} className="min-w-0 rounded-lg border border-gray-200 bg-white px-2 py-2 text-[11px]">{taskCategories.map((category) => <option key={category}>{category}</option>)}</select><select aria-label="Ordenar tarefas" value={taskOrder} onChange={(event) => setTaskOrder(event.target.value as typeof taskOrder)} className="min-w-0 rounded-lg border border-gray-200 bg-white px-2 py-2 text-[11px]"><option value="recommended">Recomendadas</option><option value="xp">Mais XP</option><option value="easy">Mais fáceis</option></select></div></div>}
+            {visibleTasks.map((task) => (
               <div
                 key={task.id}
                 className="bg-white rounded-[14px] border border-gray-200 p-6"
@@ -709,7 +723,8 @@ export default function TasksPage() {
                   </>
                 )}
               </div>
-            ))
+            ))}
+            </>
           )}
         </div>
       </div>

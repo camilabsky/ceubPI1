@@ -1,6 +1,6 @@
 import { API_URL } from './config';
 import { useState, useEffect } from 'react';
-import { Home, ListTodo, Gift, User } from 'lucide-react';
+import { Home, ListTodo, Gift, User, Compass } from 'lucide-react';
 import { Toaster } from './components/ui/sonner';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './components/LoginPage';
@@ -67,6 +67,13 @@ export default function App() {
 
   const [coins, setCoins] = useState(0);
   const [tasksCompleted, setTasksCompleted] = useState(0);
+  const mobileNavItems = [
+    { page: 'home' as Page, label: 'Início', icon: Home },
+    ...(!isAdmin ? [{ page: 'explore' as Page, label: 'Explorar', icon: Compass }] : []),
+    { page: 'tasks' as Page, label: 'Tarefas', icon: ListTodo },
+    { page: 'rewards' as Page, label: 'Recompensas', icon: Gift },
+    { page: 'profile' as Page, label: 'Perfil', icon: User },
+  ];
 
   const fetchData = async () => {
     if (!user?.id_perfil) return;
@@ -122,11 +129,7 @@ export default function App() {
       <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} isAdmin={isAdmin} />
 
       <div className="w-full lg:ml-64">
-        <div
-          className={`mx-auto w-full pb-20 lg:pb-8 ${
-            isAdmin ? 'max-w-none px-4 lg:px-6' : 'max-w-none px-4 sm:px-6 lg:px-8'
-          } ${isAdmin ? 'pt-10' : ''}`}
-        >
+        <div className={`mx-auto w-full pb-24 lg:pb-8 ${isAdmin ? 'pt-0 lg:pt-10' : ''}`}>
           {currentPage === 'home' && (
             isAdmin
               ? <AdminHomePage onNavigate={setCurrentPage} />
@@ -154,93 +157,20 @@ export default function App() {
         </div>
       </div>
 
-      {/* Bottom Navigation - só aparece em mobile */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg max-w-md mx-auto">
-        <div className="flex items-center justify-around h-[70px]">
-          <button
-            onClick={() => setCurrentPage('home')}
-            className="flex flex-col items-center justify-center gap-1 min-w-[80px]"
-          >
-            <Home
-              className={`size-6 ${
-                currentPage === 'home' ? 'fill-[#00a63e] stroke-[#00a63e]' : 'stroke-[#4a5565]'
-              }`}
-            />
-            <span
-              className={`text-[12px] ${
-                currentPage === 'home' ? 'text-[#00a63e]' : 'text-[#4a5565]'
-              }`}
-            >
-              Início
-            </span>
-          </button>
-
-          <button
-            onClick={() => setCurrentPage('tasks')}
-            className="flex flex-col items-center justify-center gap-1 min-w-[80px]"
-          >
-            <ListTodo
-              className={`size-6 ${
-                currentPage === 'tasks' ? 'fill-[#00a63e] stroke-[#00a63e]' : 'stroke-[#4a5565]'
-              }`}
-            />
-            <span
-              className={`text-[12px] ${
-                currentPage === 'tasks' ? 'text-[#00a63e]' : 'text-[#4a5565]'
-              }`}
-            >
-              Tarefas
-            </span>
-          </button>
-
-          <button
-            onClick={() => setCurrentPage('rewards')}
-            className="flex flex-col items-center justify-center gap-1 min-w-[80px]"
-          >
-            <Gift
-              className={`size-6 ${
-                currentPage === 'rewards' ? 'fill-[#00a63e] stroke-[#00a63e]' : 'stroke-[#4a5565]'
-              }`}
-            />
-            <span
-              className={`text-[12px] ${
-                currentPage === 'rewards' ? 'text-[#00a63e]' : 'text-[#4a5565]'
-              }`}
-            >
-              Recompensas
-            </span>
-          </button>
-
-          <button
-            onClick={() => setCurrentPage('profile')}
-            className="flex flex-col items-center justify-center gap-1 min-w-[80px]"
-          >
-            <User
-              className={`size-6 ${
-                currentPage === 'profile' ? 'fill-[#00a63e] stroke-[#00a63e]' : 'stroke-[#4a5565]'
-              }`}
-            />
-            <span
-              className={`text-[12px] ${
-                currentPage === 'profile' ? 'text-[#00a63e]' : 'text-[#4a5565]'
-              }`}
-            >
-              Perfil
-            </span>
-          </button>
+      {/* Bottom Navigation - inclui Explorar apenas para participantes */}
+      <nav aria-label="Navegação principal" className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md border-t border-gray-200 bg-white shadow-[0_-4px_16px_#142b1a0d] pb-[env(safe-area-inset-bottom)] lg:hidden">
+        <div className="flex h-16 items-stretch">
+          {mobileNavItems.map(({ page, label, icon: Icon }) => {
+            const selected = currentPage === page;
+            return (
+              <button key={page} onClick={() => setCurrentPage(page)} aria-current={selected ? 'page' : undefined} className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 pt-1 transition-colors ${selected ? 'text-[#008236]' : 'text-[#647067]'}`}>
+                {selected && <span className="absolute inset-x-2 top-0 h-[3px] rounded-b-full bg-[#00a63e]" />}
+                <Icon className={`size-5 shrink-0 ${selected ? 'stroke-[#00a63e]' : 'stroke-[#647067]'}`} />
+                <span className="max-w-full truncate text-[9px] font-medium leading-3 min-[380px]:text-[10px]">{label}</span>
+              </button>
+            );
+          })}
         </div>
-        {currentPage === 'home' && (
-          <div className="absolute top-[-4px] left-0 h-1 w-1/4 bg-[#00a63e]" />
-        )}
-        {currentPage === 'tasks' && (
-          <div className="absolute top-[-4px] left-1/4 h-1 w-1/4 bg-[#00a63e]" />
-        )}
-        {currentPage === 'rewards' && (
-          <div className="absolute top-[-4px] left-1/2 h-1 w-1/4 bg-[#00a63e]" />
-        )}
-        {currentPage === 'profile' && (
-          <div className="absolute top-[-4px] left-3/4 h-1 w-1/4 bg-[#00a63e]" />
-        )}
       </nav>
     </div>
   );
