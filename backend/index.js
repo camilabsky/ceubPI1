@@ -483,7 +483,10 @@ app.post('/minhas_tarefas', requireAuth, async (req, res) => {
     try {
         const id_perfil = Number(req.user.id_perfil);
         const [results] = await db.query(
-            'SELECT * FROM Tarefas WHERE id_perfil = ? AND NOT concluido AND deleted_at IS NULL',
+            `SELECT * FROM Tarefas
+             WHERE id_perfil = ? AND concluido = false AND status IN ('in_progress', 'pending_review')
+               AND deleted_at IS NULL
+             ORDER BY updated_at DESC, id DESC`,
             [id_perfil]
         );
         return res.send(results);
@@ -555,7 +558,6 @@ app.post('/concluir_tarefa', requireAuth, async (req, res) => {
         }
 
         await conn.beginTransaction();
-        await ensureGamificationProfile(conn, req.user.id_perfil);
         const [taskRows] = await conn.query(
             'SELECT * FROM Tarefas WHERE id = ? AND id_perfil = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
             [id_tarefa, req.user.id_perfil]
@@ -564,47 +566,22 @@ app.post('/concluir_tarefa', requireAuth, async (req, res) => {
             await conn.rollback();
             return res.status(403).send({ error: 'Tarefa nao pertence a este usuario ou nao existe' });
         }
-        if (taskRows[0].concluido) {
+        if (taskRows[0].concluido || taskRows[0].status !== 'in_progress') {
             await conn.rollback();
-            return res.status(409).send({ error: 'Esta tarefa ja foi concluida' });
+            return res.status(409).send({ error: taskRows[0].status === 'pending_review' ? 'Esta tarefa ja aguarda comprovação' : 'A tarefa precisa estar em andamento para ser finalizada' });
         }
 
-        const taskXp = Math.max(0, Math.floor(Number(taskRows[0].xp) || 0));
-        const taskCoins = Math.max(0, Math.floor(Number(taskRows[0].moedas) || 0));
-        const [clockRows] = await conn.query("SELECT DATE_FORMAT(CURRENT_DATE(), '%Y-%m-%d') AS today");
-        const today = normalizeSqlDate(clockRows[0]?.today);
-        const [streakRows] = await conn.query('SELECT streak_days, last_activity_date FROM PerfilGamificacao WHERE id_perfil = ? LIMIT 1 FOR UPDATE', [req.user.id_perfil]);
-        const currentStreak = getNextStreak(streakRows[0]?.streak_days, normalizeSqlDate(streakRows[0]?.last_activity_date), today);
-
         await conn.query(
-            `UPDATE Tarefas SET concluido = true, completed_at = NOW(), xp_recebido = ?, moedas_recebidas = ?,
-                completion_review_status = 'approved', completion_ai_status = 'not_requested'
-             WHERE id = ? AND id_perfil = ? AND concluido = false`,
-            [taskXp, taskCoins, id_tarefa, req.user.id_perfil]
+            `UPDATE Tarefas
+             SET status = 'pending_review', completion_review_status = 'pending', completion_submitted_at = NOW(), updated_at = NOW()
+             WHERE id = ? AND id_perfil = ? AND status = 'in_progress' AND concluido = false`,
+            [id_tarefa, req.user.id_perfil]
         );
-        await conn.query(
-            'UPDATE PerfilGamificacao SET xp_total = GREATEST(0, xp_total + ?), streak_days = ?, last_activity_date = ? WHERE id_perfil = ?',
-            [taskXp, currentStreak, today, req.user.id_perfil]
-        );
-
-        const tasks = await getCompletedTasksForGamification(conn, req.user.id_perfil);
-        const newlyUnlocked = await awardEligibleAchievements(conn, req.user.id_perfil, tasks, currentStreak);
-        const [profileRows] = await conn.query('SELECT xp_total, streak_days FROM PerfilGamificacao WHERE id_perfil = ? LIMIT 1', [req.user.id_perfil]);
-        const [balanceRows] = await conn.query('SELECT GREATEST(0, COALESCE(Saldo, 0)) AS Saldo FROM SaldoPerfil WHERE id_perfil = ?', [req.user.id_perfil]);
-        const levelInfo = getLevelInfo(profileRows[0]?.xp_total);
-        const previousLevel = getLevelInfo(Math.max(0, Number(profileRows[0]?.xp_total || 0) - taskXp - newlyUnlocked.reduce((total, achievement) => total + achievement.xp, 0))).level;
-
         await conn.commit();
         return res.send({
             ok: true,
-            moedas: taskCoins,
-            xp: taskXp,
-            saldo: Math.max(0, Number(balanceRows[0]?.Saldo) || 0),
-            ...levelInfo,
-            level_up: levelInfo.level > previousLevel,
-            sequencia_dias: Number(profileRows[0]?.streak_days) || 0,
-            conquistas_desbloqueadas: newlyUnlocked.map((achievement) => ({ id: achievement.id, name: achievement.name, xp: achievement.xp })),
-            verification_status: 'approved',
+            status: 'pending_review',
+            message: 'Tarefa enviada e aguardando comprovação.',
         });
     } catch (error) {
         await conn.rollback();
@@ -619,7 +596,7 @@ app.get('/tarefas_disponiveis', requireAuth, async (req, res) => {
     try {
         const [results] = await db.query(
             `SELECT t.* FROM Tarefas t
-             WHERE t.id_perfil IS NULL AND t.deleted_at IS NULL
+             WHERE t.id_perfil IS NULL AND t.status = 'available' AND t.concluido = false AND t.deleted_at IS NULL
                AND t.id_horta IN (SELECT id_horta FROM UsuarioHortaRole WHERE id_usuario = ?)`,
             [req.user.id]
         );
@@ -664,7 +641,7 @@ app.get('/admin/tarefas', requireAuth, async (req, res) => {
     }
 });
 
-app.post('/aceitar_tarefa', requireAuth, async (req, res) => {
+app.post(['/iniciar_tarefa', '/aceitar_tarefa'], requireAuth, async (req, res) => {
     try {
                 const id_tarefa = Number(req.body.id_tarefa);
         if (!Number.isInteger(id_tarefa) || id_tarefa <= 0) {
@@ -674,15 +651,15 @@ app.post('/aceitar_tarefa', requireAuth, async (req, res) => {
             return res.status(403).send({ error: 'Perfil nao encontrado, saia e entre novamente' });
         }
         const [results] = await db.query(
-            `UPDATE Tarefas SET id_perfil = ?
-             WHERE id = ? AND id_perfil IS NULL AND deleted_at IS NULL
+            `UPDATE Tarefas SET id_perfil = ?, status = 'in_progress', updated_at = NOW()
+             WHERE id = ? AND id_perfil IS NULL AND status = 'available' AND concluido = false AND deleted_at IS NULL
                AND id_horta IN (SELECT id_horta FROM UsuarioHortaRole WHERE id_usuario = ?)`,
             [req.user.id_perfil, id_tarefa, req.user.id]
         );
         if (results.affectedRows === 0) {
             return res.status(409).send({ error: 'Tarefa indisponivel (ja aceita, inexistente ou de outra horta)' });
         }
-        return res.send(results);
+        return res.send({ ...results, status: 'in_progress' });
     } catch (error) {
         console.error('Erro em /aceitar_tarefa:', error);
         return res.status(500).send({ error: 'Erro ao aceitar tarefa' });
@@ -1358,6 +1335,17 @@ app.delete('/admin/recompensas/:id', requireAuth, async (req, res) => {
 });
 
 async function ensureGamificationSchema() {
+    const [statusColumns] = await db.query("SHOW COLUMNS FROM Tarefas LIKE 'status'");
+    if (statusColumns.length === 0) {
+        await db.query('ALTER TABLE Tarefas ADD COLUMN status varchar(24) NULL');
+        await db.query(`UPDATE Tarefas SET status = CASE
+            WHEN concluido = true THEN 'completed'
+            WHEN id_perfil IS NOT NULL THEN 'in_progress'
+            ELSE 'available' END`);
+        await db.query("ALTER TABLE Tarefas MODIFY COLUMN status varchar(24) NOT NULL DEFAULT 'available'");
+    }
+    const [submittedColumns] = await db.query("SHOW COLUMNS FROM Tarefas LIKE 'completion_submitted_at'");
+    if (submittedColumns.length === 0) await db.query('ALTER TABLE Tarefas ADD COLUMN completion_submitted_at datetime NULL');
     const [earnedCoinsColumns] = await db.query("SHOW COLUMNS FROM Tarefas LIKE 'moedas_recebidas'");
     if (earnedCoinsColumns.length === 0) await db.query('ALTER TABLE Tarefas ADD COLUMN moedas_recebidas int NULL');
     const [xpColumns] = await db.query("SHOW COLUMNS FROM Tarefas LIKE 'xp'");
@@ -1384,6 +1372,12 @@ async function ensureGamificationSchema() {
         const [columns] = await db.query('SHOW COLUMNS FROM Tarefas LIKE ?', [column]);
         if (columns.length === 0) await db.query(`ALTER TABLE Tarefas ADD COLUMN ${column} ${definition}`);
     }
+    await db.query(`UPDATE Tarefas SET status = CASE
+        WHEN concluido = true THEN 'completed'
+        WHEN completion_review_status = 'pending' THEN 'pending_review'
+        WHEN id_perfil IS NOT NULL THEN 'in_progress'
+        ELSE 'available' END
+        WHERE status = 'available' AND (concluido = true OR id_perfil IS NOT NULL OR completion_review_status = 'pending')`);
     await db.query(`CREATE TABLE IF NOT EXISTS PerfilGamificacao (
         id_perfil int PRIMARY KEY,
         xp_total int NOT NULL DEFAULT 0,

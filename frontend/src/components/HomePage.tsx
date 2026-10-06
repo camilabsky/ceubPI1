@@ -2,15 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { API_URL } from '../config';
 import { ArrowRight, Award, CheckCircle2, Clock3, Coins, Flame, Leaf, LoaderCircle, MapPin, Play, Sprout, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from './ui/alert-dialog';
-import { Button } from './ui/button';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Task {
@@ -24,6 +15,7 @@ interface Task {
   xp: number;
   mudas: number;
   tempo: number;
+  status: 'available' | 'in_progress' | 'pending_review' | 'completed';
 }
 
 interface Achievement {
@@ -87,8 +79,6 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const [availableTasks, setAvailableTasks] = useState<Task[]>([]);
   const [coins, setCoins] = useState(0);
   const [stats, setStats] = useState<GamificationData | null>(null);
-  const [showCompletionDialog, setShowCompletionDialog] = useState(false);
-  const [completedTaskInfo, setCompletedTaskInfo] = useState({ title: '', coins: 0, xp: 0, levelUp: false, levelName: '', communityChallengeName: '', achievements: [] as { id: string; name: string; xp: number }[] });
   const [isLoading, setIsLoading] = useState(true);
   const [workingTaskId, setWorkingTaskId] = useState<number | null>(null);
 
@@ -137,14 +127,14 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     if (!token) return;
     setWorkingTaskId(task.id);
     try {
-      const response = await fetch(`${API_URL}/aceitar_tarefa`, {
+      const response = await fetch(`${API_URL}/iniciar_tarefa`, {
         method: 'POST',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_tarefa: task.id }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Não foi possível aceitar esta tarefa.');
-      toast.success('Tarefa adicionada às suas atividades.');
+      toast.success('Tarefa iniciada. Ela está em andamento.');
       await fetchData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Erro ao aceitar tarefa.');
@@ -153,7 +143,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     }
   };
 
-  const completeTask = async (task: Task) => {
+  const finalizeTask = async (task: Task) => {
     if (!token) return;
     setWorkingTaskId(task.id);
     try {
@@ -164,18 +154,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Não foi possível concluir esta tarefa.');
-      const previousChallenges = new Set((stats?.community_challenges ?? []).filter((challenge) => challenge.completed).map((challenge) => challenge.id));
-      const updatedStats = await fetchData();
-      setCompletedTaskInfo({
-        title: task.titulo,
-        coins: Math.max(0, Number(result.moedas ?? task.moedas) || 0),
-        xp: Math.max(0, Number(result.xp ?? task.xp) || 0),
-        levelUp: Boolean(result.level_up),
-        levelName: result.level_name || '',
-        communityChallengeName: updatedStats?.community_challenges.find((challenge) => challenge.completed && !previousChallenges.has(challenge.id))?.nome || '',
-        achievements: Array.isArray(result.conquistas_desbloqueadas) ? result.conquistas_desbloqueadas : [],
-      });
-      setShowCompletionDialog(true);
+      await fetchData();
+      toast.success(result.message || 'Tarefa enviada. Ela está aguardando comprovação.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Erro ao concluir tarefa.');
     } finally {
@@ -194,7 +174,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       <div className="relative h-[112px] overflow-hidden bg-[#dfeadf]">
         <img src={missionImages[task.id % missionImages.length]} alt="Canteiros de horta comunitária" loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#15321d]/55 via-transparent to-[#15321d]/5" />
-        <span className={`absolute bottom-2.5 left-3 rounded-full px-2.5 py-1 text-[10px] font-semibold shadow-sm ${available ? 'bg-white/95 text-[#218044]' : 'bg-white/95 text-[#66736a]'}`}>{available ? 'Disponível' : 'Em andamento'}</span>
+        <span className={`absolute bottom-2.5 left-3 rounded-full px-2.5 py-1 text-[10px] font-semibold shadow-sm ${available ? 'bg-white/95 text-[#218044]' : task.status === 'pending_review' ? 'bg-white/95 text-[#8a6414]' : 'bg-white/95 text-[#66736a]'}`}>{available ? 'Disponível' : task.status === 'pending_review' ? 'Aguardando comprovação' : 'Em andamento'}</span>
       </div>
       <div className="flex flex-1 flex-col p-3.5">
         <h3 className="line-clamp-1 text-[14px] font-semibold leading-5 text-[#202b22]">{task.titulo}</h3>
@@ -207,15 +187,16 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           <span className="inline-flex items-center gap-1 rounded-md bg-[#f4f0ff] px-2 py-1 font-semibold text-[#7953a9]"><Award className="size-3" />+{task.xp} XP</span>
           <span className="inline-flex items-center gap-1 rounded-md bg-[#edf7ee] px-2 py-1 font-semibold text-[#218044]"><Sprout className="size-3" />+{task.moedas} moedas</span>
         </div>
+        {!available && <p className="mt-1.5 text-[9px] text-[#849087]">Recompensas liberadas após aprovação da comprovação.</p>}
         <div className="mt-auto pt-3">
-          {!available && <div className="mb-2.5 flex items-center gap-2 text-[10px] font-medium text-[#728076]"><span className="size-1.5 rounded-full bg-[#37a45b]" />Sua participação está em andamento</div>}
-        <button
-          onClick={() => available ? acceptTask(task) : completeTask(task)}
-          disabled={workingTaskId === task.id}
-          className={`flex h-9 w-full items-center justify-center gap-2 rounded-lg text-[12px] font-semibold transition disabled:opacity-60 ${available ? 'border border-[#cae4cf] bg-[#f8fcf8] text-[#16803d] hover:bg-[#eff8f0]' : 'bg-[#168a3c] text-white hover:bg-[#117331]'}`}
-        >
-          {workingTaskId === task.id ? <LoaderCircle className="size-3.5 animate-spin" /> : available ? <><CheckCircle2 className="size-3.5" />Aceitar tarefa</> : <><Play className="size-3.5" />Concluir tarefa</>}
-        </button>
+          {!available && <div className="mb-2.5 flex items-center gap-2 text-[10px] font-medium text-[#728076]"><span className={`size-1.5 rounded-full ${task.status === 'pending_review' ? 'bg-[#c89d31]' : 'bg-[#37a45b]'}`} />{task.status === 'pending_review' ? 'Aguardando comprovação da horta' : 'Sua participação está em andamento'}</div>}
+          {available || task.status !== 'pending_review' ? <button
+            onClick={() => available ? acceptTask(task) : finalizeTask(task)}
+            disabled={workingTaskId === task.id}
+            className={`flex h-9 w-full items-center justify-center gap-2 rounded-lg text-[12px] font-semibold transition disabled:opacity-60 ${available ? 'border border-[#cae4cf] bg-[#f8fcf8] text-[#16803d] hover:bg-[#eff8f0]' : 'bg-[#168a3c] text-white hover:bg-[#117331]'}`}
+          >
+            {workingTaskId === task.id ? <LoaderCircle className="size-3.5 animate-spin" /> : available ? <><CheckCircle2 className="size-3.5" />Iniciar tarefa</> : <><Play className="size-3.5" />Finalizar tarefa</>}
+          </button> : <div className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-[#fff8e7] text-[11px] font-semibold text-[#856415]">Aguardando comprovação</div>}
         </div>
       </div>
     </article>
@@ -223,24 +204,6 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
   return (
     <>
-      <AlertDialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
-        <AlertDialogContent className="max-w-[90%] rounded-2xl sm:max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-center">Contribuição registrada</AlertDialogTitle>
-            <AlertDialogDescription className="text-center">
-              <span className="mb-3 block">{completedTaskInfo.title}</span>
-              <span className="inline-flex items-center gap-2 rounded-xl bg-[#f5f8f5] p-3 text-[13px] font-bold">
-                <span className="text-[#7953a9]">+{completedTaskInfo.xp} XP</span><span className="text-[#aab2aa]">·</span><span className="text-[#218044]">+{completedTaskInfo.coins} moedas</span>
-              </span>
-              {completedTaskInfo.levelUp && <span className="mt-3 block rounded-lg bg-[#edf7ee] px-3 py-2 text-[12px] font-semibold text-[#16803d]">Você evoluiu para {completedTaskInfo.levelName}.</span>}
-              {completedTaskInfo.communityChallengeName && <span className="mt-3 block rounded-lg bg-[#f1f7eb] px-3 py-2 text-[12px] font-semibold text-[#648344]">A comunidade concluiu o desafio de {completedTaskInfo.communityChallengeName}!</span>}
-              {completedTaskInfo.achievements.length > 0 && <span className="mt-3 block text-[12px] font-semibold text-[#34453a]">Nova conquista: {completedTaskInfo.achievements.map((achievement) => achievement.name).join(', ')}</span>}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter><Button onClick={() => setShowCompletionDialog(false)} className="w-full bg-[#168a3c] hover:bg-[#117331]">Continuar</Button></AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <main className="min-h-screen bg-[#f7f9f7] px-4 pb-10 pt-7 text-[#17201a] sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl space-y-5">
           <header className="flex flex-col justify-between gap-4 md:flex-row md:items-center">

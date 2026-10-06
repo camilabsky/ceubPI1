@@ -24,6 +24,7 @@ interface Task {
   xp: number;
   mudas: number;
   tempo: number;
+  status: 'available' | 'in_progress' | 'pending_review' | 'completed';
 }
 
 interface AdminTaskDone {
@@ -43,8 +44,8 @@ export default function TasksPage() {
 
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [acceptedTaskTitle, setAcceptedTaskTitle] = useState('');
-  const [acceptedTaskRewards, setAcceptedTaskRewards] = useState({ xp: 0, moedas: 0 });
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [myTasks, setMyTasks] = useState<Task[]>([]);
   const [taskCategory, setTaskCategory] = useState('Todas');
   const [taskOrder, setTaskOrder] = useState<'recommended' | 'xp' | 'easy'>('recommended');
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
@@ -81,6 +82,7 @@ export default function TasksPage() {
       setTasks(tasksData);
 
       if (isAdmin && token) {
+        setMyTasks([]);
         const historyResponse = await fetch(
           `${API_URL}/admin/horta/historico?id_horta=${idHorta}`,
           { headers: { Authorization: `Bearer ${token}` } }
@@ -94,6 +96,11 @@ export default function TasksPage() {
         setTarefasConcluidasHorta(historyData.tarefas_concluidas_horta || []);
       } else {
         setTarefasConcluidasHorta([]);
+        if (token) {
+          const mineResponse = await fetch(`${API_URL}/minhas_tarefas`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+          if (!mineResponse.ok) throw new Error('Falha ao carregar suas tarefas em andamento');
+          setMyTasks(await mineResponse.json());
+        }
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -123,7 +130,7 @@ export default function TasksPage() {
       return;
     }
     try {
-      const response = await fetch(`${API_URL}/aceitar_tarefa`, {
+      const response = await fetch(`${API_URL}/iniciar_tarefa`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -144,12 +151,28 @@ export default function TasksPage() {
 
       const accepted = tasks.find((task) => task.id === idTarefa);
       setAcceptedTaskTitle(accepted?.titulo || 'Tarefa');
-      setAcceptedTaskRewards({ xp: Number(accepted?.xp) || 0, moedas: Number(accepted?.moedas) || 0 });
       setShowConfirmDialog(true);
       await fetchData();
     } catch (error) {
       console.error('Error accepting task:', error);
       toast.error('Erro ao aceitar tarefa');
+    }
+  };
+
+  const finalizeTask = async (idTarefa: number) => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${API_URL}/concluir_tarefa`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_tarefa: idTarefa }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Não foi possível enviar a tarefa.');
+      toast.success(result.message || 'Tarefa aguardando comprovação.');
+      await fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao finalizar tarefa.');
     }
   };
   const resetTaskForm = () => {
@@ -279,10 +302,7 @@ export default function TasksPage() {
             <AlertDialogTitle className="text-center">Tarefa Aceita! 🎉</AlertDialogTitle>
             <AlertDialogDescription className="text-center">
               <span className="block mb-2">&quot;{acceptedTaskTitle}&quot;</span>
-              Agora está em <span className="text-[#00a63e]">Minhas Tarefas</span>. Ao concluir, você recebe:
-              <span className="mt-3 flex justify-center gap-2 text-[12px] font-semibold text-[#16803d]">
-                <span>+{acceptedTaskRewards.xp} XP</span><span>·</span><span>+{acceptedTaskRewards.moedas} moedas</span>
-              </span>
+              Agora está em <span className="text-[#00a63e]">Minhas Tarefas</span>. Ao finalizar, ela ficará aguardando comprovação. As recompensas só serão liberadas após aprovação.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -317,6 +337,8 @@ export default function TasksPage() {
             </div>
           </div>
         </div>
+
+        {!isAdmin && myTasks.length > 0 && <section className="mb-5 rounded-[14px] border border-gray-200 bg-white p-4"><div className="mb-3"><h2 className="text-[15px] font-semibold text-neutral-950">Minhas tarefas</h2><p className="mt-0.5 text-[11px] text-[#717182]">Acompanhe atividades em andamento e envios para comprovação.</p></div><div className="space-y-2">{myTasks.map((task) => <article key={task.id} className="flex flex-col gap-3 rounded-xl border border-gray-100 p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="truncate text-[13px] font-semibold text-neutral-950">{task.titulo}</p><span className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${task.status === 'pending_review' ? 'bg-amber-50 text-amber-800' : 'bg-green-50 text-green-800'}`}>{task.status === 'pending_review' ? 'Aguardando comprovação' : 'Em andamento'}</span></div>{task.status === 'in_progress' && <button onClick={() => finalizeTask(task.id)} className="shrink-0 rounded-lg bg-[#00a63e] px-3.5 py-2 text-[11px] font-semibold text-white hover:bg-[#008236]">Finalizar tarefa</button>}</article>)}</div></section>}
 
         {isAdmin && showFormTask && (
           <div className="bg-white rounded-[14px] border border-gray-200 p-5 space-y-4 mb-5">
@@ -717,7 +739,7 @@ export default function TasksPage() {
                         onClick={() => acceptTask(task.id)}
                         className="w-full bg-[#00a63e] text-white text-[14px] py-2.5 rounded-lg hover:bg-[#008236] transition-colors text-center"
                       >
-                        Aceitar Tarefa
+                        Iniciar tarefa
                       </button>
                     )}
                   </>
