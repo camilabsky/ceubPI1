@@ -1,9 +1,10 @@
 import { API_URL } from '../config';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sprout, Lock, Gift, PlusCircle, Edit2, Trash2, Loader } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
+import type { AdminNavigationIntent } from '../types/adminNavigation';
 
 interface Reward {
   id: number;
@@ -37,7 +38,11 @@ function normalizeImageSrc(src: string | undefined, title: string) {
   return src;
 }
 
-export default function RewardsPage() {
+interface RewardsPageProps {
+  navigationIntent?: AdminNavigationIntent | null;
+}
+
+export default function RewardsPage({ navigationIntent }: RewardsPageProps) {
   const { token, user, isAdmin } = useAuth();
   const idPerfil = user?.id_perfil || 1;
   const idHorta = user?.roles.find((r) => r.role === 'ADMIN')?.id_horta || 1;
@@ -50,6 +55,7 @@ export default function RewardsPage() {
   const [editingRecompensaId, setEditingRecompensaId] = useState<number | null>(null);
   const [isSavingRecompensa, setIsSavingRecompensa] = useState(false);
   const [recompensasResgatadasHorta, setRecompensasResgatadasHorta] = useState<AdminRewardRedeemed[]>([]);
+  const redemptionHistoryRef = useRef<HTMLDivElement>(null);
   const [formRecompensa, setFormRecompensa] = useState({
     nome: '',
     descricao: '',
@@ -129,6 +135,12 @@ export default function RewardsPage() {
   useEffect(() => {
     fetchData();
   }, [isAdmin, token, idHorta]);
+
+  useEffect(() => {
+    if (navigationIntent?.focusRewardHistory) {
+      requestAnimationFrame(() => redemptionHistoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+  }, [navigationIntent?.focusRewardHistory]);
 
   const redeemReward = async (idRecompensa: number) => {
     if (!token) {
@@ -375,7 +387,7 @@ export default function RewardsPage() {
       )}
 
       {isAdmin && (
-        <div className="bg-white rounded-[14px] border border-gray-200 p-4 mb-5">
+        <div id="reward-redemption-history" ref={redemptionHistoryRef} className="scroll-mt-5 bg-white rounded-[14px] border border-gray-200 p-4 mb-5">
           <h3 className="text-[15px] font-semibold text-neutral-950 mb-3">Recompensas resgatadas da sua horta</h3>
           <div className="space-y-2">
             {recompensasResgatadasHorta.length === 0 ? (

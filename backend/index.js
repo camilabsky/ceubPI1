@@ -4,8 +4,13 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const fs = require('fs/promises');
+const path = require('path');
+const crypto = require('crypto');
 const { OAuth2Client } = require('google-auth-library');
 const { ACHIEVEMENTS, getAchievementProgress, getActiveStreak, getLevelInfo, getNextStreak } = require('./gamification');
+const { distanceInMeters, isValidCoordinate } = require('./geolocation');
+const { GEMINI_MODEL, requestGeminiAnalysis, shouldAutoApprove } = require('./gemini');
 
 const app = express();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -27,6 +32,7 @@ const pool = mysql.createPool({
 });
 
 const db = pool;
+const taskProofDir = path.join(__dirname, 'uploads', 'task-proofs');
 
 app.use(cors({
     origin: ['http://localhost:3000', 'http://0.0.0.0:3000', 'http://localhost:3001', ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim()) : [])]
@@ -483,10 +489,14 @@ app.post('/minhas_tarefas', requireAuth, async (req, res) => {
     try {
         const id_perfil = Number(req.user.id_perfil);
         const [results] = await db.query(
-            `SELECT * FROM Tarefas
-             WHERE id_perfil = ? AND concluido = false AND status IN ('in_progress', 'pending_review')
-               AND deleted_at IS NULL
-             ORDER BY updated_at DESC, id DESC`,
+            `SELECT t.*, (t.completion_photo_url IS NOT NULL) AS has_completion_photo
+             FROM Tarefas t
+             WHERE t.id_perfil = ? AND (
+                 (t.concluido = false AND t.status IN ('in_progress', 'pending_review', 'proof_submitted'))
+                 OR (t.concluido = true AND t.completion_photo_url IS NOT NULL AND t.completion_ai_status = 'analyzed')
+             )
+               AND t.deleted_at IS NULL
+             ORDER BY t.updated_at DESC, t.id DESC`,
             [id_perfil]
         );
         return res.send(results);
@@ -566,14 +576,18 @@ app.post('/concluir_tarefa', requireAuth, async (req, res) => {
             await conn.rollback();
             return res.status(403).send({ error: 'Tarefa nao pertence a este usuario ou nao existe' });
         }
-        if (taskRows[0].concluido || taskRows[0].status !== 'in_progress') {
+        if (taskRows[0].concluido || taskRows[0].status !== 'in_progress'
+            || taskRows[0].completion_review_status === 'rejected') {
             await conn.rollback();
-            return res.status(409).send({ error: taskRows[0].status === 'pending_review' ? 'Esta tarefa ja aguarda comprovação' : 'A tarefa precisa estar em andamento para ser finalizada' });
+            return res.status(409).send({ error: taskRows[0].completion_review_status === 'rejected'
+                ? 'Envie uma nova foto de comprovação para tentar novamente'
+                : taskRows[0].status === 'pending_review' ? 'Esta tarefa ja aguarda comprovação' : 'A tarefa precisa estar em andamento para ser finalizada' });
         }
 
         await conn.query(
             `UPDATE Tarefas
-             SET status = 'pending_review', completion_review_status = 'pending', completion_submitted_at = NOW(), updated_at = NOW()
+             SET status = 'pending_review', completion_review_status = 'pending', completion_review_note = NULL,
+                 completion_reviewed_by = NULL, completion_reviewed_at = NULL, completion_submitted_at = NOW(), updated_at = NOW()
              WHERE id = ? AND id_perfil = ? AND status = 'in_progress' AND concluido = false`,
             [id_tarefa, req.user.id_perfil]
         );
@@ -589,6 +603,223 @@ app.post('/concluir_tarefa', requireAuth, async (req, res) => {
         return res.status(500).send({ error: 'Erro ao concluir tarefa' });
     } finally {
         conn.release();
+    }
+});
+
+app.post('/tarefas/:id/comprovacao', requireAuth, express.raw({ type: ['image/webp', 'image/jpeg'], limit: '2mb' }), async (req, res) => {
+    const conn = await db.getConnection();
+    let savedFilePath = null;
+    try {
+        const id_tarefa = Number(req.params.id);
+        const id_perfil = Number(req.user.id_perfil);
+        const mimeType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+        if (!Number.isInteger(id_tarefa) || id_tarefa <= 0 || !id_perfil) {
+            return res.status(400).send({ error: 'Tarefa invalida' });
+        }
+        if (!Buffer.isBuffer(req.body) || req.body.length === 0 || !['image/webp', 'image/jpeg'].includes(mimeType)) {
+            return res.status(400).send({ error: 'Envie uma foto em formato WebP ou JPEG' });
+        }
+        const hasJpegSignature = req.body.length >= 3 && req.body[0] === 0xff && req.body[1] === 0xd8 && req.body[2] === 0xff;
+        const hasWebpSignature = req.body.length >= 12 && req.body.toString('ascii', 0, 4) === 'RIFF' && req.body.toString('ascii', 8, 12) === 'WEBP';
+        if ((mimeType === 'image/jpeg' && !hasJpegSignature) || (mimeType === 'image/webp' && !hasWebpSignature)) {
+            return res.status(400).send({ error: 'O conteúdo enviado nao corresponde a uma foto JPEG ou WebP valida' });
+        }
+
+        await conn.beginTransaction();
+        const [taskRows] = await conn.query(
+            `SELECT t.id, t.status, t.completion_photo_url, t.completion_review_status,
+                    h.latitude AS horta_latitude, h.longitude AS horta_longitude
+             FROM Tarefas t JOIN Horta h ON h.id = t.id_horta
+             WHERE t.id = ? AND t.id_perfil = ? AND t.concluido = false AND t.deleted_at IS NULL
+             LIMIT 1 FOR UPDATE`,
+            [id_tarefa, id_perfil]
+        );
+        if (taskRows.length === 0) {
+            await conn.rollback();
+            return res.status(404).send({ error: 'Tarefa nao encontrada para este usuario' });
+        }
+        const isRetryAfterRejection = taskRows[0].status === 'in_progress'
+            && taskRows[0].completion_review_status === 'rejected';
+        if ((!isRetryAfterRejection && taskRows[0].status !== 'pending_review')
+            || (!isRetryAfterRejection && taskRows[0].completion_photo_url)) {
+            await conn.rollback();
+            return res.status(409).send({ error: 'Esta tarefa nao aguarda uma nova comprovacao' });
+        }
+
+        const rawLatitude = req.headers['x-user-latitude'];
+        const rawLongitude = req.headers['x-user-longitude'];
+        const latitude = rawLatitude == null || rawLatitude === '' ? NaN : Number(rawLatitude);
+        const longitude = rawLongitude == null || rawLongitude === '' ? NaN : Number(rawLongitude);
+        let locationStatus = 'unavailable';
+        let locationDistance = null;
+        const hasValidUserCoordinates = isValidCoordinate(latitude, longitude);
+        const gardenLatitude = taskRows[0].horta_latitude == null ? NaN : Number(taskRows[0].horta_latitude);
+        const gardenLongitude = taskRows[0].horta_longitude == null ? NaN : Number(taskRows[0].horta_longitude);
+        const hasValidGardenCoordinates = taskRows[0].horta_latitude != null
+            && taskRows[0].horta_longitude != null
+            && isValidCoordinate(gardenLatitude, gardenLongitude);
+        if (hasValidUserCoordinates) {
+            if (!hasValidGardenCoordinates) {
+                locationStatus = 'garden_location_missing';
+            } else {
+                const exactDistance = distanceInMeters(latitude, longitude, gardenLatitude, gardenLongitude);
+                locationDistance = Math.round(exactDistance);
+                locationStatus = exactDistance <= 100 ? 'validated' : 'outside_radius';
+            }
+        }
+
+        const extension = mimeType === 'image/webp' ? 'webp' : 'jpg';
+        const filename = `${id_tarefa}-${crypto.randomUUID()}.${extension}`;
+        savedFilePath = path.join(taskProofDir, filename);
+        await fs.mkdir(taskProofDir, { recursive: true });
+        await fs.writeFile(savedFilePath, req.body, { flag: 'wx' });
+        const photoUrl = filename;
+        const previousPhotoFilename = taskRows[0].completion_photo_url
+            ? path.basename(taskRows[0].completion_photo_url)
+            : null;
+        const [updateResult] = await conn.query(
+            `UPDATE Tarefas SET completion_photo_url = ?, completion_latitude = ?, completion_longitude = ?,
+                    completion_location_status = ?, completion_location_distance_meters = ?,
+                    status = 'proof_submitted', completion_review_status = 'pending', completion_review_note = NULL,
+                    completion_reviewed_by = NULL, completion_reviewed_at = NULL, completion_submitted_at = NOW(),
+                    completion_ai_status = 'not_requested', ai_resultado = NULL, ai_confianca = NULL,
+                    ai_justificativa = NULL, ai_modelo = NULL, ai_analisado_em = NULL, updated_at = NOW()
+             WHERE id = ? AND id_perfil = ? AND status = ? AND completion_review_status = ?
+               AND completion_photo_url <=> ? AND concluido = false`,
+            [photoUrl, hasValidUserCoordinates ? latitude : null, hasValidUserCoordinates ? longitude : null,
+                locationStatus, locationDistance, id_tarefa, id_perfil,
+                isRetryAfterRejection ? 'in_progress' : 'pending_review',
+                isRetryAfterRejection ? 'rejected' : 'pending', taskRows[0].completion_photo_url]
+        );
+        if (updateResult.affectedRows !== 1) {
+            await conn.rollback();
+            await fs.unlink(savedFilePath).catch(() => {});
+            savedFilePath = null;
+            return res.status(409).send({ error: 'A comprovacao desta tarefa ja foi enviada' });
+        }
+        await conn.commit();
+        savedFilePath = null;
+        if (previousPhotoFilename && previousPhotoFilename !== filename) {
+            await fs.unlink(path.join(taskProofDir, previousPhotoFilename)).catch(() => {});
+        }
+
+        const aiAnalysis = await analyzeStoredTaskProof(id_tarefa);
+        return res.send({
+            ok: true,
+            status: aiAnalysis.auto_approved ? 'completed' : 'proof_submitted',
+            has_completion_photo: true,
+            location_validation: { status: locationStatus, distance_meters: locationDistance },
+            ai_analysis: aiAnalysis,
+        });
+    } catch (error) {
+        await conn.rollback();
+        if (savedFilePath) await fs.unlink(savedFilePath).catch(() => {});
+        console.error('Erro ao enviar comprovacao da tarefa:', error);
+        return res.status(500).send({ error: 'Nao foi possivel salvar a comprovacao' });
+    } finally {
+        conn.release();
+    }
+});
+
+app.get('/minhas_tarefas/:id/localizacao', requireAuth, async (req, res) => {
+    try {
+        const id_tarefa = Number(req.params.id);
+        const [rows] = await db.query(
+            `SELECT completion_latitude, completion_longitude, completion_location_status, completion_location_distance_meters,
+                    completion_ai_status, completion_review_status, completion_review_note, completion_reviewed_by,
+                    ai_resultado, ai_confianca, ai_justificativa, ai_modelo, ai_analisado_em, status
+             FROM Tarefas WHERE id = ? AND id_perfil = ?
+               AND ((completion_photo_url IS NOT NULL AND status IN ('proof_submitted', 'completed'))
+                 OR (status = 'in_progress' AND completion_review_status = 'rejected'))
+               AND deleted_at IS NULL LIMIT 1`,
+            [id_tarefa, req.user.id_perfil]
+        );
+        if (!rows.length) return res.status(404).send({ error: 'Localização não encontrada para esta tarefa' });
+        const row = rows[0];
+        return res.send({
+            latitude: row.completion_latitude,
+            longitude: row.completion_longitude,
+            status: row.completion_location_status,
+            distance_meters: row.completion_location_distance_meters,
+            ai_status: row.completion_ai_status,
+            ai_resultado: row.ai_resultado,
+            ai_confianca: row.ai_confianca,
+            ai_justificativa: row.ai_justificativa,
+            ai_modelo: row.ai_modelo,
+            ai_analisado_em: row.ai_analisado_em,
+            review_status: row.completion_review_status,
+            review_note: row.completion_review_note,
+            auto_approved: row.status === 'completed' && row.completion_review_status === 'approved'
+                && row.completion_reviewed_by == null && row.ai_resultado === 'COMPATIVEL'
+                && Number(row.ai_confianca) >= 0.85 && row.completion_location_status === 'validated',
+        });
+    } catch (error) {
+        console.error('Erro ao consultar localização da tarefa:', error);
+        return res.status(500).send({ error: 'Não foi possível consultar a localização' });
+    }
+});
+
+app.get('/admin/tarefas/:id/localizacao', requireAuth, async (req, res) => {
+    try {
+        const id_tarefa = Number(req.params.id);
+        const [rows] = await db.query(
+            `SELECT t.id_horta, t.completion_latitude, t.completion_longitude,
+                    t.completion_location_status, t.completion_location_distance_meters,
+                    t.completion_ai_status, t.ai_resultado, t.ai_confianca, t.ai_justificativa,
+                    t.ai_modelo, t.ai_analisado_em, t.status, t.completion_review_status,
+                    t.completion_reviewed_by
+             FROM Tarefas t WHERE t.id = ? AND t.status IN ('proof_submitted', 'completed')
+               AND t.completion_photo_url IS NOT NULL AND t.deleted_at IS NULL LIMIT 1`,
+            [id_tarefa]
+        );
+        if (!rows.length) return res.status(404).send({ error: 'Localização não encontrada para esta tarefa' });
+        if (!await isAdminForHorta(req.user.id, rows[0].id_horta)) {
+            return res.status(403).send({ error: 'Apenas o Admin da horta pode consultar esta localização' });
+        }
+        const row = rows[0];
+        return res.send({
+            latitude: row.completion_latitude,
+            longitude: row.completion_longitude,
+            status: row.completion_location_status,
+            distance_meters: row.completion_location_distance_meters,
+            ai_status: row.completion_ai_status,
+            ai_resultado: row.ai_resultado,
+            ai_confianca: row.ai_confianca,
+            ai_justificativa: row.ai_justificativa,
+            ai_modelo: row.ai_modelo,
+            ai_analisado_em: row.ai_analisado_em,
+            auto_approved: row.status === 'completed' && row.completion_review_status === 'approved'
+                && row.completion_reviewed_by == null && row.ai_resultado === 'COMPATIVEL'
+                && Number(row.ai_confianca) >= 0.85 && row.completion_location_status === 'validated',
+        });
+    } catch (error) {
+        console.error('Erro ao consultar localização administrativa da tarefa:', error);
+        return res.status(500).send({ error: 'Não foi possível consultar a localização' });
+    }
+});
+
+app.get('/minhas_tarefas/:id/comprovacao', requireAuth, async (req, res) => {
+    try {
+        const id_tarefa = Number(req.params.id);
+        const id_perfil = Number(req.user.id_perfil);
+        const [rows] = await db.query(
+            `SELECT completion_photo_url FROM Tarefas WHERE id = ? AND id_perfil = ?
+             AND status IN ('proof_submitted', 'completed')
+             AND deleted_at IS NULL LIMIT 1`,
+            [id_tarefa, id_perfil]
+        );
+        if (!rows.length || !rows[0].completion_photo_url) return res.status(404).send({ error: 'Foto de comprovacao nao encontrada' });
+        const filename = path.basename(rows[0].completion_photo_url);
+        const filePath = path.join(taskProofDir, filename);
+        try {
+            await fs.access(filePath);
+        } catch {
+            return res.status(404).send({ error: 'Arquivo de comprovacao nao encontrado' });
+        }
+        return res.sendFile(filePath);
+    } catch (error) {
+        console.error('Erro ao consultar comprovacao da tarefa:', error);
+        return res.status(500).send({ error: 'Nao foi possivel consultar a comprovacao' });
     }
 });
 
@@ -1055,9 +1286,21 @@ app.get('/admin/horta/historico', requireAuth, requireHortaAdmin, async (req, re
             [req.id_horta]
         );
 
+        const [desafiosComunitarios] = await db.query(
+            `SELECT d.id, d.goal_tasks, d.period_start, d.period_end, d.completed_at,
+                    (SELECT COUNT(*) FROM Tarefas t
+                     WHERE t.id_horta = d.id_horta AND t.concluido = true AND t.deleted_at IS NULL
+                       AND DATE(t.completed_at) BETWEEN d.period_start AND d.period_end) AS completed_tasks
+             FROM DesafioComunitario d
+             WHERE d.id_horta = ? AND d.period_start = DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
+             LIMIT 1`,
+            [req.id_horta]
+        );
+
         return res.send({
             tarefas_concluidas_horta: tarefasConcluidas,
-            recompensas_resgatadas_horta: recompensasResgatadas
+            recompensas_resgatadas_horta: recompensasResgatadas,
+            desafio_comunitario: desafiosComunitarios[0] || null,
         });
     } catch (error) {
         console.error('Erro em /admin/horta/historico:', error);
@@ -1362,8 +1605,15 @@ async function ensureGamificationSchema() {
         ['completion_photo_url', 'varchar(512) NULL'],
         ['completion_latitude', 'DECIMAL(10, 8) NULL'],
         ['completion_longitude', 'DECIMAL(11, 8) NULL'],
+        ['completion_location_status', "varchar(32) NOT NULL DEFAULT 'not_requested'"],
+        ['completion_location_distance_meters', 'int NULL'],
         ['completion_review_status', "varchar(24) NOT NULL DEFAULT 'approved'"],
         ['completion_ai_status', "varchar(24) NOT NULL DEFAULT 'not_requested'"],
+        ['ai_resultado', 'varchar(24) NULL'],
+        ['ai_confianca', 'decimal(4,3) NULL'],
+        ['ai_justificativa', 'varchar(512) NULL'],
+        ['ai_modelo', 'varchar(64) NULL'],
+        ['ai_analisado_em', 'datetime NULL'],
         ['completion_review_note', 'varchar(512) NULL'],
         ['completion_reviewed_by', 'int NULL'],
         ['completion_reviewed_at', 'datetime NULL'],
@@ -1372,6 +1622,27 @@ async function ensureGamificationSchema() {
         const [columns] = await db.query('SHOW COLUMNS FROM Tarefas LIKE ?', [column]);
         if (columns.length === 0) await db.query(`ALTER TABLE Tarefas ADD COLUMN ${column} ${definition}`);
     }
+    await db.query(`CREATE TABLE IF NOT EXISTS TarefaComprovacaoHistorico (
+        id int AUTO_INCREMENT PRIMARY KEY,
+        id_tarefa int NOT NULL,
+        id_perfil int NOT NULL,
+        foto_url varchar(512) NOT NULL,
+        latitude DECIMAL(10, 8) NULL,
+        longitude DECIMAL(11, 8) NULL,
+        localizacao_status varchar(32) NULL,
+        distancia_metros int NULL,
+        ai_status varchar(24) NULL,
+        ai_resultado varchar(24) NULL,
+        ai_confianca decimal(4,3) NULL,
+        ai_justificativa varchar(512) NULL,
+        ai_modelo varchar(64) NULL,
+        ai_analisado_em datetime NULL,
+        motivo_reprovacao varchar(512) NOT NULL,
+        revisado_por int NOT NULL,
+        enviado_em datetime NULL,
+        rejeitado_em datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_comprovacao_historico_tarefa (id_tarefa, id)
+    )`);
     await db.query(`UPDATE Tarefas SET status = CASE
         WHEN concluido = true THEN 'completed'
         WHEN completion_review_status = 'pending' THEN 'pending_review'
@@ -1516,6 +1787,267 @@ async function awardEligibleAchievements(conn, idPerfil, tasks, currentStreak) {
     }
     return newlyUnlocked;
 }
+
+async function approveCompletionInTransaction(conn, task, reviewerId) {
+    if (task.concluido || task.status !== 'proof_submitted' || !task.completion_photo_url) {
+        throw Object.assign(new Error('A comprovação já foi analisada ou não está pronta para análise'), { statusCode: 409 });
+    }
+    const id_tarefa = Number(task.id);
+    const id_perfil = Number(task.id_perfil);
+    const xp = Math.max(0, Math.floor(Number(task.xp) || 0));
+    const moedas = Math.max(0, Math.floor(Number(task.moedas) || 0));
+    await ensureGamificationProfile(conn, id_perfil);
+    const [updateResult] = await conn.query(
+        `UPDATE Tarefas
+         SET concluido = true, status = 'completed', xp_recebido = ?, moedas_recebidas = ?, completed_at = NOW(),
+             completion_review_status = 'approved', completion_review_note = NULL,
+             completion_reviewed_by = ?, completion_reviewed_at = NOW(), updated_at = NOW()
+         WHERE id = ? AND status = 'proof_submitted' AND concluido = false AND completion_photo_url IS NOT NULL`,
+        [xp, moedas, reviewerId, id_tarefa]
+    );
+    if (updateResult.affectedRows !== 1) {
+        throw Object.assign(new Error('A comprovação já foi analisada'), { statusCode: 409 });
+    }
+
+    const tasks = await getCompletedTasksForGamification(conn, id_perfil);
+    const streak = streakSummary(tasks.map((item) => item.completed_day));
+    const lastActivityDate = streak.distinctDays.at(-1) || null;
+    await conn.query(
+        `UPDATE PerfilGamificacao
+         SET xp_total = GREATEST(0, xp_total + ?), streak_days = ?, last_activity_date = ?
+         WHERE id_perfil = ?`,
+        [xp, streak.lastRun, lastActivityDate, id_perfil]
+    );
+    const achievements = await awardEligibleAchievements(conn, id_perfil, tasks, streak.lastRun);
+    return { ok: true, status: 'completed', xp, moedas, achievements_unlocked: achievements.map((item) => item.id) };
+}
+
+async function recordUnavailableAiAnalysis(taskId) {
+    try {
+        await db.query(
+            `UPDATE Tarefas SET completion_ai_status = 'unavailable', ai_resultado = NULL, ai_confianca = NULL,
+                    ai_justificativa = ?, ai_modelo = ?, ai_analisado_em = NOW(), updated_at = NOW()
+             WHERE id = ? AND status = 'proof_submitted' AND concluido = false`,
+            ['Análise automática indisponível no momento. A comprovação aguarda análise do responsável.', GEMINI_MODEL, taskId]
+        );
+    } catch (error) {
+        console.error('Não foi possível registrar a indisponibilidade da análise Gemini:', error.message);
+    }
+    return {
+        status: 'unavailable', resultado: null, confianca: null,
+        justificativa: 'Análise automática indisponível no momento. A comprovação aguarda análise do responsável.',
+        modelo: GEMINI_MODEL, analisado_em: new Date().toISOString(), auto_approved: false,
+    };
+}
+
+async function analyzeStoredTaskProof(taskId) {
+    let task;
+    try {
+        const [rows] = await db.query(
+            `SELECT id, titulo, status, completion_photo_url, completion_location_status
+             FROM Tarefas WHERE id = ? AND status = 'proof_submitted' AND concluido = false
+               AND completion_photo_url IS NOT NULL AND deleted_at IS NULL LIMIT 1`,
+            [taskId]
+        );
+        if (!rows.length) throw new Error('Comprovação não está disponível para análise');
+        task = rows[0];
+        const filename = path.basename(task.completion_photo_url);
+        const image = await fs.readFile(path.join(taskProofDir, filename));
+        const extension = path.extname(filename).toLowerCase();
+        const mimeType = extension === '.webp' ? 'image/webp' : extension === '.jpg' || extension === '.jpeg' ? 'image/jpeg' : null;
+        if (!mimeType) throw new Error('Formato da foto de comprovação inválido para análise');
+        const analysis = await requestGeminiAnalysis({ taskTitle: task.titulo, image, mimeType });
+
+        const conn = await db.getConnection();
+        try {
+            await conn.beginTransaction();
+            const [lockedRows] = await conn.query(
+                'SELECT * FROM Tarefas WHERE id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
+                [taskId]
+            );
+            if (!lockedRows.length || !lockedRows[0].completion_photo_url
+                || !['proof_submitted', 'completed'].includes(lockedRows[0].status)) {
+                await conn.rollback();
+                return { status: 'analyzed', ...analysis, modelo: GEMINI_MODEL, analisado_em: new Date().toISOString(), auto_approved: false };
+            }
+            const lockedTask = lockedRows[0];
+            const awaitingAdmin = lockedTask.status === 'proof_submitted' && !lockedTask.concluido;
+            const alreadyApproved = lockedTask.status === 'completed' && lockedTask.concluido;
+            if (!awaitingAdmin && !alreadyApproved) {
+                await conn.rollback();
+                return { status: 'analyzed', ...analysis, modelo: GEMINI_MODEL, analisado_em: new Date().toISOString(), auto_approved: false };
+            }
+            const autoApprove = awaitingAdmin && shouldAutoApprove(analysis, lockedTask.completion_location_status);
+            await conn.query(
+                `UPDATE Tarefas SET completion_ai_status = 'analyzed', ai_resultado = ?, ai_confianca = ?,
+                        ai_justificativa = ?, ai_modelo = ?, ai_analisado_em = NOW(), updated_at = NOW()
+                 WHERE id = ? AND completion_photo_url IS NOT NULL AND status IN ('proof_submitted', 'completed')`,
+                [analysis.resultado, analysis.confianca, analysis.justificativa, GEMINI_MODEL, taskId]
+            );
+            let approval = null;
+            if (autoApprove) approval = await approveCompletionInTransaction(conn, lockedTask, null);
+            await conn.commit();
+            return {
+                status: 'analyzed', ...analysis, modelo: GEMINI_MODEL,
+                analisado_em: new Date().toISOString(), auto_approved: Boolean(approval),
+                ...(approval ? { approval } : {}),
+            };
+        } catch (error) {
+            await conn.rollback();
+            throw error;
+        } finally {
+            conn.release();
+        }
+    } catch (error) {
+        console.error(`Análise Gemini indisponível para tarefa ${taskId}:`, error.message);
+        return recordUnavailableAiAnalysis(taskId);
+    }
+}
+
+app.get('/admin/tarefas/:id/comprovacao', requireAuth, async (req, res) => {
+    try {
+        const id_tarefa = Number(req.params.id);
+        const [rows] = await db.query(
+            `SELECT t.id_horta, t.completion_photo_url FROM Tarefas t
+             WHERE t.id = ? AND t.status IN ('proof_submitted', 'completed') AND t.completion_photo_url IS NOT NULL AND t.deleted_at IS NULL
+             LIMIT 1`,
+            [id_tarefa]
+        );
+        if (!rows.length || !rows[0].completion_photo_url) return res.status(404).send({ error: 'Foto de comprovação não encontrada' });
+        if (!await isAdminForHorta(req.user.id, rows[0].id_horta)) {
+            return res.status(403).send({ error: 'Apenas o Admin da horta pode consultar esta foto' });
+        }
+        const filename = path.basename(rows[0].completion_photo_url);
+        const filePath = path.join(taskProofDir, filename);
+        try {
+            await fs.access(filePath);
+        } catch {
+            return res.status(404).send({ error: 'Arquivo de comprovação não encontrado' });
+        }
+        return res.sendFile(filePath);
+    } catch (error) {
+        console.error('Erro ao consultar foto administrativa da tarefa:', error);
+        return res.status(500).send({ error: 'Não foi possível consultar a foto' });
+    }
+});
+
+app.post('/admin/tarefas/:id/aprovar-comprovacao', requireAuth, async (req, res) => {
+    const conn = await db.getConnection();
+    try {
+        const id_tarefa = Number(req.params.id);
+        if (!Number.isInteger(id_tarefa) || id_tarefa <= 0) return res.status(400).send({ error: 'Tarefa inválida' });
+
+        await conn.beginTransaction();
+        const [rows] = await conn.query(
+            `SELECT t.* FROM Tarefas t WHERE t.id = ? AND t.deleted_at IS NULL LIMIT 1 FOR UPDATE`,
+            [id_tarefa]
+        );
+        if (!rows.length) {
+            await conn.rollback();
+            return res.status(404).send({ error: 'Tarefa não encontrada' });
+        }
+        const task = rows[0];
+        const [adminRows] = await conn.query(
+            "SELECT 1 FROM UsuarioHortaRole WHERE id_usuario = ? AND id_horta = ? AND papel = 'ADMIN' LIMIT 1",
+            [req.user.id, task.id_horta]
+        );
+        if (!adminRows.length) {
+            await conn.rollback();
+            return res.status(403).send({ error: 'Apenas o Admin da horta pode aprovar esta comprovação' });
+        }
+        if (task.concluido || task.status !== 'proof_submitted' || !task.completion_photo_url) {
+            await conn.rollback();
+            return res.status(409).send({ error: 'A comprovação já foi analisada ou não está pronta para análise' });
+        }
+
+        const approval = await approveCompletionInTransaction(conn, task, req.user.id);
+        await conn.commit();
+        return res.send(approval);
+    } catch (error) {
+        await conn.rollback();
+        if (error.statusCode) return res.status(error.statusCode).send({ error: error.message });
+        console.error('Erro ao aprovar comprovação:', error);
+        return res.status(500).send({ error: 'Não foi possível aprovar a comprovação' });
+    } finally {
+        conn.release();
+    }
+});
+
+app.post('/admin/tarefas/:id/reprovar-comprovacao', requireAuth, async (req, res) => {
+    const conn = await db.getConnection();
+    try {
+        const id_tarefa = Number(req.params.id);
+        const motivo = typeof req.body.motivo === 'string' ? req.body.motivo.trim() : '';
+        if (!Number.isInteger(id_tarefa) || id_tarefa <= 0) return res.status(400).send({ error: 'Tarefa inválida' });
+        if (!motivo || motivo.length > 512) return res.status(400).send({ error: 'Informe um motivo de até 512 caracteres' });
+
+        await conn.beginTransaction();
+        const [rows] = await conn.query(
+            `SELECT t.id_horta, t.id_perfil, t.status, t.concluido, t.completion_photo_url,
+                    t.completion_latitude, t.completion_longitude, t.completion_location_status,
+                    t.completion_location_distance_meters, t.completion_ai_status, t.ai_resultado,
+                    t.ai_confianca, t.ai_justificativa, t.ai_modelo, t.ai_analisado_em,
+                    t.completion_submitted_at
+             FROM Tarefas t WHERE t.id = ? AND t.deleted_at IS NULL LIMIT 1 FOR UPDATE`,
+            [id_tarefa]
+        );
+        if (!rows.length) {
+            await conn.rollback();
+            return res.status(404).send({ error: 'Tarefa não encontrada' });
+        }
+        const task = rows[0];
+        const [adminRows] = await conn.query(
+            "SELECT 1 FROM UsuarioHortaRole WHERE id_usuario = ? AND id_horta = ? AND papel = 'ADMIN' LIMIT 1",
+            [req.user.id, task.id_horta]
+        );
+        if (!adminRows.length) {
+            await conn.rollback();
+            return res.status(403).send({ error: 'Apenas o Admin da horta pode reprovar esta comprovação' });
+        }
+        if (task.concluido || task.status !== 'proof_submitted' || !task.completion_photo_url) {
+            await conn.rollback();
+            return res.status(409).send({ error: 'A comprovação já foi analisada ou não está pronta para análise' });
+        }
+
+        await conn.query(
+            `INSERT INTO TarefaComprovacaoHistorico
+                (id_tarefa, id_perfil, foto_url, latitude, longitude, localizacao_status,
+                 distancia_metros, ai_status, ai_resultado, ai_confianca, ai_justificativa,
+                 ai_modelo, ai_analisado_em, motivo_reprovacao, revisado_por, enviado_em, rejeitado_em)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [id_tarefa, task.id_perfil, task.completion_photo_url, task.completion_latitude,
+                task.completion_longitude, task.completion_location_status,
+                task.completion_location_distance_meters, task.completion_ai_status,
+                task.ai_resultado, task.ai_confianca, task.ai_justificativa, task.ai_modelo,
+                task.ai_analisado_em, motivo, req.user.id, task.completion_submitted_at]
+        );
+
+        const [updateResult] = await conn.query(
+            `UPDATE Tarefas
+             SET status = 'in_progress', completion_photo_url = NULL,
+                 completion_latitude = NULL, completion_longitude = NULL,
+                 completion_location_status = 'not_requested', completion_location_distance_meters = NULL,
+                 completion_ai_status = 'not_requested', ai_resultado = NULL, ai_confianca = NULL,
+                 ai_justificativa = NULL, ai_modelo = NULL, ai_analisado_em = NULL,
+                 completion_review_status = 'rejected', completion_review_note = ?,
+                 completion_reviewed_by = ?, completion_reviewed_at = NOW(), updated_at = NOW()
+             WHERE id = ? AND status = 'proof_submitted' AND concluido = false`,
+            [motivo, req.user.id, id_tarefa]
+        );
+        if (updateResult.affectedRows !== 1) {
+            await conn.rollback();
+            return res.status(409).send({ error: 'A comprovação já foi analisada' });
+        }
+        await conn.commit();
+        return res.send({ ok: true, status: 'in_progress', review_status: 'rejected', motivo });
+    } catch (error) {
+        await conn.rollback();
+        console.error('Erro ao reprovar comprovação:', error);
+        return res.status(500).send({ error: 'Não foi possível reprovar a comprovação' });
+    } finally {
+        conn.release();
+    }
+});
 
 const port = 8080;
 ensureGamificationSchema().then(() => {

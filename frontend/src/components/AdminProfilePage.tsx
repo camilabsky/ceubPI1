@@ -15,10 +15,12 @@ interface Task {
 
 interface AdminProfilePageProps {
   onLogout?: () => void;
+  editGardenOnOpen?: boolean;
 }
 
 export default function AdminProfilePage({
   onLogout,
+  editGardenOnOpen = false,
 }: AdminProfilePageProps) {
   const { logout, token, user, updateUser, updatePassword, } = useAuth();
 
@@ -41,6 +43,16 @@ export default function AdminProfilePage({
   const [isSavingLocation, setIsSavingLocation] = useState(false);
   const [isFetchingGeoLocation, setIsFetchingGeoLocation] = useState(false);
   const [newEndereco, setNewEndereco] = useState('');
+
+  useEffect(() => {
+    if (!editGardenOnOpen) return;
+    const garden = user?.roles.find((role) => role.role === 'ADMIN');
+    setNewLatitude(garden?.latitude != null ? String(garden.latitude) : '');
+    setNewLongitude(garden?.longitude != null ? String(garden.longitude) : '');
+    setNewEndereco(garden?.endereco || '');
+    setIsEditingLocation(true);
+    requestAnimationFrame(() => document.getElementById('admin-garden-location')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+  }, [editGardenOnOpen, user]);
 
   useEffect(() => {
     const fetchAdminData = async () => {
@@ -431,7 +443,7 @@ const handleUseCurrentLocation = () => {
             </div>
           )}
         </div>
-        <div className="p-4 border-b border-gray-100">
+        <div id="admin-garden-location" className="p-4 border-b border-gray-100 scroll-mt-5">
       {!isEditingLocation ? (
       <button
         type="button"

@@ -12,6 +12,9 @@ import {
 } from './ui/alert-dialog';
 import { Button } from './ui/button';
 import { useAuth } from '../contexts/AuthContext';
+import TaskProofUpload from './TaskProofUpload';
+import AdminTaskReview from './AdminTaskReview';
+import type { AdminNavigationIntent, AdminTaskStatusFilter } from '../types/adminNavigation';
 
 interface Task {
   id: number;
@@ -24,7 +27,15 @@ interface Task {
   xp: number;
   mudas: number;
   tempo: number;
-  status: 'available' | 'in_progress' | 'pending_review' | 'completed';
+  concluido?: boolean;
+  status: 'available' | 'in_progress' | 'pending_review' | 'proof_submitted' | 'completed';
+  id_perfil?: number | null;
+  has_completion_photo?: boolean;
+  completion_review_status?: 'pending' | 'approved' | 'rejected';
+  completion_ai_status?: 'not_requested' | 'analyzed' | 'unavailable';
+  ai_resultado?: 'COMPATIVEL' | 'INCONCLUSIVO' | 'INCOMPATIVEL' | null;
+  ai_confianca?: number | string | null;
+  completion_review_note?: string | null;
 }
 
 interface AdminTaskDone {
@@ -37,7 +48,18 @@ interface AdminTaskDone {
   perfil_nome?: string;
 }
 
-export default function TasksPage() {
+interface AdminTaskLocation {
+  latitude: number | string | null;
+  longitude: number | string | null;
+  status: 'validated' | 'outside_radius' | 'unavailable' | 'garden_location_missing' | 'not_requested';
+  distance_meters: number | null;
+}
+
+interface TasksPageProps {
+  navigationIntent?: AdminNavigationIntent | null;
+}
+
+export default function TasksPage({ navigationIntent }: TasksPageProps) {
   const { token, user, isAdmin } = useAuth();
   const idPerfil = user?.id_perfil || 1;
   const idHorta = user?.roles.find((r) => r.role === 'ADMIN')?.id_horta || 1;
@@ -50,10 +72,14 @@ export default function TasksPage() {
   const [taskOrder, setTaskOrder] = useState<'recommended' | 'xp' | 'easy'>('recommended');
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
 
-  const [showFormTask, setShowFormTask] = useState(false);
+  const [showFormTask, setShowFormTask] = useState(Boolean(navigationIntent?.openCreateTask));
+  const [statusFilter, setStatusFilter] = useState<AdminTaskStatusFilter | ''>(navigationIntent?.taskStatusFilter || '');
+  const [focusedTaskId, setFocusedTaskId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isSavingTask, setIsSavingTask] = useState(false);
   const [tarefasConcluidasHorta, setTarefasConcluidasHorta] = useState<AdminTaskDone[]>([]);
+  const [adminTaskLocations, setAdminTaskLocations] = useState<Record<number, AdminTaskLocation>>({});
+  const [loadingLocationTaskId, setLoadingLocationTaskId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     titulo: '',
     descricao: '',
@@ -116,13 +142,24 @@ export default function TasksPage() {
 
   const taskCategories = useMemo(() => ['Todas', ...Array.from(new Set(tasks.map((task) => task.tipo).filter(Boolean)))], [tasks]);
   const visibleTasks = useMemo(() => {
-    const filtered = tasks.filter((task) => taskCategory === 'Todas' || task.tipo === taskCategory);
+    const filtered = tasks.filter((task) => {
+      const matchesCategory = taskCategory === 'Todas' || task.tipo === taskCategory;
+      const matchesStatus = !statusFilter
+        || (statusFilter === 'completed' ? task.concluido || task.status === 'completed' : !task.concluido && task.status === statusFilter);
+      return matchesCategory && matchesStatus;
+    });
     return [...filtered].sort((a, b) => taskOrder === 'xp'
       ? Number(b.xp || 0) - Number(a.xp || 0)
       : taskOrder === 'easy'
         ? Number(a.dificuldade || 0) - Number(b.dificuldade || 0)
         : Number(b.moedas || 0) + Number(b.xp || 0) - Number(a.moedas || 0) - Number(a.xp || 0));
-  }, [tasks, taskCategory, taskOrder]);
+  }, [tasks, taskCategory, taskOrder, statusFilter]);
+
+  useEffect(() => {
+    if (!navigationIntent?.focusTaskId || isLoadingTasks || !tasks.some((task) => task.id === navigationIntent.focusTaskId)) return;
+    setFocusedTaskId(navigationIntent.focusTaskId);
+    document.getElementById(`admin-task-${navigationIntent.focusTaskId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [navigationIntent?.focusTaskId, isLoadingTasks, tasks]);
 
   const acceptTask = async (idTarefa: number) => {
     if (!token) {
@@ -159,6 +196,23 @@ export default function TasksPage() {
     }
   };
 
+  const loadAdminTaskLocation = async (taskId: number) => {
+    if (!token) return;
+    setLoadingLocationTaskId(taskId);
+    try {
+      const response = await fetch(`${API_URL}/admin/tarefas/${taskId}/localizacao`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Não foi possível consultar a localização.');
+      setAdminTaskLocations((previous) => ({ ...previous, [taskId]: result }));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao consultar a localização.');
+    } finally {
+      setLoadingLocationTaskId(null);
+    }
+  };
+
   const finalizeTask = async (idTarefa: number) => {
     if (!token) return;
     try {
@@ -188,6 +242,17 @@ export default function TasksPage() {
       tempo: 30,
     });
   };
+
+  useEffect(() => {
+    setStatusFilter(navigationIntent?.taskStatusFilter || '');
+    setFocusedTaskId(null);
+    if (navigationIntent?.openCreateTask) {
+      resetTaskForm();
+      setShowFormTask(true);
+    } else {
+      setShowFormTask(false);
+    }
+  }, [navigationIntent]);
 
   const handleSaveTask = async () => {
     if (!isAdmin || !token) return;
@@ -294,6 +359,22 @@ export default function TasksPage() {
     }
   };
 
+  const getAdminTaskStatus = (task: Task) => {
+    if (task.concluido || task.status === 'completed') return { label: 'Concluída', styles: 'bg-green-50 text-green-700' };
+    if (task.status === 'proof_submitted') return { label: 'Comprovação enviada', styles: 'bg-purple-50 text-purple-700' };
+    if (task.status === 'pending_review') return { label: 'Aguardando comprovação', styles: 'bg-orange-50 text-orange-800' };
+    if (task.status === 'in_progress' || task.id_perfil != null) return { label: 'Em andamento', styles: 'bg-blue-50 text-blue-700' };
+    return { label: 'Disponível', styles: 'bg-amber-50 text-amber-700' };
+  };
+
+  const statusFilterLabels: Record<AdminTaskStatusFilter, string> = {
+    available: 'Disponíveis',
+    in_progress: 'Em andamento',
+    pending_review: 'Aguardando comprovação',
+    proof_submitted: 'Comprovação enviada',
+    completed: 'Concluídas',
+  };
+
   return (
     <>
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
@@ -317,9 +398,10 @@ export default function TasksPage() {
       </AlertDialog>
 
       <div className="min-h-screen bg-gray-50 pt-16 pb-4 px-4">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-[16px] text-neutral-950 px-2 font-bold">Tarefas Disponíveis</h1>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="px-2 text-[16px] font-bold text-neutral-950">{statusFilter ? `Tarefas: ${statusFilterLabels[statusFilter]}` : 'Tarefas Disponíveis'}</h1>
           <div className="flex items-center gap-2">
+            {isAdmin && <select aria-label="Filtrar tarefas por status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as AdminTaskStatusFilter | '')} className="max-w-[190px] rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[11px] focus:border-[#00a63e] focus:outline-none"><option value="">Todas as situações</option><option value="available">Disponíveis</option><option value="in_progress">Em andamento</option><option value="pending_review">Aguardando comprovação</option><option value="proof_submitted">Comprovação enviada</option><option value="completed">Concluídas</option></select>}
             {isAdmin && (
               <button
                 onClick={() => {
@@ -333,12 +415,31 @@ export default function TasksPage() {
               </button>
             )}
             <div className="bg-white border border-gray-200 rounded-lg px-3 py-1">
-              <span className="text-[12px] text-neutral-950">{tasks.length} tarefas</span>
+              <span className="text-[12px] text-neutral-950">{visibleTasks.length} tarefas</span>
             </div>
           </div>
         </div>
 
-        {!isAdmin && myTasks.length > 0 && <section className="mb-5 rounded-[14px] border border-gray-200 bg-white p-4"><div className="mb-3"><h2 className="text-[15px] font-semibold text-neutral-950">Minhas tarefas</h2><p className="mt-0.5 text-[11px] text-[#717182]">Acompanhe atividades em andamento e envios para comprovação.</p></div><div className="space-y-2">{myTasks.map((task) => <article key={task.id} className="flex flex-col gap-3 rounded-xl border border-gray-100 p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="truncate text-[13px] font-semibold text-neutral-950">{task.titulo}</p><span className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${task.status === 'pending_review' ? 'bg-amber-50 text-amber-800' : 'bg-green-50 text-green-800'}`}>{task.status === 'pending_review' ? 'Aguardando comprovação' : 'Em andamento'}</span></div>{task.status === 'in_progress' && <button onClick={() => finalizeTask(task.id)} className="shrink-0 rounded-lg bg-[#00a63e] px-3.5 py-2 text-[11px] font-semibold text-white hover:bg-[#008236]">Finalizar tarefa</button>}</article>)}</div></section>}
+        {!isAdmin && myTasks.length > 0 && <section className="mb-5 rounded-[14px] border border-gray-200 bg-white p-4">
+          <div className="mb-3"><h2 className="text-[15px] font-semibold text-neutral-950">Minhas tarefas</h2><p className="mt-0.5 text-[11px] text-[#717182]">Acompanhe atividades e envios para comprovação.</p></div>
+          <div className="space-y-2">{myTasks.map((task) => {
+            const canRetryProof = task.status === 'in_progress' && task.completion_review_status === 'rejected';
+            const showProofPanel = task.status === 'pending_review' || task.status === 'proof_submitted'
+              || canRetryProof || (task.status === 'completed' && task.completion_ai_status === 'analyzed');
+            return <article key={task.id} className="rounded-xl border border-gray-100 p-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-semibold text-neutral-950">{task.titulo}</p>
+                  <span className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${canRetryProof ? 'bg-red-50 text-red-700' : task.status === 'pending_review' ? 'bg-amber-50 text-amber-800' : 'bg-green-50 text-green-800'}`}>
+                    {canRetryProof ? 'Comprovação recusada' : task.status === 'pending_review' ? 'Aguardando comprovação' : task.status === 'proof_submitted' ? 'Comprovação enviada' : task.status === 'completed' ? 'Tarefa concluída' : 'Em andamento'}
+                  </span>
+                </div>
+                {task.status === 'in_progress' && !canRetryProof && <button onClick={() => finalizeTask(task.id)} className="shrink-0 rounded-lg bg-[#00a63e] px-3.5 py-2 text-[11px] font-semibold text-white hover:bg-[#008236]">Finalizar tarefa</button>}
+              </div>
+              {showProofPanel && <TaskProofUpload taskId={task.id} hasPhoto={Boolean(task.has_completion_photo)} canRetry={canRetryProof} rejectionReason={task.completion_review_note} onUploaded={() => { void fetchData(); }} />}
+            </article>;
+          })}</div>
+        </section>}
 
         {isAdmin && showFormTask && (
           <div className="bg-white rounded-[14px] border border-gray-200 p-5 space-y-4 mb-5">
@@ -488,10 +589,10 @@ export default function TasksPage() {
             <div className="flex justify-center py-8">
               <Loader className="size-5 animate-spin text-[#00a63e]" />
             </div>
-          ) : tasks.length === 0 ? (
+          ) : visibleTasks.length === 0 ? (
             <div className="bg-white rounded-[14px] border border-gray-200 p-6 text-center">
-              <p className="text-[16px] text-neutral-950 font-semibold mb-2">Sem tarefas disponíveis</p>
-              <p className="text-[14px] text-[#717182]">Volte mais tarde para ver novas tarefas.</p>
+              <p className="text-[16px] text-neutral-950 font-semibold mb-2">{tasks.length === 0 ? 'Sem tarefas disponíveis' : 'Nenhuma tarefa nesta situação'}</p>
+              <p className="text-[14px] text-[#717182]">{tasks.length === 0 ? 'Volte mais tarde para ver novas tarefas.' : 'Escolha outro filtro para consultar tarefas.'}</p>
             </div>
           ) : (
             <>
@@ -499,7 +600,8 @@ export default function TasksPage() {
             {visibleTasks.map((task) => (
               <div
                 key={task.id}
-                className="bg-white rounded-[14px] border border-gray-200 p-6"
+                id={isAdmin ? `admin-task-${task.id}` : undefined}
+                className={`rounded-[14px] border bg-white p-6 transition-colors ${focusedTaskId === task.id ? 'border-[#00a63e] ring-2 ring-[#00a63e]/20' : 'border-gray-200'}`}
               >
                 {editingId === task.id && isAdmin ? (
                   // EDIÇÃO INLINE
@@ -668,9 +770,19 @@ export default function TasksPage() {
                   // VISUALIZAÇÃO NORMAL
                   <>
                     <div className="flex items-start justify-between mb-3 gap-3">
-                      <h3 className="text-[16px] text-neutral-950 flex-1">
-                        {task.titulo}
-                      </h3>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-[16px] text-neutral-950">{task.titulo}</h3>
+                        {isAdmin && <span className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${getAdminTaskStatus(task).styles}`}>{getAdminTaskStatus(task).label}</span>}
+                        {isAdmin && task.status === 'proof_submitted' && <div className="mt-1.5">
+                          <button type="button" onClick={() => void loadAdminTaskLocation(task.id)} disabled={loadingLocationTaskId === task.id} className="text-[10px] font-semibold text-[#16803d] underline disabled:opacity-60">{loadingLocationTaskId === task.id ? 'Consultando localização…' : 'Consultar localização'}</button>
+                          {adminTaskLocations[task.id] && <p className="mt-1 text-[10px] text-[#526056]">
+                            {adminTaskLocations[task.id].status === 'validated' ? 'Validada' : adminTaskLocations[task.id].status === 'outside_radius' ? 'Fora do raio de 100 m' : adminTaskLocations[task.id].status === 'garden_location_missing' ? 'Coordenadas da horta ausentes' : 'Não disponível'}
+                            {adminTaskLocations[task.id].distance_meters != null && ` · ${adminTaskLocations[task.id].distance_meters} m`}
+                            {adminTaskLocations[task.id].latitude != null && adminTaskLocations[task.id].longitude != null && ` · ${Number(adminTaskLocations[task.id].latitude).toFixed(5)}, ${Number(adminTaskLocations[task.id].longitude).toFixed(5)}`}
+                          </p>}
+                        </div>}
+                        {isAdmin && (task.status === 'proof_submitted' || (task.status === 'completed' && task.completion_ai_status === 'analyzed')) && <AdminTaskReview taskId={task.id} readOnly={task.status === 'completed'} onReviewed={() => { void fetchData(); }} />}
+                      </div>
 
                       <div className="flex items-center gap-2">
                         <div className="bg-[#f4f0ff] rounded-[10px] px-3 py-1.5 flex items-center gap-1">

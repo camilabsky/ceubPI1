@@ -3,6 +3,7 @@ import { API_URL } from '../config';
 import { ArrowRight, Award, CheckCircle2, Clock3, Coins, Flame, Leaf, LoaderCircle, MapPin, Play, Sprout, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
+import TaskProofUpload from './TaskProofUpload';
 
 interface Task {
   id: number;
@@ -15,7 +16,10 @@ interface Task {
   xp: number;
   mudas: number;
   tempo: number;
-  status: 'available' | 'in_progress' | 'pending_review' | 'completed';
+  status: 'available' | 'in_progress' | 'pending_review' | 'proof_submitted' | 'completed';
+  has_completion_photo?: boolean;
+  completion_review_status?: 'pending' | 'approved' | 'rejected';
+  completion_review_note?: string | null;
 }
 
 interface Achievement {
@@ -174,7 +178,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       <div className="relative h-[112px] overflow-hidden bg-[#dfeadf]">
         <img src={missionImages[task.id % missionImages.length]} alt="Canteiros de horta comunitária" loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#15321d]/55 via-transparent to-[#15321d]/5" />
-        <span className={`absolute bottom-2.5 left-3 rounded-full px-2.5 py-1 text-[10px] font-semibold shadow-sm ${available ? 'bg-white/95 text-[#218044]' : task.status === 'pending_review' ? 'bg-white/95 text-[#8a6414]' : 'bg-white/95 text-[#66736a]'}`}>{available ? 'Disponível' : task.status === 'pending_review' ? 'Aguardando comprovação' : 'Em andamento'}</span>
+        <span className={`absolute bottom-2.5 left-3 rounded-full px-2.5 py-1 text-[10px] font-semibold shadow-sm ${available ? 'bg-white/95 text-[#218044]' : task.completion_review_status === 'rejected' ? 'bg-white/95 text-red-700' : task.status === 'pending_review' ? 'bg-white/95 text-[#8a6414]' : task.status === 'proof_submitted' ? 'bg-white/95 text-[#16803d]' : 'bg-white/95 text-[#66736a]'}`}>{available ? 'Disponível' : task.completion_review_status === 'rejected' ? 'Comprovação recusada' : task.status === 'pending_review' ? 'Aguardando comprovação' : task.status === 'proof_submitted' ? 'Comprovação enviada' : 'Em andamento'}</span>
       </div>
       <div className="flex flex-1 flex-col p-3.5">
         <h3 className="line-clamp-1 text-[14px] font-semibold leading-5 text-[#202b22]">{task.titulo}</h3>
@@ -189,14 +193,15 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         </div>
         {!available && <p className="mt-1.5 text-[9px] text-[#849087]">Recompensas liberadas após aprovação da comprovação.</p>}
         <div className="mt-auto pt-3">
-          {!available && <div className="mb-2.5 flex items-center gap-2 text-[10px] font-medium text-[#728076]"><span className={`size-1.5 rounded-full ${task.status === 'pending_review' ? 'bg-[#c89d31]' : 'bg-[#37a45b]'}`} />{task.status === 'pending_review' ? 'Aguardando comprovação da horta' : 'Sua participação está em andamento'}</div>}
-          {available || task.status !== 'pending_review' ? <button
+          {!available && <div className="mb-2.5 flex items-center gap-2 text-[10px] font-medium text-[#728076]"><span className={`size-1.5 rounded-full ${task.status === 'pending_review' ? 'bg-[#c89d31]' : 'bg-[#37a45b]'}`} />{task.status === 'pending_review' ? 'Aguardando foto de comprovação' : task.status === 'proof_submitted' ? 'Foto vinculada à tarefa' : 'Sua participação está em andamento'}</div>}
+          {(task.status === 'pending_review' || task.status === 'proof_submitted' || task.completion_review_status === 'rejected') && <TaskProofUpload taskId={task.id} hasPhoto={Boolean(task.has_completion_photo)} canRetry={task.completion_review_status === 'rejected'} rejectionReason={task.completion_review_note} onUploaded={() => { void fetchData(); }} />}
+          {available || (task.status === 'in_progress' && task.completion_review_status !== 'rejected') ? <button
             onClick={() => available ? acceptTask(task) : finalizeTask(task)}
             disabled={workingTaskId === task.id}
             className={`flex h-9 w-full items-center justify-center gap-2 rounded-lg text-[12px] font-semibold transition disabled:opacity-60 ${available ? 'border border-[#cae4cf] bg-[#f8fcf8] text-[#16803d] hover:bg-[#eff8f0]' : 'bg-[#168a3c] text-white hover:bg-[#117331]'}`}
           >
             {workingTaskId === task.id ? <LoaderCircle className="size-3.5 animate-spin" /> : available ? <><CheckCircle2 className="size-3.5" />Iniciar tarefa</> : <><Play className="size-3.5" />Finalizar tarefa</>}
-          </button> : <div className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-[#fff8e7] text-[11px] font-semibold text-[#856415]">Aguardando comprovação</div>}
+          </button> : task.status === 'pending_review' && !task.has_completion_photo ? <div className="flex h-9 w-full items-center justify-center rounded-lg bg-[#fff8e7] text-[11px] font-semibold text-[#856415]">Envie uma foto para comprovar</div> : null}
         </div>
       </div>
     </article>

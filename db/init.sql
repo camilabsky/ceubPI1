@@ -79,6 +79,11 @@ CREATE TABLE IF NOT EXISTS Tarefas (
   completion_longitude DECIMAL(11, 8) NULL,
   completion_review_status varchar(24) NOT NULL DEFAULT 'approved',
   completion_ai_status varchar(24) NOT NULL DEFAULT 'not_requested',
+  ai_resultado varchar(24) NULL,
+  ai_confianca decimal(4,3) NULL,
+  ai_justificativa varchar(512) NULL,
+  ai_modelo varchar(64) NULL,
+  ai_analisado_em datetime NULL,
   completion_review_note varchar(512) NULL,
   completion_reviewed_by int NULL,
   completion_reviewed_at datetime NULL,
@@ -89,6 +94,28 @@ CREATE TABLE IF NOT EXISTS Tarefas (
   CONSTRAINT fk_tarefas_horta
   FOREIGN KEY (id_horta)
   REFERENCES Horta(id)
+);
+
+CREATE TABLE IF NOT EXISTS TarefaComprovacaoHistorico (
+  id int AUTO_INCREMENT PRIMARY KEY,
+  id_tarefa int NOT NULL,
+  id_perfil int NOT NULL,
+  foto_url varchar(512) NOT NULL,
+  latitude DECIMAL(10, 8) NULL,
+  longitude DECIMAL(11, 8) NULL,
+  localizacao_status varchar(32) NULL,
+  distancia_metros int NULL,
+  ai_status varchar(24) NULL,
+  ai_resultado varchar(24) NULL,
+  ai_confianca decimal(4,3) NULL,
+  ai_justificativa varchar(512) NULL,
+  ai_modelo varchar(64) NULL,
+  ai_analisado_em datetime NULL,
+  motivo_reprovacao varchar(512) NOT NULL,
+  revisado_por int NOT NULL,
+  enviado_em datetime NULL,
+  rejeitado_em datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_comprovacao_historico_tarefa (id_tarefa, id)
 );
 
 CREATE TABLE IF NOT EXISTS PerfilGamificacao (

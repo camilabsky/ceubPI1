@@ -14,8 +14,9 @@ import AdminProfilePage from './components/AdminProfilePage';
 import Sidebar from './components/Sidebar';
 import OnboardingPage from './components/OnboardingPage';
 import ExplorePage from './components/ExplorePage';
+import type { AdminNavigationIntent, AppPage } from './types/adminNavigation';
 
-type Page = 'home' | 'explore' | 'tasks' | 'rewards' | 'profile';
+type Page = AppPage;
 
 interface Task {
   id: number;
@@ -64,6 +65,12 @@ export default function App() {
   const { token, user, isAdmin, isLoading } = useAuth();
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
   const [currentPage, setCurrentPage] = useState<Page>('home');
+  const [adminNavigationIntent, setAdminNavigationIntent] = useState<AdminNavigationIntent | null>(null);
+
+  const navigate = (page: Page, intent?: AdminNavigationIntent) => {
+    setAdminNavigationIntent(intent || null);
+    setCurrentPage(page);
+  };
 
   const [coins, setCoins] = useState(0);
   const [tasksCompleted, setTasksCompleted] = useState(0);
@@ -126,32 +133,33 @@ export default function App() {
     <div className="relative min-h-screen bg-gray-50 lg:flex">
       <Toaster position="top-center" richColors />
 
-      <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} isAdmin={isAdmin} />
+      <Sidebar currentPage={currentPage} onNavigate={navigate} isAdmin={isAdmin} />
 
       <div className="w-full lg:ml-64">
         <div className={`mx-auto w-full pb-24 lg:pb-8 ${isAdmin ? 'pt-0 lg:pt-10' : ''}`}>
           {currentPage === 'home' && (
             isAdmin
-              ? <AdminHomePage onNavigate={setCurrentPage} />
-              : <HomePage onNavigate={setCurrentPage} />
+              ? <AdminHomePage onNavigate={navigate} />
+              : <HomePage onNavigate={(page) => navigate(page)} />
           )}
           {currentPage === 'explore' && !isAdmin && <ExplorePage />}
           {currentPage === 'tasks' && (
-            <TasksPage />
+            <TasksPage navigationIntent={adminNavigationIntent} />
           )}
           {currentPage === 'rewards' && (
-            <RewardsPage />
+            <RewardsPage navigationIntent={adminNavigationIntent} />
           )}
           {currentPage === 'profile' && (
             isAdmin
               ? <AdminProfilePage
                     onLogout={() => setCurrentPage('home')}
+                    editGardenOnOpen={adminNavigationIntent?.editGarden}
                   />
               : <ProfilePage
                   coins={coins}
                   tasksCompleted={tasksCompleted}
                   onLogout={() => setCurrentPage('home')}
-                  onNavigate={setCurrentPage}
+                  onNavigate={navigate}
                 />
           )}
         </div>
@@ -163,7 +171,7 @@ export default function App() {
           {mobileNavItems.map(({ page, label, icon: Icon }) => {
             const selected = currentPage === page;
             return (
-              <button key={page} onClick={() => setCurrentPage(page)} aria-current={selected ? 'page' : undefined} className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 pt-1 transition-colors ${selected ? 'text-[#008236]' : 'text-[#647067]'}`}>
+              <button key={page} onClick={() => navigate(page)} aria-current={selected ? 'page' : undefined} className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 pt-1 transition-colors ${selected ? 'text-[#008236]' : 'text-[#647067]'}`}>
                 {selected && <span className="absolute inset-x-2 top-0 h-[3px] rounded-b-full bg-[#00a63e]" />}
                 <Icon className={`size-5 shrink-0 ${selected ? 'stroke-[#00a63e]' : 'stroke-[#647067]'}`} />
                 <span className="max-w-full truncate text-[9px] font-medium leading-3 min-[380px]:text-[10px]">{label}</span>
