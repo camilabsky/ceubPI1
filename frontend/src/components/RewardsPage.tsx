@@ -5,12 +5,13 @@ import { ImageWithFallback } from './figma/ImageWithFallback';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import type { AdminNavigationIntent } from '../types/adminNavigation';
+import MyRedeemedRewardsSection, { type RedeemedReward } from './MyRedeemedRewardsSection';
 
 interface Reward {
   id: number;
   nome?: string;
   titulo?: string;
-  descricao: string;
+  descricao?: string | null;
   tipo: string;
   preco: number;
   src?: string;
@@ -48,6 +49,9 @@ export default function RewardsPage({ navigationIntent }: RewardsPageProps) {
   const idHorta = activeGardenId;
 
   const [rewards, setRewards] = useState<Reward[]>([]);
+  const [myRedemptions, setMyRedemptions] = useState<RedeemedReward[]>([]);
+  const [isLoadingMyRedemptions, setIsLoadingMyRedemptions] = useState(true);
+  const [myRedemptionsError, setMyRedemptionsError] = useState<string | null>(null);
   const [coins, setCoins] = useState(0);
   const [isLoadingRewards, setIsLoadingRewards] = useState(false);
 
@@ -83,6 +87,31 @@ export default function RewardsPage({ navigationIntent }: RewardsPageProps) {
 
     const result = await response.json();
     return Number(result.Saldo) || 0;
+  };
+
+  const fetchMyRedemptions = async () => {
+    if (!token) {
+      setMyRedemptions([]);
+      setMyRedemptionsError(null);
+      setIsLoadingMyRedemptions(false);
+      return;
+    }
+    setIsLoadingMyRedemptions(true);
+    setMyRedemptionsError(null);
+    try {
+      const response = await fetch(`${API_URL}/me/historico`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error('Falha ao carregar seu histórico de resgates');
+      const history = await response.json();
+      setMyRedemptions(history.recompensas_resgatadas || []);
+    } catch (error) {
+      console.error('Erro ao carregar resgates do usuário:', error);
+      setMyRedemptions([]);
+      setMyRedemptionsError('Não foi possível carregar suas recompensas resgatadas. Tente novamente.');
+    } finally {
+      setIsLoadingMyRedemptions(false);
+    }
   };
 
   const fetchRewards = async () => {
@@ -135,6 +164,16 @@ export default function RewardsPage({ navigationIntent }: RewardsPageProps) {
   }, [isAdmin, token, idHorta]);
 
   useEffect(() => {
+    if (isAdmin) {
+      setMyRedemptions([]);
+      setMyRedemptionsError(null);
+      setIsLoadingMyRedemptions(false);
+      return;
+    }
+    void fetchMyRedemptions();
+  }, [isAdmin, token]);
+
+  useEffect(() => {
     if (navigationIntent?.focusRewardHistory) {
       requestAnimationFrame(() => redemptionHistoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     }
@@ -166,7 +205,7 @@ export default function RewardsPage({ navigationIntent }: RewardsPageProps) {
       }
 
       toast.success('Recompensa resgatada');
-      await fetchData();
+      await Promise.all([fetchData(), fetchMyRedemptions()]);
     } catch (error) {
       console.error('Error redeeming reward:', error);
       toast.error('Erro ao resgatar recompensa');
@@ -186,8 +225,8 @@ export default function RewardsPage({ navigationIntent }: RewardsPageProps) {
 
   const handleSaveRecompensa = async () => {
     if (!isAdmin || !token) return;
-    if (!formRecompensa.nome.trim() || !formRecompensa.descricao.trim()) {
-      toast.error('Preencha nome e descrição');
+    if (!formRecompensa.nome.trim()) {
+      toast.error('Informe o nome da recompensa.');
       return;
     }
 
@@ -316,53 +355,58 @@ export default function RewardsPage({ navigationIntent }: RewardsPageProps) {
 
       {!isAdmin && <p className="-mt-3 mb-5 rounded-lg border border-[#e3eadc] bg-[#f7faf4] px-3.5 py-2.5 text-[11px] text-[#687669]">Escolha a recompensa que faz sentido para você. O custo é descontado do seu saldo; seus níveis e XP continuam ligados às tarefas concluídas.</p>}
 
+      {!isAdmin && <MyRedeemedRewardsSection rewards={myRedemptions} loading={isLoadingMyRedemptions} error={myRedemptionsError} />}
+
       {isAdmin && showFormRecompensa && (
         <div className="bg-white rounded-[14px] border border-gray-200 p-5 space-y-4 mb-5">
-          <h3 className="text-[16px] text-neutral-950 font-semibold">
-            {editingRecompensaId ? 'Editar recompensa' : 'Criar nova recompensa'}
-          </h3>
+          <div>
+            <h3 className="text-[16px] font-semibold text-neutral-950">Criar nova recompensa</h3>
+            <p className="mt-1.5 max-w-3xl text-[12px] leading-5 text-[#66736a]">Cadastre uma recompensa que os membros da horta poderão resgatar com as moedas conquistadas nas tarefas. Preencha os dados e escolha o tipo de recompensa.</p>
+          </div>
 
-          <input
-            type="text"
-            placeholder="Nome"
-            value={formRecompensa.nome}
-            onChange={(e) => setFormRecompensa({ ...formRecompensa, nome: e.target.value })}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e]"
-          />
-
-          <textarea
-            placeholder="Descrição"
-            value={formRecompensa.descricao}
-            onChange={(e) => setFormRecompensa({ ...formRecompensa, descricao: e.target.value })}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e] min-h-16"
-          />
-
-          <select
-            value={formRecompensa.tipo}
-            onChange={(e) => setFormRecompensa({ ...formRecompensa, tipo: e.target.value })}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
-          >
-            <option value="Produto">Produto</option>
-            <option value="Workshop">Workshop</option>
-            <option value="Serviço">Serviço</option>
-            <option value="Outro">Outro</option>
-          </select>
-
-          <div className="grid grid-cols-2 gap-3">
+          <label className="block text-[12px] font-medium text-[#4a5565]">Nome
             <input
-              type="number"
-              placeholder="Custo (moedas)"
-              value={formRecompensa.preco}
-              onChange={(e) => setFormRecompensa({ ...formRecompensa, preco: Number(e.target.value) })}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+              type="text"
+              placeholder="Ex.: Kit de ferramentas para horta"
+              value={formRecompensa.nome}
+              onChange={(e) => setFormRecompensa({ ...formRecompensa, nome: e.target.value })}
+              className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2 text-[14px] outline-none focus:border-[#00a63e]"
             />
-            <input
-              type="number"
-              placeholder="Quantidade disponível"
-              value={formRecompensa.quantidade_disponivel}
-              onChange={(e) => setFormRecompensa({ ...formRecompensa, quantidade_disponivel: Number(e.target.value) })}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
+          </label>
+
+          <label className="block text-[12px] font-medium text-[#4a5565]">Descrição
+            <textarea
+              placeholder="Explique o que o membro receberá e eventuais condições de resgate..."
+              value={formRecompensa.descricao}
+              onChange={(e) => setFormRecompensa({ ...formRecompensa, descricao: e.target.value })}
+              className="mt-1.5 min-h-20 w-full rounded-lg border border-gray-200 px-3 py-2 text-[14px] outline-none focus:border-[#00a63e]"
             />
+            <span className="mt-1 block text-[11px] leading-4 text-[#718075]">Inclua o conteúdo da recompensa e qualquer condição importante para resgatá-la.</span>
+          </label>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="block text-[12px] font-medium text-[#4a5565]">Custo em moedas
+              <input
+                type="number"
+                min="0"
+                placeholder="Ex.: 100"
+                value={formRecompensa.preco}
+                onChange={(e) => setFormRecompensa({ ...formRecompensa, preco: Number(e.target.value) })}
+                className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2 text-[14px]"
+              />
+              <span className="mt-1 block text-[11px] leading-4 text-[#718075]">Quantidade de moedas descontada no resgate.</span>
+            </label>
+            <label className="block text-[12px] font-medium text-[#4a5565]">Quantidade disponível
+              <input
+                type="number"
+                min="0"
+                placeholder="Ex.: 10"
+                value={formRecompensa.quantidade_disponivel}
+                onChange={(e) => setFormRecompensa({ ...formRecompensa, quantidade_disponivel: Number(e.target.value) })}
+                className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2 text-[14px]"
+              />
+              <span className="mt-1 block text-[11px] leading-4 text-[#718075]">Número de resgates disponíveis para os membros.</span>
+            </label>
           </div>
 
           <div className="flex gap-3">
@@ -477,7 +521,7 @@ export default function RewardsPage({ navigationIntent }: RewardsPageProps) {
                       />
 
                       <textarea
-                        placeholder="Descrição"
+                        placeholder="Descreva a recompensa e o que o membro receberá..."
                         value={formRecompensa.descricao}
                         onChange={(e) =>
                           setFormRecompensa({
@@ -581,7 +625,7 @@ export default function RewardsPage({ navigationIntent }: RewardsPageProps) {
                       </div>
 
                       <p className="text-[14px] text-[#717182] mb-4">
-                        {reward.descricao}
+                        {reward.descricao?.trim() || 'Descrição não informada.'}
                       </p>
 
                       <div className="flex items-center justify-between mb-2">

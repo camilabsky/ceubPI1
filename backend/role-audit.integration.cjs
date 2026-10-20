@@ -61,8 +61,21 @@ async function task(token, gardenId, title) {
 
     assert.equal((await request(`/admin/tarefas?id_horta=${gardenA}`, { token: adminB.token })).status, 403);
     assert.equal((await request(`/admin/tarefas?id_horta=${gardenB}`, { token: memberA.token })).status, 403);
+    assert.equal((await request('/admin/tarefas', { token: memberA.token, method: 'POST', body: {
+      id_horta: gardenA, titulo: `Não autorizado ${suffix}`, tipo: 'Teste', descricao: 'Operação negada', dificuldade: 0, moedas: 1, xp: 1, tempo: 5,
+    } })).status, 403);
     assert.equal((await request(`/tarefas_disponiveis?id_horta=${gardenB}`, { token: memberA.token })).status, 403);
     assert.equal((await request(`/me/gamificacao?id_horta=${gardenB}`, { token: memberA.token })).status, 403);
+
+    // Complete two rows for the same profile in different gardens to verify that
+    // the active community leaderboard only counts tasks from its own garden.
+    await db.query('UPDATE Tarefas SET id_perfil = ?, concluido = true, status = \'completed\' WHERE id = ?', [adminB.user.id_perfil, taskA]);
+    await db.query('UPDATE Tarefas SET id_perfil = ?, concluido = true, status = \'completed\' WHERE id = ?', [adminB.user.id_perfil, taskB]);
+    const communityProfile = await request(`/me/gamificacao?id_horta=${gardenB}`, { token: adminB.token });
+    assert.equal(communityProfile.status, 200, JSON.stringify(communityProfile.data));
+    const selfOnLeaderboard = communityProfile.data.leaderboard.find((member) => member.is_you);
+    assert.equal(selfOnLeaderboard.tarefas_concluidas, 1);
+    await db.query('UPDATE Tarefas SET id_perfil = NULL, concluido = false, status = \'available\' WHERE id = ?', [taskB]);
 
     const accepted = await request('/iniciar_tarefa', { token: adminB.token, method: 'POST', body: { id_horta: gardenB, id_tarefa: taskB } });
     assert.equal(accepted.status, 200);

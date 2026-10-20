@@ -8,6 +8,7 @@ interface Role {
   latitude: number | null;
   longitude: number | null;
   endereco: string | null;
+  descricao: string | null;
 }
 
 interface User {
@@ -30,11 +31,14 @@ interface AuthContextType {
   leaveGarden: (id: number) => Promise<User>;
   refreshActiveAssociation: () => void;
   isLoading: boolean;
+  isAuthenticating: boolean;
       loginWithGoogle: (credential: string) => Promise<void>;
       applyUser: (user: User) => void;
 
   
   login: (email: string, senha: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  resetPassword: (token: string, novaSenha: string) => Promise<void>;
   // 1. Na interface AuthContextType (linha ~27-29):
 register: (
   nome: string,
@@ -66,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   const availableGardens = Object.values((user?.roles ?? []).reduce<Record<number, { id: number; nome: string; roles: Role['role'][] }>>((items, role) => {
     const garden = items[role.id_horta] ?? (items[role.id_horta] = { id: role.id_horta, nome: role.horta_nome, roles: [] });
@@ -166,24 +171,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, senha: string) => {
-    setIsLoading(true);
+    setIsAuthenticating(true);
     try {
       const res = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, senha })
+        body: JSON.stringify({ email: email.trim(), senha })
       });
-      if (!res.ok) throw new Error('Login failed');
+      if (!res.ok) {
+        throw new Error(res.status === 401 ? 'invalid_credentials' : 'auth_service_unavailable');
+      }
       const data = await res.json();
       setToken(data.token);
       setUser(data.user);
       localStorage.setItem('token', data.token);
     } catch (error) {
-      console.error('Erro no login:', error);
+      if (error instanceof TypeError) throw new Error('Não foi possível conectar ao serviço de autenticação. Tente novamente mais tarde.');
       throw error;
     } finally {
-      setIsLoading(false);
+      setIsAuthenticating(false);
     }
+  };
+
+  const requestPasswordReset = async (email: string) => {
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}/auth/password/forgot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+    } catch {
+      throw new Error('Não foi possível conectar ao serviço de autenticação. Tente novamente mais tarde.');
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Não foi possível solicitar a recuperação agora.');
+  };
+
+  const resetPassword = async (resetToken: string, novaSenha: string) => {
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}/auth/password/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resetToken, novaSenha }),
+      });
+    } catch {
+      throw new Error('Não foi possível conectar ao serviço de autenticação. Tente novamente mais tarde.');
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Não foi possível redefinir a senha.');
   };
 
     const register = async (
@@ -198,12 +235,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         endereco?: string;
       }
     ) => {
-    setIsLoading(true);
+    setIsAuthenticating(true);
     try {
       const res = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome, email, senha, ...opts })
+        body: JSON.stringify({ nome: nome.trim(), email: email.trim(), senha, ...opts })
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -214,10 +251,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data.user);
       localStorage.setItem('token', data.token);
     } catch (error) {
-      console.error('Erro no registro:', error);
+      if (error instanceof TypeError) throw new Error('Não foi possível conectar ao serviço de autenticação. Tente novamente mais tarde.');
       throw error;
     } finally {
-      setIsLoading(false);
+      setIsAuthenticating(false);
     }
   };
 
@@ -283,7 +320,7 @@ if (!response.ok) {
 };
 
   const loginWithGoogle = async (credential: string) => {
-    setIsLoading(true);
+    setIsAuthenticating(true);
     try {
       const res = await fetch(`${API_URL}/auth/google`, {
         method: 'POST',
@@ -299,10 +336,9 @@ if (!response.ok) {
       setUser(data.user);
       localStorage.setItem('token', data.token);
     } catch (error) {
-      console.error('Erro no login com Google:', error);
       throw error;
     } finally {
-      setIsLoading(false);
+      setIsAuthenticating(false);
     }
   };
 
@@ -318,7 +354,7 @@ if (!response.ok) {
   };
 
   return (
-        <AuthContext.Provider value={{token,user,isAdmin,activeGardenId,activeGarden,availableGardens,selectGarden,refreshUser,leaveGarden,refreshActiveAssociation,isLoading,login,logout,register,updateUser,updatePassword,loginWithGoogle,applyUser}}
+        <AuthContext.Provider value={{token,user,isAdmin,activeGardenId,activeGarden,availableGardens,selectGarden,refreshUser,leaveGarden,refreshActiveAssociation,isLoading,isAuthenticating,login,requestPasswordReset,resetPassword,logout,register,updateUser,updatePassword,loginWithGoogle,applyUser}}
 >
         {children}
     </AuthContext.Provider>

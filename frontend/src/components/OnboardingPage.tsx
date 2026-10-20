@@ -8,7 +8,7 @@ import HortaFields, { HORTA_VAZIA, payloadHorta, validarHorta, type HortaDraft }
 
 const RASCUNHO = 'rascunho_horta';
 
-export default function OnboardingPage() {
+export default function OnboardingPage({ onExplore }: { onExplore: () => void }) {
   const { token, user, applyUser, logout } = useAuth();
   const [view, setView] = useState<'choose' | 'create' | 'auto'>(() =>
     sessionStorage.getItem(RASCUNHO) ? 'auto' : 'choose'
@@ -58,7 +58,7 @@ export default function OnboardingPage() {
       /* rascunho inválido: cai no formulário vazio */
     }
     setHorta(d);
-    if (validarHorta(d)) {
+    if (validarHorta(d, true)) {
       setView('create');
       return;
     }
@@ -68,7 +68,7 @@ export default function OnboardingPage() {
   }, [view, token]);
 
   const criarHorta = async () => {
-    const erro = validarHorta(horta);
+    const erro = validarHorta(horta, true);
     if (erro) return toast.error(erro);
     await enviar(horta);
   };
@@ -92,7 +92,7 @@ export default function OnboardingPage() {
 
             <div className="mt-6 space-y-3">
               <button
-                onClick={() => toast.info('Explorar hortas chega em breve')}
+                onClick={onExplore}
                 className="flex w-full items-center gap-4 rounded-xl border border-[#16A34A]/30 bg-[#f0fdf4] p-4 text-left hover:border-[#16A34A]"
               >
                 <span className="flex size-10 items-center justify-center rounded-lg bg-[#dcfce7]">
@@ -141,7 +141,7 @@ export default function OnboardingPage() {
             <h1 className="text-[22px] font-semibold text-[#030213]">Criar uma horta</h1>
             <p className="mt-1 mb-6 text-[14px] text-[#4a5565]">Você será o administrador dela.</p>
 
-            <HortaFields value={horta} onChange={setHorta} />
+            <HortaFields value={horta} onChange={setHorta} mostrarDescricao permitirEnderecoSemCoordenadas />
 
             <button
               onClick={criarHorta}

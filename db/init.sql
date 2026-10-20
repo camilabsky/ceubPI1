@@ -19,10 +19,22 @@ CREATE TABLE IF NOT EXISTS Usuario (
   password_hash varchar(255) NULL,
   ativo boolean default true,
   id_perfil int NULL,
+  cidade varchar(100) NULL,
+  uf char(2) NULL,
   last_login_at datetime NULL,
   CONSTRAINT fk_usuario_perfil
   FOREIGN KEY (id_perfil)
   REFERENCES Perfil(id)
+);
+
+CREATE TABLE IF NOT EXISTS PasswordResetToken (
+  id int AUTO_INCREMENT PRIMARY KEY,
+  id_usuario int NOT NULL,
+  token_hash char(64) NOT NULL UNIQUE,
+  expires_at datetime NOT NULL,
+  used_at datetime NULL,
+  created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_password_reset_user (id_usuario, used_at, expires_at)
 );
 
 CREATE TABLE IF NOT EXISTS UsuarioHortaRole (

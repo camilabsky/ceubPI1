@@ -1,5 +1,5 @@
 import { API_URL } from '../config';
-import { MapPin, Clock, Sprout, PlusCircle, Edit2, Trash2, Loader, Award } from 'lucide-react';
+import { MapPin, Clock, Sprout, PlusCircle, Edit2, Trash2, Loader, Award, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useEffect, useMemo } from 'react';
 import {
@@ -56,9 +56,10 @@ interface AdminTaskLocation {
 
 interface TasksPageProps {
   navigationIntent?: AdminNavigationIntent | null;
+  onBack: () => void;
 }
 
-export default function TasksPage({ navigationIntent }: TasksPageProps) {
+export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) {
   const { token, user, isAdmin, activeGardenId } = useAuth();
   const idPerfil = user?.id_perfil || 1;
   const idHorta = activeGardenId;
@@ -398,7 +399,10 @@ export default function TasksPage({ navigationIntent }: TasksPageProps) {
 
       <div className="min-h-screen bg-gray-50 pt-16 pb-4 px-4">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="px-2 text-[16px] font-bold text-neutral-950">{statusFilter ? `Tarefas: ${statusFilterLabels[statusFilter]}` : 'Tarefas Disponíveis'}</h1>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-[#526056] hover:bg-gray-50" aria-label="Voltar à tela anterior"><ArrowLeft className="size-4" />Voltar</button>
+            <h1 className="px-2 text-[16px] font-bold text-neutral-950">{statusFilter ? `Tarefas: ${statusFilterLabels[statusFilter]}` : 'Tarefas Disponíveis'}</h1>
+          </div>
           <div className="flex items-center gap-2">
             {isAdmin && <select aria-label="Filtrar tarefas por status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as AdminTaskStatusFilter | '')} className="max-w-[190px] rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[11px] focus:border-[#00a63e] focus:outline-none"><option value="">Todas as situações</option><option value="available">Disponíveis</option><option value="in_progress">Em andamento</option><option value="proof_pending">Comprovações pendentes</option><option value="pending_review">Aguardando envio da foto</option><option value="proof_submitted">Aguardando análise do Admin</option><option value="completed">Concluídas</option></select>}
             {isAdmin && (

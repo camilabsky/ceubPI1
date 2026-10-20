@@ -13,13 +13,17 @@ export interface HortaDraft {
 
 export const HORTA_VAZIA: HortaDraft = { nome: '', descricao: '', endereco: '', lat: '', lng: '' };
 
-export function validarHorta(d: HortaDraft): string | null {
-  const la = Number(d.lat);
-  const lo = Number(d.lng);
+export function validarHorta(d: HortaDraft, permitirEnderecoSemCoordenadas = false): string | null {
   if (!d.nome.trim()) return 'Informe o nome da horta';
   if (!d.endereco.trim()) return 'Informe o endereço da horta';
-  if (!d.lat.trim() || !d.lng.trim() || Number.isNaN(la) || Number.isNaN(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) {
-    return 'Informe uma localização válida (use o botão de localização atual)';
+  const temLatitude = Boolean(d.lat.trim());
+  const temLongitude = Boolean(d.lng.trim());
+  if (!temLatitude && !temLongitude && permitirEnderecoSemCoordenadas) return null;
+  if (!temLatitude || !temLongitude) return 'Informe latitude e longitude juntas ou deixe ambas vazias';
+  const la = Number(d.lat);
+  const lo = Number(d.lng);
+  if (!Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) {
+    return 'Informe coordenadas válidas para a localização';
   }
   return null;
 }
@@ -29,8 +33,8 @@ export function payloadHorta(d: HortaDraft) {
     nome: d.nome.trim(),
     descricao: d.descricao.trim() || undefined,
     endereco: d.endereco.trim(),
-    latitude: Number(d.lat),
-    longitude: Number(d.lng),
+    latitude: d.lat.trim() ? Number(d.lat) : null,
+    longitude: d.lng.trim() ? Number(d.lng) : null,
   };
 }
 
@@ -41,9 +45,10 @@ interface Props {
   value: HortaDraft;
   onChange: (d: HortaDraft) => void;
   mostrarDescricao?: boolean;
+  permitirEnderecoSemCoordenadas?: boolean;
 }
 
-export default function HortaFields({ value, onChange, mostrarDescricao = false }: Props) {
+export default function HortaFields({ value, onChange, mostrarDescricao = false, permitirEnderecoSemCoordenadas = false }: Props) {
   const [locating, setLocating] = useState(false);
   const set = (parcial: Partial<HortaDraft>) => onChange({ ...value, ...parcial });
 
@@ -118,6 +123,7 @@ export default function HortaFields({ value, onChange, mostrarDescricao = false 
           value={value.endereco}
           onChange={(e) => set({ endereco: e.target.value })}
         />
+        {permitirEnderecoSemCoordenadas && <p className="mt-2 text-[11px] text-[#718075]">Endereço pode ser cadastrado sem coordenadas. Se souber, informe as coordenadas para exibir a horta no mapa.</p>}
         <div className="mt-2 grid grid-cols-2 gap-2">
           <input className={inputCls} placeholder="Latitude" inputMode="decimal" value={value.lat} onChange={(e) => set({ lat: e.target.value })} />
           <input className={inputCls} placeholder="Longitude" inputMode="decimal" value={value.lng} onChange={(e) => set({ lng: e.target.value })} />

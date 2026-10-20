@@ -8,6 +8,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
 const { OAuth2Client } = require('google-auth-library');
+const nodemailer = require('nodemailer');
 const { ACHIEVEMENTS, getAchievementProgress, getActiveStreak, getLevelInfo, getNextStreak } = require('./gamification');
 const { distanceInMeters, isValidCoordinate } = require('./geolocation');
 const { GEMINI_MODEL, requestGeminiAnalysis, shouldAutoApprove } = require('./gemini');
@@ -26,13 +27,56 @@ const pool = mysql.createPool({
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || 'root',
   database: process.env.DB_NAME || 'horta',
-  port: Number(process.env.DB_PORT || 3006,),
+  port: Number(process.env.DB_PORT || 3306),
   waitForConnections: true,
   connectionLimit: 10,
 });
 
 const db = pool;
 const taskProofDir = path.join(__dirname, 'uploads', 'task-proofs');
+const passwordResetRequests = new Map();
+
+function canRequestPasswordReset(ip) {
+    const now = Date.now();
+    const windowMs = 60 * 60 * 1000;
+    const previous = passwordResetRequests.get(ip);
+    if (!previous || now - previous.startedAt >= windowMs) {
+        passwordResetRequests.set(ip, { startedAt: now, count: 1 });
+        return true;
+    }
+    if (previous.count >= 10) return false;
+    previous.count += 1;
+    return true;
+}
+
+function passwordResetMailer() {
+    const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM } = process.env;
+    const port = Number(SMTP_PORT);
+    let resetUrl;
+    try {
+        resetUrl = new URL(process.env.PASSWORD_RESET_URL);
+    } catch {
+        return null;
+    }
+    if (!SMTP_HOST || !Number.isInteger(port) || port < 1 || port > 65535 || !SMTP_USER || !SMTP_PASS || !SMTP_FROM
+        || (resetUrl.protocol !== 'https:' && resetUrl.hostname !== 'localhost' && resetUrl.hostname !== '127.0.0.1')) {
+        return null;
+    }
+    return {
+        transporter: nodemailer.createTransport({
+            host: SMTP_HOST,
+            port,
+            secure: port === 465,
+            auth: { user: SMTP_USER, pass: SMTP_PASS },
+        }),
+        from: SMTP_FROM,
+        resetUrl,
+    };
+}
+
+function hashPasswordResetToken(token) {
+    return crypto.createHash('sha256').update(token).digest('hex');
+}
 
 app.use(cors({
     origin: ['http://localhost:3000', 'http://0.0.0.0:3000', 'http://localhost:3001', ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim()) : [])]
@@ -50,7 +94,7 @@ function tokenFromHeader(authorizationHeader) {
 
 async function getUserRoles(id_usuario) {
     const [roles] = await db.query(
-        `SELECT uhr.papel AS role, uhr.id_horta, h.nome AS horta_nome, h.latitude, h.longitude, h.endereco
+        `SELECT uhr.papel AS role, uhr.id_horta, h.nome AS horta_nome, h.latitude, h.longitude, h.endereco, h.descricao
         FROM UsuarioHortaRole uhr
         LEFT JOIN Horta h ON h.id = uhr.id_horta
         WHERE uhr.id_usuario = ?`,
@@ -112,7 +156,8 @@ async function requireHortaAdmin(req, res, next) {
 
 app.post('/auth/login', async (req, res) => {
     try {
-        const { email, senha } = req.body;
+        const senha = req.body?.senha;
+        const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
 
         if (!email || !senha) {
             return res.status(400).send({ error: 'Email e senha sao obrigatorios' });
@@ -158,10 +203,15 @@ app.post('/auth/login', async (req, res) => {
 });
 
 app.post('/auth/register', async (req, res) => {
-    const { nome, email, senha, id_horta, nome_nova_horta, latitude, longitude, endereco } = req.body;
+    const { senha, id_horta, nome_nova_horta, latitude, longitude, endereco } = req.body;
+    const nome = typeof req.body.nome === 'string' ? req.body.nome.trim() : '';
+    const email = typeof req.body.email === 'string' ? req.body.email.trim() : '';
 
     if (!nome || !email || !senha) {
         return res.status(400).send({ error: 'Nome, email e senha sao obrigatorios' });
+    }
+    if (nome.length > 128 || email.length > 128) {
+        return res.status(400).send({ error: 'Nome ou email excede o limite permitido' });
     }
 
     if (id_horta && nome_nova_horta) {
@@ -358,6 +408,37 @@ app.get('/auth/me', requireAuth, async (req, res) => {
     }
 });
 
+app.get('/me/localizacao', requireAuth, async (req, res) => {
+    try {
+        const [rows] = await db.query('SELECT cidade, uf FROM Usuario WHERE id = ? LIMIT 1', [req.user.id]);
+        if (!rows.length) return res.status(404).send({ error: 'Usuário não encontrado' });
+        return res.send({ cidade: rows[0].cidade || '', uf: rows[0].uf || '' });
+    } catch (error) {
+        console.error('Erro ao carregar localização do usuário:', error);
+        return res.status(500).send({ error: 'Não foi possível carregar sua localização' });
+    }
+});
+
+app.put('/me/localizacao', requireAuth, async (req, res) => {
+    const cidade = typeof req.body?.cidade === 'string' ? req.body.cidade.trim() : '';
+    const uf = typeof req.body?.uf === 'string' ? req.body.uf.trim().toUpperCase() : '';
+    const estados = new Set(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
+    if ((cidade && !uf) || (!cidade && uf)) return res.status(400).send({ error: 'Informe cidade e UF juntas, ou deixe ambas vazias' });
+    if (cidade.length > 100 || (cidade && !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade))) {
+        return res.status(400).send({ error: 'Informe uma cidade válida com até 100 caracteres' });
+    }
+    if (uf && !estados.has(uf)) return res.status(400).send({ error: 'Informe uma UF brasileira válida com duas letras' });
+    try {
+        const [users] = await db.query('SELECT id FROM Usuario WHERE id = ? LIMIT 1', [req.user.id]);
+        if (!users.length) return res.status(404).send({ error: 'Usuário não encontrado' });
+        await db.query('UPDATE Usuario SET cidade = ?, uf = ? WHERE id = ?', [cidade || null, uf || null, req.user.id]);
+        return res.send({ cidade, uf });
+    } catch (error) {
+        console.error('Erro ao salvar localização do usuário:', error);
+        return res.status(500).send({ error: 'Não foi possível salvar sua localização' });
+    }
+});
+
 app.put('/auth/me', requireAuth, async (req, res) => {
     try {
         const { nome, email } = req.body;
@@ -438,7 +519,109 @@ app.put('/auth/me', requireAuth, async (req, res) => {
     }
 }); 
 
-    app.put('/auth/password', requireAuth, async (req, res) => {
+app.post('/auth/password/forgot', async (req, res) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    if (!canRequestPasswordReset(ip)) {
+        return res.status(429).send({ error: 'Muitas solicitações. Tente novamente mais tarde.' });
+    }
+
+    const mailer = passwordResetMailer();
+    if (!mailer) {
+        return res.status(503).send({ error: 'Recuperação de senha indisponível: configure SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM e PASSWORD_RESET_URL.' });
+    }
+    if (!email || email.length > 128) {
+        return res.status(400).send({ error: 'Informe um e-mail válido.' });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashPasswordResetToken(token);
+    const conn = await db.getConnection();
+    let committed = false;
+    try {
+        await conn.beginTransaction();
+        const [users] = await conn.query(
+            'SELECT id FROM Usuario WHERE email = ? AND ativo = true LIMIT 1 FOR UPDATE',
+            [email]
+        );
+        if (users.length) {
+            await conn.query(
+                'UPDATE PasswordResetToken SET used_at = NOW() WHERE id_usuario = ? AND used_at IS NULL',
+                [users[0].id]
+            );
+            await conn.query(
+                `INSERT INTO PasswordResetToken (id_usuario, token_hash, expires_at)
+                 VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 MINUTE))`,
+                [users[0].id, tokenHash]
+            );
+        }
+        await conn.commit();
+        committed = true;
+
+        const resetUrl = new URL(mailer.resetUrl);
+        resetUrl.searchParams.set('resetToken', token);
+        await mailer.transporter.sendMail({
+            from: mailer.from,
+            to: email,
+            subject: 'Redefinição de senha do Couve',
+            text: `Foi solicitada uma redefinição de senha para esta conta. Se você fez a solicitação, use este link em até 30 minutos: ${resetUrl.toString()}\n\nSe não solicitou, ignore esta mensagem.`,
+        });
+        return res.send({ message: 'Se houver uma conta ativa com esse e-mail, enviaremos as instruções de redefinição.' });
+    } catch (error) {
+        if (committed) {
+            await conn.query('UPDATE PasswordResetToken SET used_at = NOW() WHERE token_hash = ? AND used_at IS NULL', [tokenHash]);
+        } else {
+            await conn.rollback();
+        }
+        console.error('Erro ao solicitar redefinição de senha:', error);
+        return res.status(503).send({ error: 'Não foi possível enviar o e-mail de recuperação. Tente novamente mais tarde.' });
+    } finally {
+        conn.release();
+    }
+});
+
+app.post('/auth/password/reset', async (req, res) => {
+    const token = typeof req.body?.token === 'string' ? req.body.token : '';
+    const novaSenha = typeof req.body?.novaSenha === 'string' ? req.body.novaSenha : '';
+    if (!/^[a-f0-9]{64}$/i.test(token)) {
+        return res.status(400).send({ error: 'Link de redefinição inválido ou expirado.' });
+    }
+    if (novaSenha.length < 6) {
+        return res.status(400).send({ error: 'A nova senha deve ter pelo menos 6 caracteres.' });
+    }
+
+    const conn = await db.getConnection();
+    try {
+        await conn.beginTransaction();
+        const [tokens] = await conn.query(
+            `SELECT id, id_usuario FROM PasswordResetToken
+             WHERE token_hash = ? AND used_at IS NULL AND expires_at > NOW()
+             LIMIT 1 FOR UPDATE`,
+            [hashPasswordResetToken(token)]
+        );
+        if (!tokens.length) {
+            await conn.rollback();
+            return res.status(400).send({ error: 'Link de redefinição inválido ou expirado.' });
+        }
+
+        const passwordHash = await bcrypt.hash(novaSenha, 10);
+        await conn.query('UPDATE Usuario SET password_hash = ? WHERE id = ?', [passwordHash, tokens[0].id_usuario]);
+        await conn.query(
+            'UPDATE PasswordResetToken SET used_at = NOW() WHERE id_usuario = ? AND used_at IS NULL',
+            [tokens[0].id_usuario]
+        );
+        await conn.commit();
+        return res.send({ message: 'Senha redefinida. Você já pode entrar com a nova senha.' });
+    } catch (error) {
+        await conn.rollback();
+        console.error('Erro ao redefinir senha:', error);
+        return res.status(500).send({ error: 'Não foi possível redefinir a senha.' });
+    } finally {
+        conn.release();
+    }
+});
+
+app.put('/auth/password', requireAuth, async (req, res) => {
     try {
         const { senhaAtual, novaSenha } = req.body;
 
@@ -1140,18 +1323,34 @@ app.get('/me/historico', requireAuth, async (req, res) => {
         );
 
         const [recompensasResgatadas] = await db.query(
-            `SELECT r.id, r.nome, r.descricao, r.tipo, r.preco, r.src, r.id_horta
+            `SELECT pr.id_recompensa AS id, COALESCE(NULLIF(r.nome, ''), 'Recompensa indisponível') AS nome,
+                    r.descricao, r.tipo, pr.redeemed_at, pr.redeemed_price, r.id_horta
              FROM PerfilRecompensas pr
-             JOIN Recompensas r ON r.id = pr.id_recompensa
-             WHERE pr.id_perfil = ? AND r.deleted_at IS NULL
-             ORDER BY r.id DESC
+             LEFT JOIN Recompensas r ON r.id = pr.id_recompensa
+             WHERE pr.id_perfil = ?
+             ORDER BY pr.redeemed_at DESC, pr.id_recompensa DESC
              LIMIT 50`,
             [id_perfil]
         );
 
+        const [hortas] = await db.query(
+            `SELECT h.id, h.nome, uhr.papel,
+                    COUNT(DISTINCT t.id) AS tarefas_concluidas,
+                    (SELECT COUNT(*) FROM UsuarioHortaRole membros
+                     WHERE membros.id_horta = h.id AND membros.papel = 'MEMBER') AS participantes
+             FROM UsuarioHortaRole uhr
+             JOIN Horta h ON h.id = uhr.id_horta
+             LEFT JOIN Tarefas t ON t.id_horta = h.id AND t.id_perfil = ? AND t.concluido = true AND t.deleted_at IS NULL
+             WHERE uhr.id_usuario = ?
+             GROUP BY h.id, h.nome, uhr.papel
+             ORDER BY h.nome ASC`,
+            [id_perfil, req.user.id]
+        );
+
         return res.send({
             tarefas_concluidas: tarefasConcluidas,
-            recompensas_resgatadas: recompensasResgatadas
+            recompensas_resgatadas: recompensasResgatadas,
+            hortas,
         });
     } catch (error) {
         console.error('Erro em /me/historico:', error);
@@ -1257,7 +1456,7 @@ app.get('/me/gamificacao', requireAuth, async (req, res) => {
              JOIN Usuario u ON u.id = member.id_usuario AND u.ativo = true
              JOIN Perfil p ON p.id = u.id_perfil
              LEFT JOIN PerfilGamificacao pg ON pg.id_perfil = p.id
-             LEFT JOIN Tarefas t ON t.id_perfil = p.id AND t.concluido = true
+             LEFT JOIN Tarefas t ON t.id_perfil = p.id AND t.id_horta = mine.id_horta AND t.concluido = true
              WHERE member.papel = 'MEMBER' AND (? IS NULL OR mine.id_horta = ?)
              GROUP BY p.id, p.nome, pg.xp_total
              ORDER BY xp_total DESC, tarefas_concluidas DESC, p.nome ASC
@@ -1274,10 +1473,10 @@ app.get('/me/gamificacao', requireAuth, async (req, res) => {
         }));
 
         const [resgates] = await conn.query(
-            `SELECT pr.id_recompensa, r.nome, pr.redeemed_at,
-                    GREATEST(0, COALESCE(pr.redeemed_price, r.preco, 0)) AS preco
+            `SELECT pr.id_recompensa, COALESCE(NULLIF(r.nome, ''), 'Recompensa indisponível') AS nome,
+                    pr.redeemed_at, pr.redeemed_price
              FROM PerfilRecompensas pr
-             JOIN Recompensas r ON r.id = pr.id_recompensa
+             LEFT JOIN Recompensas r ON r.id = pr.id_recompensa
              WHERE pr.id_perfil = ?
              ORDER BY pr.redeemed_at ASC, pr.id_recompensa ASC`,
             [id_perfil]
@@ -1290,7 +1489,7 @@ app.get('/me/gamificacao', requireAuth, async (req, res) => {
         const mudasEsteMes = tasks.reduce((total, task) => total + (task.completed_month === clockRows[0].current_month ? Math.max(0, Number(task.mudas) || 0) : 0), 0);
         const events = [
             ...tasks.map((task) => ({ id: `task-${task.id}`, kind: 'task', title: 'Tarefa concluída', description: task.titulo, xp: Number(task.xp) || 0, coins: Number(task.moedas) || 0, occurred_at: task.completed_at })),
-            ...resgates.map((reward, index) => ({ id: `reward-${reward.id_recompensa}-${index}`, kind: 'reward', title: 'Recompensa resgatada', description: reward.nome, xp: 0, coins: -(Number(reward.preco) || 0), occurred_at: reward.redeemed_at })),
+            ...resgates.map((reward, index) => ({ id: `reward-${reward.id_recompensa}-${index}`, kind: 'reward', title: 'Recompensa resgatada', description: reward.nome, xp: 0, coins: reward.redeemed_price == null ? 0 : -Number(reward.redeemed_price), reward_price: reward.redeemed_price == null ? null : Number(reward.redeemed_price), occurred_at: reward.redeemed_at })),
             ...achievements.filter((achievement) => achievement.unlocked).map((achievement) => ({
                 id: `achievement-${achievement.id}`, kind: 'achievement', title: 'Conquista desbloqueada', description: achievement.name,
                 xp: Number(unlocked.get(achievement.id)?.xp_awarded) || achievement.xp, coins: 0, occurred_at: achievement.unlocked_at,
@@ -1419,27 +1618,26 @@ app.get('/admin/horta/participantes', requireAuth, requireHortaAdmin, async (req
 app.post('/hortas', requireAuth, async (req, res) => {
     const { nome, descricao, latitude, longitude, endereco } = req.body;
 
-    if (!nome || !nome.trim()) {
+    if (typeof nome !== 'string' || !nome.trim()) {
         return res.status(400).send({ error: 'Nome da horta e obrigatorio' });
     }
     if (nome.trim().length > 128) {
         return res.status(400).send({ error: 'Nome da horta deve ter no maximo 128 caracteres' });
     }
-    if (descricao && descricao.length > 255) {
+    if (typeof descricao === 'string' && descricao.trim().length > 255) {
         return res.status(400).send({ error: 'Descricao deve ter no maximo 255 caracteres' });
     }
-    if (!endereco || !endereco.trim()) {
+    if (typeof endereco !== 'string' || !endereco.trim()) {
         return res.status(400).send({ error: 'Endereco da horta e obrigatorio' });
     }
 
-    const lat = latitude === '' || latitude == null ? NaN : Number(latitude);
-    const lng = longitude === '' || longitude == null ? NaN : Number(longitude);
-    if (Number.isNaN(lat) || lat < -90 || lat > 90) {
-        return res.status(400).send({ error: 'Latitude invalida ou nao informada' });
-    }
-    if (Number.isNaN(lng) || lng < -180 || lng > 180) {
-        return res.status(400).send({ error: 'Longitude invalida ou nao informada' });
-    }
+    const hasLatitude = latitude !== '' && latitude != null;
+    const hasLongitude = longitude !== '' && longitude != null;
+    if (hasLatitude !== hasLongitude) return res.status(400).send({ error: 'Informe latitude e longitude juntas ou deixe ambas vazias' });
+    const lat = hasLatitude ? Number(latitude) : null;
+    const lng = hasLongitude ? Number(longitude) : null;
+    if (hasLatitude && (!Number.isFinite(lat) || lat < -90 || lat > 90)) return res.status(400).send({ error: 'Latitude invalida' });
+    if (hasLongitude && (!Number.isFinite(lng) || lng < -180 || lng > 180)) return res.status(400).send({ error: 'Longitude invalida' });
 
     const connection = await db.getConnection();
     try {
@@ -1447,7 +1645,7 @@ app.post('/hortas', requireAuth, async (req, res) => {
 
         const [hortaResult] = await connection.query(
             'INSERT INTO Horta (nome, descricao, latitude, longitude, endereco) VALUES (?, ?, ?, ?, ?)',
-            [nome.trim(), descricao && descricao.trim() ? descricao.trim() : null, lat, lng, endereco.trim()]
+            [nome.trim(), typeof descricao === 'string' && descricao.trim() ? descricao.trim() : null, lat, lng, endereco.trim()]
         );
         const id_horta = hortaResult.insertId;
 
@@ -1541,7 +1739,7 @@ app.delete('/hortas/:id/sair', requireAuth, async (req, res) => {
             [req.user.id, id_horta]
         );
         const [roles] = await conn.query(
-            `SELECT uhr.papel AS role, uhr.id_horta, h.nome AS horta_nome, h.latitude, h.longitude, h.endereco
+            `SELECT uhr.papel AS role, uhr.id_horta, h.nome AS horta_nome, h.latitude, h.longitude, h.endereco, h.descricao
              FROM UsuarioHortaRole uhr LEFT JOIN Horta h ON h.id = uhr.id_horta
              WHERE uhr.id_usuario = ? ORDER BY uhr.id_horta, uhr.papel`,
             [req.user.id]
@@ -1624,9 +1822,10 @@ app.post('/admin/recompensas', requireAuth, requireHortaAdmin, async (req, res) 
     const conn = await db.getConnection();
     try {
         const { nome, descricao, tipo, preco, src, quantidade_disponivel } = req.body;
-        if (!nome || !descricao || !tipo) {
-            return res.status(400).send({ error: 'Campos obrigatorios ausentes' });
+        if (typeof nome !== 'string' || !nome.trim() || !tipo) {
+            return res.status(400).send({ error: 'Nome e tipo da recompensa sao obrigatorios' });
         }
+        const descricaoSalva = typeof descricao === 'string' && descricao.trim() ? descricao.trim() : null;
         const preco_num = Number(preco);
         const quantidade_num = Number(quantidade_disponivel);
         if (!Number.isInteger(preco_num) || preco_num < 0 || !Number.isInteger(quantidade_num) || quantidade_num < 0) {
@@ -1638,7 +1837,7 @@ app.post('/admin/recompensas', requireAuth, requireHortaAdmin, async (req, res) 
             `INSERT INTO Recompensas
              (nome, descricao, tipo, preco, src, quantidade_disponivel, id_horta, created_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [nome, descricao, tipo, preco_num, src || null, quantidade_num, req.id_horta, req.user.id]
+            [nome.trim(), descricaoSalva, tipo, preco_num, src || null, quantidade_num, req.id_horta, req.user.id]
         );
 
         for (let remaining = quantidade_num; remaining > 0;) {
@@ -1672,6 +1871,11 @@ app.put('/admin/recompensas/:id', requireAuth, async (req, res) => {
         }
 
         const current = currentRows[0];
+        const descricaoSalva = req.body.descricao === undefined
+            ? current.descricao
+            : typeof req.body.descricao === 'string' && req.body.descricao.trim()
+                ? req.body.descricao.trim()
+                : null;
         const canEdit = await isAdminForHorta(req.user.id, current.id_horta);
         if (!canEdit) {
             await conn.rollback();
@@ -1714,7 +1918,7 @@ app.put('/admin/recompensas/:id', requireAuth, async (req, res) => {
              WHERE id = ?`,
             [
                 req.body.nome ?? current.nome,
-                req.body.descricao ?? current.descricao,
+                descricaoSalva,
                 req.body.tipo ?? current.tipo,
                 preco_num,
                 req.body.src ?? current.src,
@@ -1737,28 +1941,23 @@ app.put('/admin/recompensas/:id', requireAuth, async (req, res) => {
 
 app.put('/admin/horta', requireAuth, requireHortaAdmin, async (req, res) => {
     try {
-        const { latitude, longitude, endereco } = req.body;
-
-        if (latitude === undefined || longitude === undefined) {
-            return res.status(400).send({ error: 'Latitude e longitude sao obrigatorias' });
-        }
-
-        const lat = Number(latitude);
-        const lng = Number(longitude);
-
-        if (Number.isNaN(lat) || lat < -90 || lat > 90) {
-            return res.status(400).send({ error: 'Latitude invalida' });
-        }
-        if (Number.isNaN(lng) || lng < -180 || lng > 180) {
-            return res.status(400).send({ error: 'Longitude invalida' });
-        }
+        const { latitude, longitude, endereco, descricao } = req.body;
+        const hasLatitude = latitude !== '' && latitude != null;
+        const hasLongitude = longitude !== '' && longitude != null;
+        if (hasLatitude !== hasLongitude) return res.status(400).send({ error: 'Informe latitude e longitude juntas ou deixe ambas vazias' });
+        const lat = hasLatitude ? Number(latitude) : null;
+        const lng = hasLongitude ? Number(longitude) : null;
+        if (hasLatitude && (!Number.isFinite(lat) || lat < -90 || lat > 90)) return res.status(400).send({ error: 'Latitude invalida' });
+        if (hasLongitude && (!Number.isFinite(lng) || lng < -180 || lng > 180)) return res.status(400).send({ error: 'Longitude invalida' });
+        if (typeof endereco !== 'string' || endereco.trim().length > 255) return res.status(400).send({ error: 'Informe um endereço válido com no máximo 255 caracteres' });
+        if (typeof descricao === 'string' && descricao.trim().length > 255) return res.status(400).send({ error: 'Descrição deve ter no máximo 255 caracteres' });
 
         await db.query(
-            'UPDATE Horta SET latitude = ?, longitude = ?, endereco = ? WHERE id = ?',
-            [lat, lng, endereco || null, req.id_horta]
+            'UPDATE Horta SET latitude = ?, longitude = ?, endereco = ?, descricao = ? WHERE id = ?',
+            [lat, lng, endereco.trim() || null, typeof descricao === 'string' && descricao.trim() ? descricao.trim() : null, req.id_horta]
         );
 
-        return res.send({ message: 'Localizacao da horta atualizada', latitude: lat, longitude: lng, endereco });
+        return res.send({ message: 'Informações da horta atualizadas', latitude: lat, longitude: lng, endereco: endereco.trim() || null, descricao: typeof descricao === 'string' && descricao.trim() ? descricao.trim() : null });
     } catch (error) {
         console.error('Erro em PUT /admin/horta:', error);
         return res.status(500).send({ error: 'Erro ao atualizar localizacao da horta' });
@@ -1787,8 +1986,21 @@ app.delete('/admin/recompensas/:id', requireAuth, async (req, res) => {
 });
 
 async function ensureGamificationSchema() {
+    await db.query(`CREATE TABLE IF NOT EXISTS PasswordResetToken (
+        id int AUTO_INCREMENT PRIMARY KEY,
+        id_usuario int NOT NULL,
+        token_hash char(64) NOT NULL UNIQUE,
+        expires_at datetime NOT NULL,
+        used_at datetime NULL,
+        created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_password_reset_user (id_usuario, used_at, expires_at)
+    )`);
     const [loginColumns] = await db.query("SHOW COLUMNS FROM Usuario LIKE 'last_login_at'");
     if (loginColumns.length === 0) await db.query('ALTER TABLE Usuario ADD COLUMN last_login_at datetime NULL');
+    const [cityColumns] = await db.query("SHOW COLUMNS FROM Usuario LIKE 'cidade'");
+    if (cityColumns.length === 0) await db.query('ALTER TABLE Usuario ADD COLUMN cidade varchar(100) NULL');
+    const [stateColumns] = await db.query("SHOW COLUMNS FROM Usuario LIKE 'uf'");
+    if (stateColumns.length === 0) await db.query('ALTER TABLE Usuario ADD COLUMN uf char(2) NULL');
     const [statusColumns] = await db.query("SHOW COLUMNS FROM Tarefas LIKE 'status'");
     if (statusColumns.length === 0) {
         await db.query('ALTER TABLE Tarefas ADD COLUMN status varchar(24) NULL');

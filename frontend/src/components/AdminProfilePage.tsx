@@ -3,6 +3,9 @@ import {User,ShieldCheck,ClipboardList,CheckCircle,Sprout,LogOut,Mail,Lock,Chevr
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { HortaMap } from './HortaMap';
+import ProfileCommunitySections from './ProfileCommunitySections';
+import ProfileLocationEditor from './ProfileLocationEditor';
 
 interface Task {
   id: number;
@@ -22,7 +25,7 @@ export default function AdminProfilePage({
   onLogout,
   editGardenOnOpen = false,
 }: AdminProfilePageProps) {
-  const { logout, token, user, updateUser, updatePassword, activeGarden, leaveGarden } = useAuth();
+  const { logout, token, user, updateUser, updatePassword, activeGarden, leaveGarden, refreshUser } = useAuth();
 
   const [adminTasks, setAdminTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -43,6 +46,7 @@ export default function AdminProfilePage({
   const [isSavingLocation, setIsSavingLocation] = useState(false);
   const [isFetchingGeoLocation, setIsFetchingGeoLocation] = useState(false);
   const [newEndereco, setNewEndereco] = useState('');
+  const [newDescricaoHorta, setNewDescricaoHorta] = useState('');
   const [isLeavingMemberRole, setIsLeavingMemberRole] = useState(false);
 
   const leaveMemberRole = async () => {
@@ -66,6 +70,8 @@ export default function AdminProfilePage({
     setNewLatitude(garden?.latitude != null ? String(garden.latitude) : '');
     setNewLongitude(garden?.longitude != null ? String(garden.longitude) : '');
     setNewEndereco(garden?.endereco || '');
+    setNewDescricaoHorta(garden?.descricao || '');
+    setNewDescricaoHorta(garden?.descricao || '');
     setIsEditingLocation(true);
     requestAnimationFrame(() => document.getElementById('admin-garden-location')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   }, [editGardenOnOpen, user]);
@@ -156,17 +162,15 @@ export default function AdminProfilePage({
   };
   
   const handleSaveLocation = async () => {
-  const lat = Number(newLatitude);
-  const lng = Number(newLongitude);
-
-  if (Number.isNaN(lat) || lat < -90 || lat > 90) {
-    toast.error('Latitude inválida');
-    return;
-  }
-  if (Number.isNaN(lng) || lng < -180 || lng > 180) {
-    toast.error('Longitude inválida');
-    return;
-  }
+  const hasLatitude = Boolean(newLatitude.trim());
+  const hasLongitude = Boolean(newLongitude.trim());
+  if (hasLatitude !== hasLongitude) return toast.error('Informe latitude e longitude juntas ou deixe ambas vazias');
+  const lat = hasLatitude ? Number(newLatitude) : null;
+  const lng = hasLongitude ? Number(newLongitude) : null;
+  if (hasLatitude && (!Number.isFinite(lat) || Math.abs(lat!) > 90)) return toast.error('Latitude inválida');
+  if (hasLongitude && (!Number.isFinite(lng) || Math.abs(lng!) > 180)) return toast.error('Longitude inválida');
+  if (newEndereco.trim().length > 255) return toast.error('O endereço deve ter no máximo 255 caracteres');
+  if (newDescricaoHorta.trim().length > 255) return toast.error('A descrição deve ter no máximo 255 caracteres');
 
   setIsSavingLocation(true);
   try {
@@ -179,21 +183,19 @@ export default function AdminProfilePage({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ latitude: lat, longitude: lng, endereco: newEndereco }),
+        body: JSON.stringify({ latitude: lat, longitude: lng, endereco: newEndereco, descricao: newDescricaoHorta }),
       }
     );
 
-    if (!response.ok) {
-      throw new Error('Falha ao atualizar localização');
-    }
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Falha ao atualizar informações da horta');
+    await refreshUser();
 
-    toast.success('Localização da horta atualizada');
+    toast.success('Informações da horta atualizadas');
     setIsEditingLocation(false);
   } catch (error) {
     console.error('Erro ao atualizar localização:', error);
-    toast.error(
-      error instanceof Error ? error.message : 'Erro ao atualizar localização'
-    );
+    toast.error(error instanceof Error ? error.message : 'Erro ao atualizar informações da horta');
   } finally {
     setIsSavingLocation(false);
   }
@@ -321,9 +323,15 @@ const handleUseCurrentLocation = () => {
             <p className="text-white/90 text-[13px] mt-1">
               {hortaNome}
             </p>
+            <p className="text-white/80 text-[12px] mt-1">{user?.email || 'E-mail não informado'}</p>
+            <div className="mt-1"><ProfileLocationEditor /></div>
           </div>
         </div>
       </div>
+    </div>
+
+    <div className="px-4 mb-6">
+      <ProfileCommunitySections />
     </div>
 
     {/* Estatísticas */}
@@ -461,6 +469,7 @@ const handleUseCurrentLocation = () => {
         </div>
         <div id="admin-garden-location" className="p-4 border-b border-gray-100 scroll-mt-5">
       {!isEditingLocation ? (
+      <>
       <button
         type="button"
         onClick={() => {
@@ -468,6 +477,7 @@ const handleUseCurrentLocation = () => {
           setNewLatitude(horta?.latitude != null ? String(horta.latitude) : '');
           setNewLongitude(horta?.longitude != null ? String(horta.longitude) : '');
           setNewEndereco(horta?.endereco || '');
+          setNewDescricaoHorta(horta?.descricao || '');
           setIsEditingLocation(true);
         }}
         className="w-full flex items-center gap-3 text-left"
@@ -494,6 +504,12 @@ const handleUseCurrentLocation = () => {
 
         <ChevronRight className="size-5 text-gray-400" />
       </button>
+      {activeGarden?.role === 'ADMIN' && <div className="mt-3 space-y-3 pl-12">
+        <p className="text-[12px] leading-5 text-[#66736a]">{activeGarden.descricao || 'Descrição não cadastrada.'}</p>
+        <p className="text-[11px] text-[#718075]">{activeGarden.latitude != null && activeGarden.longitude != null ? `${activeGarden.latitude}, ${activeGarden.longitude}` : 'Coordenadas não informadas'}</p>
+        <HortaMap latitude={activeGarden.latitude} longitude={activeGarden.longitude} nome={activeGarden.horta_nome} endereco={activeGarden.endereco} height="180px" />
+      </div>}
+      </>
     ) : (
       <div className="space-y-3">
         <div className="flex items-center gap-3">
@@ -524,6 +540,11 @@ const handleUseCurrentLocation = () => {
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500 min-h-16"
         />
       </div>
+
+        <div>
+          <label className="text-[12px] text-gray-500 mb-1 block">Descrição da horta</label>
+          <textarea maxLength={255} value={newDescricaoHorta} onChange={(event) => setNewDescricaoHorta(event.target.value)} placeholder="Conte o que torna esta comunidade especial" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500 min-h-16" />
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -596,7 +617,6 @@ const handleUseCurrentLocation = () => {
                   {user?.email || 'Não informado'}
                 </p>
               </div>
-
               <ChevronRight className="size-5 text-gray-400" />
             </button>
           ) : (

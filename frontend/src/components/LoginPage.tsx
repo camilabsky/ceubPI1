@@ -16,16 +16,21 @@ declare global {
 }
 
 export default function LoginPage({ onSwitchToRegister }: LoginPageProps) {
-  const { login, loginWithGoogle, isLoading } = useAuth();
+  const { login, loginWithGoogle, requestPasswordReset, isAuthenticating } = useAuth();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [showSenha, setShowSenha] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoginError('');
     if (!email || !senha) {
-      toast.error('Preencha email e senha');
+      setLoginError('Preencha seu e-mail e sua senha.');
       return;
     }
 
@@ -33,12 +38,31 @@ export default function LoginPage({ onSwitchToRegister }: LoginPageProps) {
       await login(email, senha);
       toast.success('Login realizado com sucesso!');
     } catch (error) {
-      toast.error('Email ou senha invalidos');
+      setLoginError('email ou senha invalida');
     }
   };
 
   const handleForgotPassword = () => {
-    toast.info('Funcionalidade em breve');
+    setForgotEmail(email.trim());
+    setForgotOpen(true);
+  };
+
+  const handleRequestPasswordReset = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!forgotEmail.trim()) {
+      toast.error('Informe seu e-mail.');
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      await requestPasswordReset(forgotEmail);
+      toast.success('Se houver uma conta ativa com esse e-mail, as instruções foram enviadas.');
+      setForgotOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível solicitar a recuperação.');
+    } finally {
+      setForgotLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -134,6 +158,7 @@ export default function LoginPage({ onSwitchToRegister }: LoginPageProps) {
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {loginError && <p role="alert" aria-live="polite" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800">{loginError}</p>}
               <div>
                 <label className="block text-[13px] text-[#4a5565] mb-2">E-mail</label>
                 <input
@@ -177,13 +202,24 @@ export default function LoginPage({ onSwitchToRegister }: LoginPageProps) {
 
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isAuthenticating}
                 className="w-full bg-[#16A34A] text-white text-[14px] py-3 rounded-lg hover:bg-[#166534] transition-colors disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 font-semibold"
               >
                 <LogIn className="size-4" />
-                {isLoading ? 'Entrando...' : 'Entrar'}
+                {isAuthenticating ? 'Entrando...' : 'Entrar'}
               </button>
             </form>
+
+            {forgotOpen && <form onSubmit={handleRequestPasswordReset} className="mt-4 space-y-3 rounded-lg border border-[#E2E8E3] bg-[#F7F9F7] p-4">
+              <p className="text-[13px] font-semibold text-[#17201A]">Recuperar senha</p>
+              <label className="block text-[12px] text-[#4a5565]">E-mail da conta
+                <input type="email" required value={forgotEmail} onChange={(event) => setForgotEmail(event.target.value)} className="mt-1 w-full rounded-lg border border-[#E2E8E3] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#16A34A]" />
+              </label>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setForgotOpen(false)} className="rounded-lg px-3 py-2 text-[12px] text-[#66736A]">Cancelar</button>
+                <button type="submit" disabled={forgotLoading} className="rounded-lg bg-[#16A34A] px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-60">{forgotLoading ? 'Enviando…' : 'Enviar instruções'}</button>
+              </div>
+            </form>}
 
             <div className="flex items-center gap-3 my-6">
               <div className="flex-1 h-px bg-[#E2E8E3]" />

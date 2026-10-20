@@ -16,7 +16,7 @@ const inputBase =
   'w-full border border-[#E2E8E3] rounded-lg pl-10 py-2.5 text-[14px] outline-none focus:border-[#16A34A]';
 
 export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
-  const { register, isLoading } = useAuth();
+  const { register, isAuthenticating } = useAuth();
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -210,11 +210,11 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
 
                 <button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isAuthenticating}
                   className="w-full bg-[#16A34A] text-white text-[14px] py-3 rounded-lg hover:bg-[#166534] transition-colors disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 font-semibold"
                 >
                   <UserPlus className="size-4" />
-                  {isLoading ? 'Criando conta...' : 'Criar minha conta'}
+                  {isAuthenticating ? 'Criando conta...' : 'Criar minha conta'}
                 </button>
               </form>
 

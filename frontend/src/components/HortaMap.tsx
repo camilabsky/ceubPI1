@@ -36,11 +36,9 @@ export function HortaMap({
 
   if (Number.isNaN(lat) || Number.isNaN(lng)) {
     return (
-      <div
-        className="flex items-center justify-center rounded-xl border border-dashed text-sm text-[#4a5565]"
-        style={{ height }}
-      >
-        Localização ainda não cadastrada
+      <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed px-4 text-center text-sm text-[#4a5565]" style={{ height }}>
+        <span>{endereco ? 'Mapa indisponível sem coordenadas' : 'Localização ainda não cadastrada'}</span>
+        {endereco && <span className="text-[12px] text-[#718075]">{endereco}</span>}
       </div>
     );
   }

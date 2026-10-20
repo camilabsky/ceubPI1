@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Award, CheckCircle2, Coins, Edit2, Flame, Gift, Leaf, LogOut, MapPin, Sprout, TrendingUp, Users, X } from 'lucide-react';
+import { Award, CheckCircle2, Coins, Edit2, Flame, Gift, LogOut, Sprout, TrendingUp, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_URL } from '../config';
 import { useAuth } from '../contexts/AuthContext';
+import ProfileCommunitySections from './ProfileCommunitySections';
+import ProfileLocationEditor from './ProfileLocationEditor';
 
 interface ProfilePageProps {
   coins: number;
@@ -29,6 +31,7 @@ interface ProfileEvent {
   description: string;
   xp: number;
   coins: number;
+  reward_price?: number | null;
   occurred_at: string | null;
 }
 
@@ -78,7 +81,7 @@ interface GamificationData {
   impact: { tasks_completed: number; gardens_count: number; seedlings_planted: number };
 }
 
-type Tab = 'achievements' | 'gardens' | 'history';
+type Tab = 'achievements' | 'history';
 
 function formatDate(value: string | null) {
   if (!value) return 'Data não registrada';
@@ -88,7 +91,7 @@ function formatDate(value: string | null) {
 }
 
 export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigate }: ProfilePageProps) {
-  const { logout, token, user, updateUser, leaveGarden, activeGardenId } = useAuth();
+  const { logout, token, user, updateUser, activeGardenId } = useAuth();
   const [tab, setTab] = useState<Tab>('achievements');
   const [data, setData] = useState<GamificationData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -96,24 +99,6 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
   const [editName, setEditName] = useState(user?.nome ?? '');
   const [editEmail, setEditEmail] = useState(user?.email ?? '');
   const [saving, setSaving] = useState(false);
-  const [gardenToLeave, setGardenToLeave] = useState<Garden | null>(null);
-  const [leavingGarden, setLeavingGarden] = useState(false);
-
-  const confirmLeaveGarden = async () => {
-    if (!gardenToLeave || leavingGarden) return;
-    setLeavingGarden(true);
-    try {
-      const updatedUser = await leaveGarden(gardenToLeave.id);
-      setData((current) => current ? { ...current, hortas: current.hortas.filter((garden) => garden.id !== gardenToLeave.id || garden.papel !== 'MEMBER') } : current);
-      toast.success(`Você saiu de ${gardenToLeave.nome}.`);
-      setGardenToLeave(null);
-      onNavigate?.(updatedUser.roles.length ? 'home' : 'explore');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Não foi possível sair da horta.');
-    } finally {
-      setLeavingGarden(false);
-    }
-  };
 
   useEffect(() => {
     let active = true;
@@ -166,7 +151,6 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
   const saldo = Math.max(0, Number(data?.moedas ?? coins) || 0);
   const tabItems: { id: Tab; label: string; icon: typeof Award }[] = [
     { id: 'achievements', label: 'Conquistas', icon: Award },
-    { id: 'gardens', label: 'Minhas hortas', icon: Leaf },
     { id: 'history', label: 'Histórico', icon: TrendingUp },
   ];
 
@@ -180,6 +164,8 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
               <div className="min-w-0">
                 <p className="text-[12px] font-medium text-white/80">Perfil da comunidade</p>
                 <h1 className="mt-0.5 truncate text-[22px] font-bold">{user?.nome || 'Usuário'}</h1>
+                <p className="mt-1 truncate text-[12px] text-white/85">{user?.email || 'E-mail não informado'}</p>
+                <div className="mt-2"><ProfileLocationEditor /></div>
                 <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold"><Sprout className="size-3.5" /> Nível {level} · {levelName}</span>
               </div>
             </div>
@@ -198,6 +184,8 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
             <div className="flex items-center gap-2 rounded-xl bg-white/10 px-3.5 py-2.5 text-[12px] font-semibold"><Flame className="size-4 text-[#ffe7a3]" /><span>{streak} {streak === 1 ? 'dia' : 'dias'} de sequência</span></div>
           </div>
         </section>
+
+        <ProfileCommunitySections onNavigate={() => onNavigate?.('explore')} />
 
         <section className="mt-4 grid grid-cols-3 gap-2 sm:gap-3" aria-label="Seu impacto na comunidade">
           <div className="rounded-[14px] border border-gray-200 bg-white p-3 sm:p-4"><div className="flex size-8 items-center justify-center rounded-full bg-green-50"><CheckCircle2 className="size-4 text-[#00a63e]" /></div><p className="mt-2 text-[19px] font-bold leading-5 text-neutral-950">{completed}</p><p className="mt-1 text-[10px] text-[#66736a] sm:text-[11px]">Tarefas concluídas</p></div>
@@ -235,24 +223,18 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
               <p className="mt-4 flex items-center gap-2 text-[11px] text-[#718075]"><TrendingUp className="size-3.5 text-[#00a63e]" />Cada missão define seu próprio XP. Resgatar recompensas usa moedas e não altera seu XP.</p>
             </>}
 
-            {!isLoading && tab === 'gardens' && <>
-              <div className="mb-4"><h2 className="text-[15px] font-bold text-neutral-950">Minhas hortas</h2><p className="mt-0.5 text-[12px] text-[#718075]">Sua participação e contribuição em cada comunidade.</p></div>
-              {gardens.length === 0 ? <div className="rounded-xl border border-dashed border-gray-200 px-5 py-10 text-center"><Leaf className="mx-auto size-6 text-[#7caa86]" /><p className="mt-2 text-[13px] font-semibold text-[#34453a]">Você ainda não participa de uma horta</p><p className="mt-1 text-[12px] text-[#718075]">Explore as comunidades para encontrar a sua.</p><button onClick={() => onNavigate?.('explore')} className="mt-3 rounded-lg bg-[#00a63e] px-3.5 py-2 text-[12px] font-semibold text-white hover:bg-[#008236]">Explorar hortas</button></div> : <div className="grid gap-3 sm:grid-cols-2">{gardens.map((garden) => <article key={`${garden.id}-${garden.papel}`} className="rounded-xl border border-gray-200 p-4"><div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-green-50"><Sprout className="size-5 text-[#00a63e]" /></div><div className="min-w-0"><h3 className="truncate text-[14px] font-semibold text-neutral-950">{garden.nome}</h3><p className="mt-0.5 flex items-center gap-1 text-[11px] text-[#718075]"><MapPin className="size-3" />Horta comunitária</p></div></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold ${garden.papel === 'ADMIN' ? 'bg-amber-50 text-[#91630c]' : 'bg-green-50 text-[#16803d]'}`}>{garden.papel === 'ADMIN' ? 'Administrador' : 'Participante'}</span></div><div className="mt-4 flex items-center gap-4 border-t border-gray-100 pt-3 text-[11px] text-[#66736a]"><span className="inline-flex items-center gap-1.5"><Users className="size-3.5" />{Number(garden.participantes)} participantes</span><span className="inline-flex items-center gap-1.5"><CheckCircle2 className="size-3.5" />{Number(garden.tarefas_concluidas)} tarefas suas</span></div><button onClick={() => onNavigate?.('explore')} className="mt-3 text-[12px] font-semibold text-[#16803d] hover:underline">Ver horta <span aria-hidden="true">→</span></button></article>)}</div>}
-            </>}
-
             {!isLoading && tab === 'history' && <>
               <div className="mb-4"><h2 className="text-[15px] font-bold text-neutral-950">Histórico</h2><p className="mt-0.5 text-[12px] text-[#718075]">Veja como suas atividades movimentam XP e moedas.</p></div>
               {events.length === 0 ? <div className="rounded-xl border border-dashed border-gray-200 px-5 py-10 text-center"><TrendingUp className="mx-auto size-6 text-[#7caa86]" /><p className="mt-2 text-[13px] font-semibold text-[#34453a]">Suas atividades aparecerão aqui</p><p className="mt-1 text-[12px] text-[#718075]">Conclua tarefas ou resgate uma recompensa.</p></div> : <div className="divide-y divide-gray-100">{events.map((event) => <article key={event.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0"><div className={`mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full ${event.kind === 'task' ? 'bg-green-50 text-[#16803d]' : event.kind === 'reward' ? 'bg-amber-50 text-[#ad7817]' : 'bg-violet-50 text-violet-700'}`}>{event.kind === 'task' ? <CheckCircle2 className="size-4" /> : event.kind === 'reward' ? <Gift className="size-4" /> : <Award className="size-4" />}</div><div className="min-w-0 flex-1"><p className="text-[12px] font-semibold text-neutral-950">{event.title} <span className="font-normal text-[#4e5b52]">— {event.description}</span></p><p className="mt-1 text-[10px] text-[#8a958d]">{formatDate(event.occurred_at)}</p></div><div className="flex shrink-0 flex-col items-end gap-1 text-[10px] font-semibold">{event.xp > 0 && <span className="text-[#16803d]">+{event.xp} XP</span>}{event.coins !== 0 && <span className={event.coins > 0 ? 'text-[#ad7817]' : 'text-[#9b5a36]'}>{event.coins > 0 ? '+' : '−'}{Math.abs(event.coins)} moedas</span>}</div></article>)}</div>}
             </>}
+
           </div>
         </section>
 
-        {tab === 'gardens' && gardens.some((garden) => garden.papel === 'MEMBER') && <section className="mt-3 rounded-[14px] border border-gray-200 bg-white p-4"><h2 className="text-[13px] font-bold text-[#34453a]">Participação nas hortas</h2><p className="mt-1 text-[11px] text-[#718075]">Você pode encerrar sua participação sem excluir sua conta ou seus registros.</p><ul className="mt-3 divide-y divide-gray-100">{gardens.filter((garden) => garden.papel === 'MEMBER').map((garden) => <li key={garden.id} className="flex items-center justify-between gap-3 py-2"><span className="min-w-0 truncate text-[12px] font-medium text-[#34453a]">{garden.nome}</span><button type="button" onClick={() => setGardenToLeave(garden)} className="shrink-0 text-[12px] font-medium text-[#9b3d34] hover:underline">Sair da horta</button></li>)}</ul></section>}
 
         <div className="mt-4 flex items-center justify-between rounded-[14px] border border-gray-200 bg-white px-4 py-3"><div><p className="text-[12px] font-semibold text-[#34453a]">Impacto na comunidade</p><p className="text-[11px] text-[#718075]">Tarefas concluídas ajudam sua horta a crescer.</p></div><button onClick={() => { logout(); onLogout?.(); }} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium text-[#66736a] hover:bg-gray-50"><LogOut className="size-4" />Sair</button></div>
       </div>
 
-      {gardenToLeave && <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4" role="presentation" onClick={() => !leavingGarden && setGardenToLeave(null)}><section role="alertdialog" aria-modal="true" aria-labelledby="leave-garden-title" aria-describedby="leave-garden-description" onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"><h2 id="leave-garden-title" className="text-[16px] font-bold text-neutral-950">Sair de {gardenToLeave.nome}?</h2><p id="leave-garden-description" className="mt-2 text-[13px] leading-5 text-[#58665c]">Você perderá acesso a esta comunidade até voltar a participar. Tarefas em andamento e seus registros históricos serão preservados; enquanto não participar novamente, você não poderá continuar essas tarefas. Sua conta e outras hortas não serão afetadas.</p><div className="mt-5 flex justify-end gap-2"><button type="button" disabled={leavingGarden} onClick={() => setGardenToLeave(null)} className="rounded-lg border border-gray-200 px-4 py-2 text-[12px] font-semibold text-[#66736a]">Cancelar</button><button type="button" disabled={leavingGarden} onClick={() => void confirmLeaveGarden()} className="rounded-lg bg-[#a83f36] px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-60">{leavingGarden ? 'Saindo…' : 'Confirmar saída'}</button></div></section></div>}
       {editOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4" onClick={() => setEditOpen(false)}><form onSubmit={saveProfile} onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"><div className="mb-5 flex items-center justify-between"><div><h2 className="text-[17px] font-bold text-neutral-950">Editar perfil</h2><p className="mt-1 text-[12px] text-[#718075]">Atualize seus dados da comunidade.</p></div><button type="button" onClick={() => setEditOpen(false)} aria-label="Fechar" className="flex size-8 items-center justify-center rounded-full text-[#718075] hover:bg-gray-100"><X className="size-4" /></button></div><label className="mb-3 block text-[12px] font-medium text-[#4a5565]">Nome<input value={editName} onChange={(event) => setEditName(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-200 px-3 text-[13px] outline-none focus:border-[#00a63e]" /></label><label className="block text-[12px] font-medium text-[#4a5565]">E-mail<input type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-200 px-3 text-[13px] outline-none focus:border-[#00a63e]" /></label><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setEditOpen(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-[12px] font-semibold text-[#66736a]">Cancelar</button><button type="submit" disabled={saving} className="rounded-lg bg-[#00a63e] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#008236] disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar alterações'}</button></div></form></div>}
     </div>
   );

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { ArrowUpRight, Check, Compass, Leaf, LoaderCircle, MapPin, MapPinned, Search, Sprout, Users, X } from 'lucide-react';
+import { Check, Compass, Leaf, LoaderCircle, MapPin, MapPinned, Search, Sprout, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_URL } from '../config';
 import { useAuth } from '../contexts/AuthContext';
@@ -38,8 +38,29 @@ const coordinates = (horta: Horta): Position | null => {
   const lat = Number(horta.latitude);
   const lng = Number(horta.longitude);
   return horta.latitude != null && horta.longitude != null && Number.isFinite(lat) && Number.isFinite(lng)
+    && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
     ? { lat, lng }
     : null;
+};
+
+function readSessionPosition(key: string): Position | null {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(key) || 'null') as Position | null;
+    return value && Number.isFinite(value.lat) && Number.isFinite(value.lng)
+      && value.lat >= -90 && value.lat <= 90 && value.lng >= -180 && value.lng <= 180
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+const stateNames: Record<string, string> = {
+  AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará', DF: 'Distrito Federal',
+  ES: 'Espírito Santo', GO: 'Goiás', MA: 'Maranhão', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul',
+  MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná', PE: 'Pernambuco', PI: 'Piauí',
+  RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RS: 'Rio Grande do Sul', RO: 'Rondônia', RR: 'Roraima',
+  SC: 'Santa Catarina', SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins',
 };
 
 function distanceKm(a: Position, b: Position) {
@@ -72,7 +93,7 @@ export default function ExplorePage() {
   const [saldo, setSaldo] = useState(0);
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<Filtro>('Todas');
-  const [posicao, setPosicao] = useState<Position | null>(null);
+  const [posicao, setPosicao] = useState<Position | null>(() => readSessionPosition('couve:user-position'));
   const [selecionada, setSelecionada] = useState<Horta | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
   const [carregando, setCarregando] = useState(true);
@@ -104,6 +125,43 @@ export default function ExplorePage() {
     return () => { ativo = false; };
   }, [token]);
 
+  useEffect(() => {
+    let ativo = true;
+    const carregarLocalizacaoPerfil = async () => {
+      if (!token || posicao) return;
+      try {
+        const response = await fetch(`${API_URL}/me/localizacao`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!response.ok) return;
+        const { cidade, uf } = await response.json() as { cidade?: string; uf?: string };
+        if (!cidade || !uf || !ativo) return;
+
+        const cacheKey = `couve:profile-position:${cidade.trim().toLocaleLowerCase('pt-BR')}:${uf.toUpperCase()}`;
+        const cached = readSessionPosition(cacheKey);
+        if (cached) {
+          setPosicao(cached);
+          setFiltro('Mais próximas');
+          return;
+        }
+
+        const query = `${cidade.trim()}, ${stateNames[uf.toUpperCase()] || uf.toUpperCase()}, Brazil`;
+        const geocodeResponse = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=br&accept-language=pt-BR&q=${encodeURIComponent(query)}`);
+        if (!geocodeResponse.ok) return;
+        const matches = await geocodeResponse.json() as Array<{ lat?: string; lon?: string }>;
+        const lat = Number(matches[0]?.lat);
+        const lng = Number(matches[0]?.lon);
+        if (!ativo || !Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+        const approximatePosition = { lat, lng };
+        try { sessionStorage.setItem(cacheKey, JSON.stringify(approximatePosition)); } catch { /* cache opcional */ }
+        setPosicao(approximatePosition);
+        setFiltro('Mais próximas');
+      } catch {
+        // A geocodificação é opcional: a exploração segue disponível sem ordenação por distância.
+      }
+    };
+    void carregarLocalizacaoPerfil();
+    return () => { ativo = false; };
+  }, [token, posicao]);
+
   const listaVisivel = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase('pt-BR');
     const encontrados = hortas.filter((horta) => `${horta.nome} ${horta.endereco ?? ''} ${horta.descricao ?? ''}`.toLocaleLowerCase('pt-BR').includes(termo));
@@ -121,9 +179,14 @@ export default function ExplorePage() {
   const usarLocalizacao = () => {
     if (!navigator.geolocation) return toast.error('Seu navegador não oferece localização.');
     navigator.geolocation.getCurrentPosition(
-      ({ coords }) => { setPosicao({ lat: coords.latitude, lng: coords.longitude }); setFiltro('Mais próximas'); },
+      ({ coords }) => {
+        const currentPosition = { lat: coords.latitude, lng: coords.longitude };
+        try { sessionStorage.setItem('couve:user-position', JSON.stringify(currentPosition)); } catch { /* posição mantida em memória */ }
+        setPosicao(currentPosition);
+        setFiltro('Mais próximas');
+      },
       () => toast.error('Não foi possível acessar sua localização. Confira a permissão do navegador.'),
-      { enableHighAccuracy: true, timeout: 10000 },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
     );
   };
 
@@ -227,7 +290,7 @@ export default function ExplorePage() {
                   <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-white/95 px-2 py-1 text-[10px] font-semibold text-[#16803d] shadow-sm"><span className={`size-1.5 rounded-full ${ativa ? 'bg-[#22a052]' : 'bg-[#9ba69d]'}`} />{ativa ? 'Ativa' : 'Nova'}</span>
                 </div>
                 <div className="min-w-0 flex-1 p-2.5 sm:p-3.5">
-                  <div className="flex items-start justify-between gap-2"><h3 className="truncate text-[14px] font-bold leading-5 text-[#1c2b20]">{horta.nome}</h3><ArrowUpRight className="mt-0.5 size-4 shrink-0 text-[#91a095] transition group-hover:text-[#16803d]" /></div>
+                  <div className="flex items-start justify-between gap-2"><h3 className="truncate text-[14px] font-bold leading-5 text-[#1c2b20]">{horta.nome}</h3></div>
                   <p className="mt-1 flex items-center gap-1 truncate text-[11px] text-[#758178]"><MapPin className="size-3 shrink-0 text-[#829187]" />{horta.endereco || 'Localização não informada'}</p>
                   <p className="mt-2 line-clamp-2 min-h-[32px] text-[11px] leading-[16px] text-[#58665c]">{horta.descricao || 'Um espaço coletivo para plantar, aprender e compartilhar com a comunidade.'}</p>
                   <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-medium text-[#6c7a70]">
