@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface TaskProofUploadProps {
   taskId: number;
+  idHorta: number;
   hasPhoto: boolean;
   onUploaded: () => void;
   canRetry?: boolean;
@@ -79,7 +80,7 @@ async function compressProofPhoto(file: File): Promise<Blob> {
   }
 }
 
-export default function TaskProofUpload({ taskId, hasPhoto, onUploaded, canRetry = false, rejectionReason }: TaskProofUploadProps) {
+export default function TaskProofUpload({ taskId, idHorta, hasPhoto, onUploaded, canRetry = false, rejectionReason }: TaskProofUploadProps) {
   const { token } = useAuth();
   const cameraInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -93,7 +94,7 @@ export default function TaskProofUpload({ taskId, hasPhoto, onUploaded, canRetry
 
   const loadValidation = async () => {
     if (!token) return;
-    const response = await fetch(`${API_URL}/minhas_tarefas/${taskId}/localizacao`, {
+    const response = await fetch(`${API_URL}/minhas_tarefas/${taskId}/localizacao?id_horta=${idHorta}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!response.ok) return;
@@ -103,7 +104,7 @@ export default function TaskProofUpload({ taskId, hasPhoto, onUploaded, canRetry
   useEffect(() => {
     if ((!hasPhoto && !canRetry) || !token) return;
     let cancelled = false;
-    fetch(`${API_URL}/minhas_tarefas/${taskId}/localizacao`, {
+    fetch(`${API_URL}/minhas_tarefas/${taskId}/localizacao?id_horta=${idHorta}`, {
       headers: { Authorization: `Bearer ${token}` },
     }).then(async (response) => {
       if (!response.ok) return null;
@@ -112,7 +113,7 @@ export default function TaskProofUpload({ taskId, hasPhoto, onUploaded, canRetry
       if (!cancelled && result) setLocationValidation(result);
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, [hasPhoto, canRetry, taskId, token]);
+  }, [hasPhoto, canRetry, taskId, idHorta, token]);
 
   useEffect(() => () => {
     if (draft) URL.revokeObjectURL(draft.previewUrl);
@@ -162,7 +163,7 @@ export default function TaskProofUpload({ taskId, hasPhoto, onUploaded, canRetry
         headers['X-User-Latitude'] = String(coordinates.latitude);
         headers['X-User-Longitude'] = String(coordinates.longitude);
       }
-      const response = await fetch(`${API_URL}/tarefas/${taskId}/comprovacao`, {
+      const response = await fetch(`${API_URL}/tarefas/${taskId}/comprovacao?id_horta=${idHorta}`, {
         method: 'POST',
         headers,
         body: draft.blob,
@@ -196,7 +197,7 @@ export default function TaskProofUpload({ taskId, hasPhoto, onUploaded, canRetry
     if (!token) return;
     setIsLoadingPhoto(true);
     try {
-      const response = await fetch(`${API_URL}/minhas_tarefas/${taskId}/comprovacao`, {
+      const response = await fetch(`${API_URL}/minhas_tarefas/${taskId}/comprovacao?id_horta=${idHorta}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) throw new Error('Não foi possível carregar a foto enviada.');

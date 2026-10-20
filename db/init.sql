@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS Usuario (
   password_hash varchar(255) NULL,
   ativo boolean default true,
   id_perfil int NULL,
+  last_login_at datetime NULL,
   CONSTRAINT fk_usuario_perfil
   FOREIGN KEY (id_perfil)
   REFERENCES Perfil(id)
@@ -190,7 +191,7 @@ INSERT INTO Tarefas (
   "Remover ervas daninhas do canteiro de tomates", 1, 80, 0, 60
 ), (
   "Plantar mudas de alface", "Plantio", "Horta Comunitária Centro",
-  "Plantar 20 mudas de alface na área designada", 1, 120, 20, 90
+  "Plantar 20 mudas de alface na área designada", 1, 120, 0, 90
 ),
 (
   "Colher vegetais maduros", "colheita", "Horta Orgânica Vila Nova",
@@ -212,7 +213,7 @@ INSERT INTO Tarefas (
   "Fazer colheita seletiva de tomates maduros para distribuição", 0, 95, 0, 40
 ), (
   "Plantar mudas de couve", "Plantio", "Horta Comunitária Centro",
-  "Plantar 15 mudas de couve no canteiro lateral", 1, 125, 15, 80
+  "Plantar 15 mudas de couve no canteiro lateral", 1, 125, 0, 80
 ), (
   "Revisar irrigação por gotejamento", "Manutenção", "Horta Orgânica Vila Nova",
   "Checar vazamentos e ajustar fluxo dos gotejadores", 2, 170, 0, 95

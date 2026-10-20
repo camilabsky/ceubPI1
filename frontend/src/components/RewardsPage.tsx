@@ -43,9 +43,9 @@ interface RewardsPageProps {
 }
 
 export default function RewardsPage({ navigationIntent }: RewardsPageProps) {
-  const { token, user, isAdmin } = useAuth();
+  const { token, user, isAdmin, activeGardenId } = useAuth();
   const idPerfil = user?.id_perfil || 1;
-  const idHorta = user?.roles.find((r) => r.role === 'ADMIN')?.id_horta || 1;
+  const idHorta = activeGardenId;
 
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [coins, setCoins] = useState(0);
@@ -86,12 +86,10 @@ export default function RewardsPage({ navigationIntent }: RewardsPageProps) {
   };
 
   const fetchRewards = async () => {
-    const endpoint = isAdmin ? `${API_URL}/recompensas` : `${API_URL}/recompensas_disponiveis`;
-    const headers: Record<string, string> = {};
-
-    if (isAdmin && token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
+    const endpoint = isAdmin
+      ? `${API_URL}/recompensas?id_horta=${idHorta}`
+      : `${API_URL}/recompensas_disponiveis?id_horta=${idHorta ?? ''}`;
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
     const response = await fetch(endpoint, { headers });
     if (!response.ok) {
@@ -155,7 +153,7 @@ export default function RewardsPage({ navigationIntent }: RewardsPageProps) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ id_recompensa: idRecompensa }),
+        body: JSON.stringify({ id_recompensa: idRecompensa, id_horta: idHorta }),
       });
 
       if (response.status === 409) {
@@ -228,6 +226,8 @@ export default function RewardsPage({ navigationIntent }: RewardsPageProps) {
     } catch (error) {
     console.error('Error saving reward:', error);
     toast.error('Erro ao salvar recompensa');
+    } finally {
+      setIsSavingRecompensa(false);
     }
   };
 

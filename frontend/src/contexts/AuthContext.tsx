@@ -22,6 +22,13 @@ interface AuthContextType {
   token: string | null;
   user: User | null;
   isAdmin: boolean;
+  activeGardenId: number | null;
+  activeGarden: Role | null;
+  availableGardens: Array<{ id: number; nome: string; roles: Role['role'][] }>;
+  selectGarden: (id: number, role?: Role['role']) => void;
+  refreshUser: () => Promise<void>;
+  leaveGarden: (id: number) => Promise<User>;
+  refreshActiveAssociation: () => void;
   isLoading: boolean;
       loginWithGoogle: (credential: string) => Promise<void>;
       applyUser: (user: User) => void;
@@ -60,7 +67,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const isAdmin = user?.roles.some(r => r.role === 'ADMIN') ?? false;
+  const availableGardens = Object.values((user?.roles ?? []).reduce<Record<number, { id: number; nome: string; roles: Role['role'][] }>>((items, role) => {
+    const garden = items[role.id_horta] ?? (items[role.id_horta] = { id: role.id_horta, nome: role.horta_nome, roles: [] });
+    if (!garden.roles.includes(role.role)) garden.roles.push(role.role);
+    return items;
+  }, {}));
+  const [selection, setSelection] = useState(() => ({
+    gardenId: Number(localStorage.getItem('activeGardenId')) || null,
+    role: (localStorage.getItem('activeGardenRole') as Role['role'] | null) ?? null,
+  }));
+  const validGarden = availableGardens.find((garden) => garden.id === selection.gardenId)
+    ?? availableGardens.find((garden) => garden.roles.includes('MEMBER'))
+    ?? availableGardens[0]
+    ?? null;
+  const rolesForGarden = validGarden?.roles ?? [];
+  const activeRole = rolesForGarden.includes(selection.role as Role['role'])
+    ? selection.role as Role['role']
+    : rolesForGarden.includes('MEMBER') ? 'MEMBER' : rolesForGarden[0] ?? null;
+  const activeGarden = validGarden ? user?.roles.find((role) => role.id_horta === validGarden.id && role.role === activeRole) ?? null : null;
+  const activeGardenId = validGarden?.id ?? null;
+  const isAdmin = activeRole === 'ADMIN';
+
+  const persistSelection = (gardenId: number | null, role: Role['role'] | null) => {
+    setSelection({ gardenId, role });
+    if (gardenId == null) localStorage.removeItem('activeGardenId');
+    else localStorage.setItem('activeGardenId', String(gardenId));
+    if (role == null) localStorage.removeItem('activeGardenRole');
+    else localStorage.setItem('activeGardenRole', role);
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    if (!validGarden) {
+      persistSelection(null, null);
+      return;
+    }
+    if (selection.gardenId !== validGarden.id || selection.role !== activeRole) {
+      persistSelection(validGarden.id, activeRole);
+    }
+  }, [user, validGarden?.id, activeRole]);
+
+  const selectGarden = (id: number, role?: Role['role']) => {
+    const garden = availableGardens.find((item) => item.id === id);
+    if (!garden) return;
+    const nextRole = role && garden.roles.includes(role)
+      ? role
+      : garden.roles.includes('MEMBER') ? 'MEMBER' : garden.roles[0];
+    persistSelection(garden.id, nextRole);
+  };
+
+  const refreshUser = async () => {
+    if (!token) return;
+    const response = await fetch(`${API_URL}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!response.ok) throw new Error('Não foi possível atualizar suas hortas.');
+    setUser(await response.json());
+  };
+
+  const refreshActiveAssociation = () => {
+    const garden = availableGardens.find((item) => item.id !== activeGardenId) ?? null;
+    if (garden) selectGarden(garden.id);
+    else persistSelection(null, null);
+  };
+
+  const leaveGarden = async (id: number) => {
+    if (!token) throw new Error('Sessão expirada. Entre novamente.');
+    const response = await fetch(`${API_URL}/hortas/${id}/sair`, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Não foi possível sair da horta.');
+    setUser(result.user);
+    return result.user as User;
+  };
 
   useEffect(() => {
     if (token) {
@@ -236,10 +314,11 @@ if (!response.ok) {
     setToken(null);
     setUser(null);
     localStorage.removeItem('token');
+    persistSelection(null, null);
   };
 
   return (
-        <AuthContext.Provider value={{token,user,isAdmin,isLoading,login,logout,register,updateUser,updatePassword,loginWithGoogle,applyUser}}
+        <AuthContext.Provider value={{token,user,isAdmin,activeGardenId,activeGarden,availableGardens,selectGarden,refreshUser,leaveGarden,refreshActiveAssociation,isLoading,login,logout,register,updateUser,updatePassword,loginWithGoogle,applyUser}}
 >
         {children}
     </AuthContext.Provider>

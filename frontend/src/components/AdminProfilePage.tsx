@@ -22,7 +22,7 @@ export default function AdminProfilePage({
   onLogout,
   editGardenOnOpen = false,
 }: AdminProfilePageProps) {
-  const { logout, token, user, updateUser, updatePassword, } = useAuth();
+  const { logout, token, user, updateUser, updatePassword, activeGarden, leaveGarden } = useAuth();
 
   const [adminTasks, setAdminTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -43,10 +43,26 @@ export default function AdminProfilePage({
   const [isSavingLocation, setIsSavingLocation] = useState(false);
   const [isFetchingGeoLocation, setIsFetchingGeoLocation] = useState(false);
   const [newEndereco, setNewEndereco] = useState('');
+  const [isLeavingMemberRole, setIsLeavingMemberRole] = useState(false);
+
+  const leaveMemberRole = async () => {
+    if (!activeGarden || activeGarden.role !== 'ADMIN' || !user?.roles.some((role) => role.id_horta === activeGarden.id_horta && role.role === 'MEMBER') || isLeavingMemberRole) return;
+    const confirmed = window.confirm(`Sair como participante de ${activeGarden.horta_nome}? Você perderá acesso à comunidade como participante até voltar. Tarefas em andamento e registros históricos serão preservados, mas você não poderá continuar essas tarefas enquanto não voltar a participar. Sua administração desta horta e sua conta permanecerão ativas.`);
+    if (!confirmed) return;
+    setIsLeavingMemberRole(true);
+    try {
+      await leaveGarden(activeGarden.id_horta);
+      toast.success('Sua participação foi encerrada. Sua função administrativa permanece ativa.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível encerrar sua participação.');
+    } finally {
+      setIsLeavingMemberRole(false);
+    }
+  };
 
   useEffect(() => {
     if (!editGardenOnOpen) return;
-    const garden = user?.roles.find((role) => role.role === 'ADMIN');
+    const garden = activeGarden?.role === 'ADMIN' ? activeGarden : null;
     setNewLatitude(garden?.latitude != null ? String(garden.latitude) : '');
     setNewLongitude(garden?.longitude != null ? String(garden.longitude) : '');
     setNewEndereco(garden?.endereco || '');
@@ -61,7 +77,7 @@ export default function AdminProfilePage({
       setIsLoading(true);
 
       try {
-        const tasksRes = await fetch(`${API_URL}/admin/tarefas`, {
+        const tasksRes = await fetch(`${API_URL}/admin/tarefas?id_horta=${activeGarden?.id_horta ?? ''}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -82,10 +98,10 @@ export default function AdminProfilePage({
     };
 
     fetchAdminData();
-  }, [token]);
+  }, [token, activeGarden?.id_horta, activeGarden?.role]);
 
   const hortaNome =
-    user?.roles?.find((role) => role.role === 'ADMIN')?.horta_nome ||
+    (activeGarden?.role === 'ADMIN' ? activeGarden.horta_nome : null) ||
     'Sua horta';
 
   const tarefasPendentes = adminTasks.filter(
@@ -154,7 +170,7 @@ export default function AdminProfilePage({
 
   setIsSavingLocation(true);
   try {
-    const idHorta = user?.roles.find((r) => r.role === 'ADMIN')?.id_horta;
+    const idHorta = activeGarden?.role === 'ADMIN' ? activeGarden.id_horta : undefined;
     const response = await fetch(
       `${API_URL}/admin/horta?id_horta=${idHorta}`,
       {
@@ -448,7 +464,7 @@ const handleUseCurrentLocation = () => {
       <button
         type="button"
         onClick={() => {
-          const horta = user?.roles.find((r) => r.role === 'ADMIN');
+          const horta = activeGarden?.role === 'ADMIN' ? activeGarden : null;
           setNewLatitude(horta?.latitude != null ? String(horta.latitude) : '');
           setNewLongitude(horta?.longitude != null ? String(horta.longitude) : '');
           setNewEndereco(horta?.endereco || '');
@@ -467,7 +483,7 @@ const handleUseCurrentLocation = () => {
 
           <p className="text-[14px] text-neutral-950 truncate">
             {(() => {
-              const horta = user?.roles.find((r) => r.role === 'ADMIN');
+              const horta = activeGarden?.role === 'ADMIN' ? activeGarden : null;
               if (horta?.endereco) return horta.endereco;
               return horta?.latitude != null && horta?.longitude != null
                 ? `${horta.latitude}, ${horta.longitude}`
@@ -715,6 +731,12 @@ const handleUseCurrentLocation = () => {
         </div>
       </div>
     </div>
+
+    {activeGarden?.role === 'ADMIN' && user?.roles.some((role) => role.id_horta === activeGarden.id_horta && role.role === 'MEMBER') && <div className="px-4 mb-3 rounded-[14px] border border-gray-200 bg-white p-4">
+      <h2 className="text-[13px] font-semibold text-[#34453a]">Participação nesta horta</h2>
+      <p className="mt-1 text-[11px] leading-4 text-[#718075]">Encerrar a participação não altera sua administração. Suas tarefas em andamento e seus registros serão preservados, mas não poderão ser atualizados enquanto você não voltar como participante.</p>
+      <button type="button" disabled={isLeavingMemberRole} onClick={() => void leaveMemberRole()} className="mt-3 text-[12px] font-medium text-[#9b3d34] hover:underline disabled:opacity-60">{isLeavingMemberRole ? 'Saindo…' : 'Sair da horta como participante'}</button>
+    </div>}
 
     {/* Botão sair */}
     <div className="px-4">

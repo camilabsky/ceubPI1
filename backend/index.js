@@ -67,6 +67,14 @@ async function isAdminForHorta(id_usuario, id_horta) {
     return rows.length > 0;
 }
 
+async function isMemberForHorta(id_usuario, id_horta) {
+    const [rows] = await db.query(
+        'SELECT 1 FROM UsuarioHortaRole WHERE id_usuario = ? AND id_horta = ? AND papel = \'MEMBER\' LIMIT 1',
+        [id_usuario, id_horta]
+    );
+    return rows.length > 0;
+}
+
 function requireAuth(req, res, next) {
     try {
         const token = tokenFromHeader(req.headers.authorization);
@@ -125,6 +133,7 @@ app.post('/auth/login', async (req, res) => {
             return res.status(401).send({ error: 'Credenciais invalidas' });
         }
 
+        await db.query('UPDATE Usuario SET last_login_at = NOW() WHERE id = ?', [user.id]);
         const roles = await getUserRoles(user.id);
         const token = jwt.sign(
             { id: user.id, email: user.email, nome: user.nome, id_perfil: user.id_perfil },
@@ -306,6 +315,7 @@ app.post('/auth/google', async (req, res) => {
             }
         }
 
+        await db.query('UPDATE Usuario SET last_login_at = NOW() WHERE id = ?', [user.id]);
         const roles = await getUserRoles(user.id);
         const token = jwt.sign(
             { id: user.id, email: user.email, nome: user.nome, id_perfil: user.id_perfil },
@@ -488,16 +498,19 @@ app.put('/auth/me', requireAuth, async (req, res) => {
 app.post('/minhas_tarefas', requireAuth, async (req, res) => {
     try {
         const id_perfil = Number(req.user.id_perfil);
+        const id_horta = Number(req.query.id_horta || req.body?.id_horta);
+        if (!Number.isInteger(id_horta) || id_horta <= 0) return res.status(400).send({ error: 'id_horta invalido' });
+        if (!await isMemberForHorta(req.user.id, id_horta)) return res.status(403).send({ error: 'Você não participa desta horta' });
         const [results] = await db.query(
             `SELECT t.*, (t.completion_photo_url IS NOT NULL) AS has_completion_photo
              FROM Tarefas t
-             WHERE t.id_perfil = ? AND (
+             WHERE t.id_perfil = ? AND t.id_horta = ? AND (
                  (t.concluido = false AND t.status IN ('in_progress', 'pending_review', 'proof_submitted'))
                  OR (t.concluido = true AND t.completion_photo_url IS NOT NULL AND t.completion_ai_status = 'analyzed')
              )
                AND t.deleted_at IS NULL
              ORDER BY t.updated_at DESC, t.id DESC`,
-            [id_perfil]
+            [id_perfil, id_horta]
         );
         return res.send(results);
     } catch (error) {
@@ -563,14 +576,19 @@ app.post('/concluir_tarefa', requireAuth, async (req, res) => {
     const conn = await db.getConnection();
     try {
         const id_tarefa = Number(req.body.id_tarefa);
-        if (!Number.isInteger(id_tarefa) || id_tarefa <= 0 || !req.user.id_perfil) {
+        const id_horta = Number(req.body.id_horta);
+        if (!Number.isInteger(id_tarefa) || id_tarefa <= 0 || !req.user.id_perfil || !Number.isInteger(id_horta) || id_horta <= 0) {
             return res.status(400).send({ error: 'Tarefa invalida' });
         }
+        if (!await isMemberForHorta(req.user.id, id_horta)) return res.status(403).send({ error: 'Você não participa desta horta' });
 
         await conn.beginTransaction();
         const [taskRows] = await conn.query(
-            'SELECT * FROM Tarefas WHERE id = ? AND id_perfil = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
-            [id_tarefa, req.user.id_perfil]
+            `SELECT t.* FROM Tarefas t
+             JOIN UsuarioHortaRole member ON member.id_horta = t.id_horta
+               AND member.id_usuario = ? AND member.papel = 'MEMBER'
+             WHERE t.id = ? AND t.id_horta = ? AND t.id_perfil = ? AND t.deleted_at IS NULL LIMIT 1 FOR UPDATE`,
+            [req.user.id, id_tarefa, id_horta, req.user.id_perfil]
         );
         if (taskRows.length === 0) {
             await conn.rollback();
@@ -611,11 +629,13 @@ app.post('/tarefas/:id/comprovacao', requireAuth, express.raw({ type: ['image/we
     let savedFilePath = null;
     try {
         const id_tarefa = Number(req.params.id);
+        const id_horta = Number(req.query.id_horta);
         const id_perfil = Number(req.user.id_perfil);
         const mimeType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
-        if (!Number.isInteger(id_tarefa) || id_tarefa <= 0 || !id_perfil) {
+        if (!Number.isInteger(id_tarefa) || id_tarefa <= 0 || !id_perfil || !Number.isInteger(id_horta) || id_horta <= 0) {
             return res.status(400).send({ error: 'Tarefa invalida' });
         }
+        if (!await isMemberForHorta(req.user.id, id_horta)) return res.status(403).send({ error: 'Você não participa desta horta' });
         if (!Buffer.isBuffer(req.body) || req.body.length === 0 || !['image/webp', 'image/jpeg'].includes(mimeType)) {
             return res.status(400).send({ error: 'Envie uma foto em formato WebP ou JPEG' });
         }
@@ -630,9 +650,11 @@ app.post('/tarefas/:id/comprovacao', requireAuth, express.raw({ type: ['image/we
             `SELECT t.id, t.status, t.completion_photo_url, t.completion_review_status,
                     h.latitude AS horta_latitude, h.longitude AS horta_longitude
              FROM Tarefas t JOIN Horta h ON h.id = t.id_horta
-             WHERE t.id = ? AND t.id_perfil = ? AND t.concluido = false AND t.deleted_at IS NULL
+             JOIN UsuarioHortaRole member ON member.id_horta = t.id_horta
+               AND member.id_usuario = ? AND member.papel = 'MEMBER'
+             WHERE t.id = ? AND t.id_horta = ? AND t.id_perfil = ? AND t.concluido = false AND t.deleted_at IS NULL
              LIMIT 1 FOR UPDATE`,
-            [id_tarefa, id_perfil]
+            [req.user.id, id_tarefa, id_horta, id_perfil]
         );
         if (taskRows.length === 0) {
             await conn.rollback();
@@ -724,15 +746,17 @@ app.post('/tarefas/:id/comprovacao', requireAuth, express.raw({ type: ['image/we
 app.get('/minhas_tarefas/:id/localizacao', requireAuth, async (req, res) => {
     try {
         const id_tarefa = Number(req.params.id);
+        const id_horta = Number(req.query.id_horta);
+        if (!Number.isInteger(id_horta) || id_horta <= 0 || !await isMemberForHorta(req.user.id, id_horta)) return res.status(403).send({ error: 'Você não participa desta horta' });
         const [rows] = await db.query(
             `SELECT completion_latitude, completion_longitude, completion_location_status, completion_location_distance_meters,
                     completion_ai_status, completion_review_status, completion_review_note, completion_reviewed_by,
                     ai_resultado, ai_confianca, ai_justificativa, ai_modelo, ai_analisado_em, status
-             FROM Tarefas WHERE id = ? AND id_perfil = ?
+             FROM Tarefas WHERE id = ? AND id_perfil = ? AND id_horta = ?
                AND ((completion_photo_url IS NOT NULL AND status IN ('proof_submitted', 'completed'))
                  OR (status = 'in_progress' AND completion_review_status = 'rejected'))
                AND deleted_at IS NULL LIMIT 1`,
-            [id_tarefa, req.user.id_perfil]
+            [id_tarefa, req.user.id_perfil, id_horta]
         );
         if (!rows.length) return res.status(404).send({ error: 'Localização não encontrada para esta tarefa' });
         const row = rows[0];
@@ -801,12 +825,14 @@ app.get('/admin/tarefas/:id/localizacao', requireAuth, async (req, res) => {
 app.get('/minhas_tarefas/:id/comprovacao', requireAuth, async (req, res) => {
     try {
         const id_tarefa = Number(req.params.id);
+        const id_horta = Number(req.query.id_horta);
         const id_perfil = Number(req.user.id_perfil);
+        if (!Number.isInteger(id_horta) || id_horta <= 0 || !await isMemberForHorta(req.user.id, id_horta)) return res.status(403).send({ error: 'Você não participa desta horta' });
         const [rows] = await db.query(
-            `SELECT completion_photo_url FROM Tarefas WHERE id = ? AND id_perfil = ?
+            `SELECT completion_photo_url FROM Tarefas WHERE id = ? AND id_perfil = ? AND id_horta = ?
              AND status IN ('proof_submitted', 'completed')
              AND deleted_at IS NULL LIMIT 1`,
-            [id_tarefa, id_perfil]
+            [id_tarefa, id_perfil, id_horta]
         );
         if (!rows.length || !rows[0].completion_photo_url) return res.status(404).send({ error: 'Foto de comprovacao nao encontrada' });
         const filename = path.basename(rows[0].completion_photo_url);
@@ -825,11 +851,14 @@ app.get('/minhas_tarefas/:id/comprovacao', requireAuth, async (req, res) => {
 
 app.get('/tarefas_disponiveis', requireAuth, async (req, res) => {
     try {
+        const id_horta = Number(req.query.id_horta);
+        if (!Number.isInteger(id_horta) || id_horta <= 0) return res.status(400).send({ error: 'id_horta invalido' });
+        if (!await isMemberForHorta(req.user.id, id_horta)) return res.status(403).send({ error: 'Você não participa desta horta' });
         const [results] = await db.query(
             `SELECT t.* FROM Tarefas t
              WHERE t.id_perfil IS NULL AND t.status = 'available' AND t.concluido = false AND t.deleted_at IS NULL
-               AND t.id_horta IN (SELECT id_horta FROM UsuarioHortaRole WHERE id_usuario = ?)`,
-            [req.user.id]
+               AND t.id_horta = ?`,
+            [id_horta]
         );
         return res.send(results);
     } catch (error) {
@@ -857,13 +886,19 @@ app.get('/hortas', async (req, res) => {
 
 app.get('/admin/tarefas', requireAuth, async (req, res) => {
     try {
+        const id_horta = Number(req.query.id_horta);
+        if (!Number.isInteger(id_horta) || id_horta <= 0) {
+            return res.status(400).send({ error: 'id_horta invalido' });
+        }
+        if (!await isAdminForHorta(req.user.id, id_horta)) {
+            return res.status(403).send({ error: 'Apenas o administrador desta horta pode consultar estas tarefas' });
+        }
         const [results] = await db.query(
             `SELECT t.*
              FROM Tarefas t
-             JOIN UsuarioHortaRole uhr ON uhr.id_horta = t.id_horta AND uhr.papel = 'ADMIN'
-             WHERE uhr.id_usuario = ? AND t.deleted_at IS NULL
+             WHERE t.id_horta = ? AND t.deleted_at IS NULL
              ORDER BY t.id DESC`,
-            [req.user.id]
+            [id_horta]
         );
         return res.send(results);
     } catch (error) {
@@ -875,17 +910,20 @@ app.get('/admin/tarefas', requireAuth, async (req, res) => {
 app.post(['/iniciar_tarefa', '/aceitar_tarefa'], requireAuth, async (req, res) => {
     try {
                 const id_tarefa = Number(req.body.id_tarefa);
+        const id_horta = Number(req.body.id_horta);
         if (!Number.isInteger(id_tarefa) || id_tarefa <= 0) {
             return res.status(400).send({ error: 'id_tarefa invalido' });
+        }
+        if (!Number.isInteger(id_horta) || id_horta <= 0 || !await isMemberForHorta(req.user.id, id_horta)) {
+            return res.status(403).send({ error: 'Você não participa desta horta' });
         }
         if (!req.user.id_perfil) {
             return res.status(403).send({ error: 'Perfil nao encontrado, saia e entre novamente' });
         }
         const [results] = await db.query(
             `UPDATE Tarefas SET id_perfil = ?, status = 'in_progress', updated_at = NOW()
-             WHERE id = ? AND id_perfil IS NULL AND status = 'available' AND concluido = false AND deleted_at IS NULL
-               AND id_horta IN (SELECT id_horta FROM UsuarioHortaRole WHERE id_usuario = ?)`,
-            [req.user.id_perfil, id_tarefa, req.user.id]
+             WHERE id = ? AND id_horta = ? AND id_perfil IS NULL AND status = 'available' AND concluido = false AND deleted_at IS NULL`,
+            [req.user.id_perfil, id_tarefa, id_horta]
         );
         if (results.affectedRows === 0) {
             return res.status(409).send({ error: 'Tarefa indisponivel (ja aceita, inexistente ou de outra horta)' });
@@ -900,28 +938,26 @@ app.post(['/iniciar_tarefa', '/aceitar_tarefa'], requireAuth, async (req, res) =
 // Endpoint legado (aberto) mantido por compatibilidade temporaria.
 app.post('/criar_tarefa', async (req, res) => {
     try {
-        const { titulo, tipo, horta, descricao, dificuldade, moedas, mudas, tempo } = req.body;
+        const { titulo, tipo, horta, descricao, dificuldade, moedas, tempo } = req.body;
         if (!titulo || !tipo || !horta || !descricao) {
             return res.status(400).send({ error: 'Campos obrigatorios ausentes' });
         }
 
         const dificuldade_num = Number(dificuldade);
         const moedas_num = Number(moedas);
-        const mudas_num = Number(mudas);
         const tempo_num = Number(tempo);
 
         if (
             !Number.isInteger(dificuldade_num) || dificuldade_num < 0 || dificuldade_num > 2 ||
             !Number.isInteger(moedas_num) || moedas_num < 0 ||
-            !Number.isInteger(mudas_num) || mudas_num < 0 ||
             !Number.isInteger(tempo_num) || tempo_num <= 0
         ) {
             return res.status(400).send({ error: 'Valores numericos invalidos' });
         }
 
         const [results] = await db.query(
-            'INSERT INTO Tarefas (titulo, tipo, horta, descricao, dificuldade, moedas, mudas, tempo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [titulo, tipo, horta, descricao, dificuldade_num, moedas_num, mudas_num, tempo_num]
+            'INSERT INTO Tarefas (titulo, tipo, horta, descricao, dificuldade, moedas, mudas, tempo) VALUES (?, ?, ?, ?, ?, ?, 0, ?)',
+            [titulo, tipo, horta, descricao, dificuldade_num, moedas_num, tempo_num]
         );
 
         return res.status(201).send({ id: results.insertId, message: 'Tarefa criada com sucesso' });
@@ -933,7 +969,7 @@ app.post('/criar_tarefa', async (req, res) => {
 
 app.post('/admin/tarefas', requireAuth, requireHortaAdmin, async (req, res) => {
     try {
-        const { titulo, tipo, descricao, dificuldade, moedas, xp, mudas, tempo } = req.body;
+        const { titulo, tipo, descricao, dificuldade, moedas, xp, tempo } = req.body;
         if (!titulo || !tipo || !descricao) {
             return res.status(400).send({ error: 'Campos obrigatorios ausentes' });
         }
@@ -955,7 +991,7 @@ app.post('/admin/tarefas', requireAuth, requireHortaAdmin, async (req, res) => {
         const [results] = await db.query(
             `INSERT INTO Tarefas
              (titulo, tipo, horta, descricao, dificuldade, moedas, xp, mudas, tempo, id_horta, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
             [
                 titulo,
                 tipo,
@@ -964,7 +1000,6 @@ app.post('/admin/tarefas', requireAuth, requireHortaAdmin, async (req, res) => {
                 Number(dificuldade) || 0,
                 moedas_num,
                 xp_num,
-                Number(mudas) || 0,
                 Number(tempo) || 1,
                 req.id_horta,
                 req.user.id
@@ -998,7 +1033,6 @@ app.put('/admin/tarefas/:id', requireAuth, async (req, res) => {
         const dificuldade = req.body.dificuldade ?? current.dificuldade;
         const moedas = req.body.moedas ?? current.moedas;
         const xp = req.body.xp ?? current.xp ?? 50;
-        const mudas = req.body.mudas ?? current.mudas;
         const tempo = req.body.tempo ?? current.tempo;
         const xp_num = Number(xp);
         const moedas_num = Number(moedas);
@@ -1011,9 +1045,9 @@ app.put('/admin/tarefas/:id', requireAuth, async (req, res) => {
 
         await db.query(
             `UPDATE Tarefas
-             SET titulo = ?, tipo = ?, descricao = ?, dificuldade = ?, moedas = ?, xp = ?, mudas = ?, tempo = ?, updated_at = NOW()
+             SET titulo = ?, tipo = ?, descricao = ?, dificuldade = ?, moedas = ?, xp = ?, tempo = ?, updated_at = NOW()
              WHERE id = ?`,
-            [titulo, tipo, descricao, dificuldade, moedas_num, xp_num, mudas, tempo, id]
+            [titulo, tipo, descricao, dificuldade, moedas_num, xp_num, tempo, id]
         );
 
         return res.send({ message: 'Tarefa atualizada' });
@@ -1044,9 +1078,21 @@ app.delete('/admin/tarefas/:id', requireAuth, async (req, res) => {
     }
 });
 
-app.get('/recompensas_disponiveis', async (req, res) => {
+app.get('/recompensas_disponiveis', requireAuth, async (req, res) => {
     try {
-        const [results] = await db.query('SELECT * FROM RecompensasDisponiveis');
+        const id_horta = Number(req.query.id_horta);
+        if (!Number.isInteger(id_horta) || id_horta <= 0) return res.status(400).send({ error: 'id_horta invalido' });
+        if (!await isMemberForHorta(req.user.id, id_horta)) return res.status(403).send({ error: 'Você não participa desta horta' });
+        const [results] = await db.query(
+            `SELECT r.id, r.nome, r.descricao, r.tipo, r.preco, r.src, r.id_horta,
+                    COUNT(pr.id_recompensa) AS total, COUNT(pr.id_recompensa) AS quantidade_disponivel
+             FROM Recompensas r
+             JOIN PerfilRecompensas pr ON pr.id_recompensa = r.id AND pr.id_perfil IS NULL
+             WHERE r.deleted_at IS NULL AND r.id_horta = ?
+             GROUP BY r.id
+             HAVING COUNT(pr.id_recompensa) > 0`
+            , [id_horta]
+        );
         return res.send(results);
     } catch (error) {
         console.error('Erro em /recompensas_disponiveis:', error);
@@ -1056,11 +1102,22 @@ app.get('/recompensas_disponiveis', async (req, res) => {
 
 app.get('/recompensas', requireAuth, async (req, res) => {
     try {
+        const id_horta = Number(req.query.id_horta);
+        if (!Number.isInteger(id_horta) || id_horta <= 0) {
+            return res.status(400).send({ error: 'id_horta invalido' });
+        }
+        if (!await isAdminForHorta(req.user.id, id_horta)) {
+            return res.status(403).send({ error: 'Apenas o Admin da horta pode listar suas recompensas' });
+        }
         const [results] = await db.query(
-            `SELECT id, nome, descricao, tipo, preco, src, quantidade_disponivel, id_horta
-             FROM Recompensas
-             WHERE deleted_at IS NULL
-             ORDER BY id DESC`
+            `SELECT r.id, r.nome, r.descricao, r.tipo, r.preco, r.src, r.id_horta,
+                    COUNT(pr.id_recompensa) AS quantidade_disponivel
+             FROM Recompensas r
+             LEFT JOIN PerfilRecompensas pr ON pr.id_recompensa = r.id AND pr.id_perfil IS NULL
+             WHERE r.deleted_at IS NULL AND r.id_horta = ?
+             GROUP BY r.id
+             ORDER BY r.id DESC`,
+            [id_horta]
         );
         return res.send(results);
     } catch (error) {
@@ -1107,6 +1164,10 @@ app.get('/me/gamificacao', requireAuth, async (req, res) => {
     try {
         const id_perfil = Number(req.user.id_perfil);
         if (!id_perfil) return res.status(403).send({ error: 'Perfil nao encontrado' });
+        const id_horta = req.query.id_horta == null ? null : Number(req.query.id_horta);
+        if (id_horta != null && (!Number.isInteger(id_horta) || id_horta <= 0 || !await isMemberForHorta(req.user.id, id_horta))) {
+            return res.status(403).send({ error: 'Você não participa desta horta' });
+        }
 
         await conn.beginTransaction();
         let gamification = await ensureGamificationProfile(conn, id_perfil);
@@ -1152,7 +1213,10 @@ app.get('/me/gamificacao', requireAuth, async (req, res) => {
         );
 
         const communityChallenges = [];
-        for (const garden of gardens) {
+        const challengeGardens = [...new Map(gardens
+            .filter((garden) => id_horta == null || Number(garden.id) === id_horta)
+            .map((garden) => [Number(garden.id), garden])).values()];
+        for (const garden of challengeGardens) {
             const goalTasks = Math.max(5, (Number(garden.participantes) || 0) * 2);
             await conn.query(
                 `INSERT IGNORE INTO DesafioComunitario (id_horta, period_start, period_end, goal_tasks)
@@ -1189,16 +1253,16 @@ app.get('/me/gamificacao', requireAuth, async (req, res) => {
              `SELECT p.id, p.nome, COALESCE(pg.xp_total, 0) AS xp_total,
                     COUNT(DISTINCT t.id) AS tarefas_concluidas
              FROM UsuarioHortaRole member
-             JOIN UsuarioHortaRole mine ON mine.id_horta = member.id_horta AND mine.id_usuario = ?
+             JOIN UsuarioHortaRole mine ON mine.id_horta = member.id_horta AND mine.id_usuario = ? AND mine.papel = 'MEMBER'
              JOIN Usuario u ON u.id = member.id_usuario AND u.ativo = true
              JOIN Perfil p ON p.id = u.id_perfil
              LEFT JOIN PerfilGamificacao pg ON pg.id_perfil = p.id
              LEFT JOIN Tarefas t ON t.id_perfil = p.id AND t.concluido = true
-             WHERE member.papel = 'MEMBER'
+             WHERE member.papel = 'MEMBER' AND (? IS NULL OR mine.id_horta = ?)
              GROUP BY p.id, p.nome, pg.xp_total
              ORDER BY xp_total DESC, tarefas_concluidas DESC, p.nome ASC
              LIMIT 5`,
-            [req.user.id]
+            [req.user.id, id_horta, id_horta]
         );
         const leaderboard = leaderboardRows.map((member, index) => ({
             position: index + 1,
@@ -1308,6 +1372,50 @@ app.get('/admin/horta/historico', requireAuth, requireHortaAdmin, async (req, re
     }
 });
 
+app.get('/admin/horta/participantes', requireAuth, requireHortaAdmin, async (req, res) => {
+    try {
+        const [rows] = await db.query(
+            `SELECT u.id AS id_usuario, p.id AS id_perfil, p.nome, u.last_login_at,
+                    MAX(CASE WHEN t.concluido = true THEN t.completed_at ELSE NULL END) AS ultima_contribuicao_at,
+                    COUNT(DISTINCT CASE WHEN t.concluido = true
+                        AND t.completed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN t.id END) AS tarefas_30_dias,
+                    COUNT(DISTINCT CASE WHEN t.concluido = true
+                        AND t.completed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN DATE(t.completed_at) END) AS dias_contribuindo_30_dias,
+                    COUNT(DISTINCT CASE WHEN t.concluido = true THEN t.id END) AS tarefas_totais,
+                    CASE
+                        WHEN u.last_login_at IS NULL THEN 'untracked'
+                        WHEN u.last_login_at >= DATE_SUB(NOW(), INTERVAL 14 DAY) THEN 'active'
+                        WHEN u.last_login_at >= DATE_SUB(NOW(), INTERVAL 40 DAY) THEN 'attention'
+                        ELSE 'inactive'
+                    END AS activity_status
+             FROM UsuarioHortaRole uhr
+             JOIN Usuario u ON u.id = uhr.id_usuario
+             JOIN Perfil p ON p.id = u.id_perfil
+             LEFT JOIN Tarefas t ON t.id_perfil = p.id AND t.id_horta = uhr.id_horta
+                 AND t.deleted_at IS NULL
+             WHERE uhr.id_horta = ? AND uhr.papel = 'MEMBER'
+             GROUP BY u.id, p.id, p.nome, u.last_login_at
+             ORDER BY CASE activity_status WHEN 'inactive' THEN 0 WHEN 'attention' THEN 1 WHEN 'untracked' THEN 2 ELSE 3 END,
+                      u.last_login_at ASC, p.nome ASC`,
+            [req.id_horta]
+        );
+        return res.send(rows.map((row) => ({
+            id_usuario: Number(row.id_usuario),
+            id_perfil: Number(row.id_perfil),
+            nome: row.nome,
+            ultima_entrada_at: row.last_login_at,
+            ultima_contribuicao_at: row.ultima_contribuicao_at,
+            tarefas_30_dias: Number(row.tarefas_30_dias) || 0,
+            dias_contribuindo_30_dias: Number(row.dias_contribuindo_30_dias) || 0,
+            tarefas_totais: Number(row.tarefas_totais) || 0,
+            activity_status: row.activity_status,
+        })));
+    } catch (error) {
+        console.error('Erro ao listar participantes da horta:', error);
+        return res.status(500).send({ error: 'Não foi possível carregar os participantes da horta' });
+    }
+});
+
 app.post('/hortas', requireAuth, async (req, res) => {
     const { nome, descricao, latitude, longitude, endereco } = req.body;
 
@@ -1380,7 +1488,7 @@ app.post('/hortas/:id/entrar', requireAuth, async (req, res) => {
         }
 
         const [existing] = await db.query(
-            'SELECT 1 FROM UsuarioHortaRole WHERE id_usuario = ? AND id_horta = ? LIMIT 1',
+            "SELECT 1 FROM UsuarioHortaRole WHERE id_usuario = ? AND id_horta = ? AND papel = 'MEMBER' LIMIT 1",
             [req.user.id, id_horta]
         );
         if (existing.length === 0) {
@@ -1401,22 +1509,76 @@ app.post('/hortas/:id/entrar', requireAuth, async (req, res) => {
     }
 });
 
+app.delete('/hortas/:id/sair', requireAuth, async (req, res) => {
+    const id_horta = Number(req.params.id);
+    if (!Number.isInteger(id_horta) || id_horta <= 0) {
+        return res.status(400).send({ error: 'Horta invalida' });
+    }
+
+    const conn = await db.getConnection();
+    try {
+        await conn.beginTransaction();
+        const [membership] = await conn.query(
+            `SELECT papel FROM UsuarioHortaRole
+             WHERE id_usuario = ? AND id_horta = ? AND papel = 'MEMBER'
+             LIMIT 1 FOR UPDATE`,
+            [req.user.id, id_horta]
+        );
+        if (!membership.length) {
+            await conn.rollback();
+            return res.status(409).send({ error: 'Você não participa desta horta como participante.' });
+        }
+
+        const [inProgress] = await conn.query(
+            `SELECT COUNT(*) AS total FROM Tarefas
+             WHERE id_perfil = ? AND id_horta = ? AND concluido = false
+               AND status IN ('in_progress', 'pending_review', 'proof_submitted') AND deleted_at IS NULL`,
+            [req.user.id_perfil, id_horta]
+        );
+        await conn.query(
+            `DELETE FROM UsuarioHortaRole
+             WHERE id_usuario = ? AND id_horta = ? AND papel = 'MEMBER'`,
+            [req.user.id, id_horta]
+        );
+        const [roles] = await conn.query(
+            `SELECT uhr.papel AS role, uhr.id_horta, h.nome AS horta_nome, h.latitude, h.longitude, h.endereco
+             FROM UsuarioHortaRole uhr LEFT JOIN Horta h ON h.id = uhr.id_horta
+             WHERE uhr.id_usuario = ? ORDER BY uhr.id_horta, uhr.papel`,
+            [req.user.id]
+        );
+        await conn.commit();
+        return res.send({
+            ok: true,
+            in_progress_tasks: Number(inProgress[0]?.total) || 0,
+            user: { id: req.user.id, nome: req.user.nome, email: req.user.email, id_perfil: req.user.id_perfil ?? null, roles }
+        });
+    } catch (error) {
+        await conn.rollback();
+        console.error('Erro em DELETE /hortas/:id/sair:', error);
+        return res.status(500).send({ error: 'Não foi possível sair da horta.' });
+    } finally {
+        conn.release();
+    }
+});
+
 app.post('/resgatar_recompensa', requireAuth, async (req, res) => {
     const conn = await db.getConnection();
     try {
         const id_perfil = req.user.id_perfil;
         const id_recompensa = Number(req.body.id_recompensa);
+        const id_horta = Number(req.body.id_horta);
 
-        if (!Number.isInteger(id_recompensa) || id_recompensa <= 0) {
+        if (!Number.isInteger(id_recompensa) || id_recompensa <= 0 || !Number.isInteger(id_horta) || id_horta <= 0) {
             return res.status(400).send({ error: 'id_recompensa invalido' });
         }
+        if (!await isMemberForHorta(req.user.id, id_horta)) return res.status(403).send({ error: 'Você não participa desta horta' });
 
         await conn.beginTransaction();
         await ensureGamificationProfile(conn, id_perfil);
 
         const [recompensas] = await conn.query(
-            'SELECT preco FROM Recompensas WHERE id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
-            [id_recompensa]
+            'SELECT preco, id_horta FROM Recompensas WHERE id = ? AND id_horta = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
+            [id_recompensa, id_horta]
         );
         if (recompensas.length === 0 || recompensas[0].preco === null) {
             await conn.rollback();
@@ -1459,6 +1621,7 @@ app.post('/resgatar_recompensa', requireAuth, async (req, res) => {
 });
 
 app.post('/admin/recompensas', requireAuth, requireHortaAdmin, async (req, res) => {
+    const conn = await db.getConnection();
     try {
         const { nome, descricao, tipo, preco, src, quantidade_disponivel } = req.body;
         if (!nome || !descricao || !tipo) {
@@ -1470,41 +1633,82 @@ app.post('/admin/recompensas', requireAuth, requireHortaAdmin, async (req, res) 
             return res.status(400).send({ error: 'Preco e quantidade devem ser numeros inteiros iguais ou maiores que zero' });
         }
 
-        const [results] = await db.query(
+        await conn.beginTransaction();
+        const [results] = await conn.query(
             `INSERT INTO Recompensas
              (nome, descricao, tipo, preco, src, quantidade_disponivel, id_horta, created_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [nome, descricao, tipo, preco_num, src || null, quantidade_num, req.id_horta, req.user.id]
         );
 
+        for (let remaining = quantidade_num; remaining > 0;) {
+            const batchSize = Math.min(500, remaining);
+            const stockRows = Array.from({ length: batchSize }, () => [results.insertId]);
+            await conn.query('INSERT INTO PerfilRecompensas (id_recompensa) VALUES ?', [stockRows]);
+            remaining -= batchSize;
+        }
+
+        await conn.commit();
+
         return res.status(201).send({ id: results.insertId, message: 'Recompensa criada pelo admin' });
     } catch (error) {
+        await conn.rollback();
         console.error('Erro em /admin/recompensas:', error);
         return res.status(500).send({ error: 'Erro ao criar recompensa admin' });
+    } finally {
+        conn.release();
     }
 });
 
 app.put('/admin/recompensas/:id', requireAuth, async (req, res) => {
+    const conn = await db.getConnection();
     try {
         const id = Number(req.params.id);
-        const [currentRows] = await db.query('SELECT * FROM Recompensas WHERE id = ? AND deleted_at IS NULL LIMIT 1', [id]);
+        await conn.beginTransaction();
+        const [currentRows] = await conn.query('SELECT * FROM Recompensas WHERE id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE', [id]);
         if (currentRows.length === 0) {
+            await conn.rollback();
             return res.status(404).send({ error: 'Recompensa nao encontrada' });
         }
 
         const current = currentRows[0];
         const canEdit = await isAdminForHorta(req.user.id, current.id_horta);
         if (!canEdit) {
+            await conn.rollback();
             return res.status(403).send({ error: 'Apenas admin da horta pode editar' });
         }
 
         const preco_num = Number(req.body.preco ?? current.preco);
         const quantidade_num = Number(req.body.quantidade_disponivel ?? current.quantidade_disponivel);
         if (!Number.isInteger(preco_num) || preco_num < 0 || !Number.isInteger(quantidade_num) || quantidade_num < 0) {
+            await conn.rollback();
             return res.status(400).send({ error: 'Preco e quantidade devem ser numeros inteiros iguais ou maiores que zero' });
         }
 
-        await db.query(
+        const [stockRows] = await conn.query(
+            'SELECT COUNT(*) AS total FROM PerfilRecompensas WHERE id_recompensa = ? AND id_perfil IS NULL',
+            [id]
+        );
+        const currentStock = Number(stockRows[0]?.total) || 0;
+        let difference = quantidade_num - currentStock;
+        if (difference > 0) {
+            for (; difference > 0;) {
+                const batchSize = Math.min(500, difference);
+                const stockEntries = Array.from({ length: batchSize }, () => [id]);
+                await conn.query('INSERT INTO PerfilRecompensas (id_recompensa) VALUES ?', [stockEntries]);
+                difference -= batchSize;
+            }
+        } else if (difference < 0) {
+            const removeCount = -difference;
+            await conn.query(
+                `DELETE FROM PerfilRecompensas
+                 WHERE id_recompensa = ? AND id_perfil IS NULL
+                 LIMIT ${removeCount}`,
+                [id]
+            );
+        }
+
+        await conn.query(
             `UPDATE Recompensas
              SET nome = ?, descricao = ?, tipo = ?, preco = ?, src = ?, quantidade_disponivel = ?, updated_at = NOW()
              WHERE id = ?`,
@@ -1519,10 +1723,15 @@ app.put('/admin/recompensas/:id', requireAuth, async (req, res) => {
             ]
         );
 
+        await conn.commit();
+
         return res.send({ message: 'Recompensa atualizada' });
     } catch (error) {
+        await conn.rollback();
         console.error('Erro em PUT /admin/recompensas/:id:', error);
         return res.status(500).send({ error: 'Erro ao editar recompensa' });
+    } finally {
+        conn.release();
     }
 });
 
@@ -1578,6 +1787,8 @@ app.delete('/admin/recompensas/:id', requireAuth, async (req, res) => {
 });
 
 async function ensureGamificationSchema() {
+    const [loginColumns] = await db.query("SHOW COLUMNS FROM Usuario LIKE 'last_login_at'");
+    if (loginColumns.length === 0) await db.query('ALTER TABLE Usuario ADD COLUMN last_login_at datetime NULL');
     const [statusColumns] = await db.query("SHOW COLUMNS FROM Tarefas LIKE 'status'");
     if (statusColumns.length === 0) {
         await db.query('ALTER TABLE Tarefas ADD COLUMN status varchar(24) NULL');
@@ -2049,7 +2260,7 @@ app.post('/admin/tarefas/:id/reprovar-comprovacao', requireAuth, async (req, res
     }
 });
 
-const port = 8080;
+const port = Number(process.env.PORT || 8080);
 ensureGamificationSchema().then(() => {
     app.listen(port, () => {
         console.log(`⚡️[bootup]: Server is running at port: ${port}`);

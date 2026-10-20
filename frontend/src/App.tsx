@@ -62,15 +62,23 @@ async function get_number_of_completed_tasks(id_perfil: Number, token: string) {
 }
 
 export default function App() {
-  const { token, user, isAdmin, isLoading } = useAuth();
+  const { token, user, isAdmin, isLoading, activeGarden, activeGardenId, availableGardens, selectGarden } = useAuth();
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [adminNavigationIntent, setAdminNavigationIntent] = useState<AdminNavigationIntent | null>(null);
+
+  const handleLogout = () => {
+    setAuthView('login');
+    setCurrentPage('home');
+    setAdminNavigationIntent(null);
+  };
 
   const navigate = (page: Page, intent?: AdminNavigationIntent) => {
     setAdminNavigationIntent(intent || null);
     setCurrentPage(page);
   };
+
+  const hasGardenSelector = availableGardens.length > 1 || (activeGardenId != null && availableGardens.find((garden) => garden.id === activeGardenId)?.roles.length === 2);
 
   const [coins, setCoins] = useState(0);
   const [tasksCompleted, setTasksCompleted] = useState(0);
@@ -107,6 +115,13 @@ export default function App() {
     if (isAdmin && currentPage === 'explore') setCurrentPage('home');
   }, [isAdmin, currentPage]);
 
+  useEffect(() => {
+    if (user && availableGardens.length === 0 && currentPage !== 'explore') {
+      setCurrentPage('explore');
+      setAdminNavigationIntent(null);
+    }
+  }, [user, availableGardens.length, currentPage]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -136,9 +151,20 @@ export default function App() {
       <Sidebar currentPage={currentPage} onNavigate={navigate} isAdmin={isAdmin} />
 
       <div className="w-full lg:ml-64">
+        {hasGardenSelector && <div className="flex flex-wrap items-center justify-end gap-2 border-b border-gray-200 bg-white px-4 py-2.5 sm:px-6">
+          <label htmlFor="active-garden" className="text-[12px] font-medium text-[#526056]">Horta ativa</label>
+          <select id="active-garden" value={activeGardenId ?? ''} onChange={(event) => { selectGarden(Number(event.target.value)); setCurrentPage('home'); setAdminNavigationIntent(null); }} className="max-w-[min(60vw,18rem)] rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] text-neutral-900 focus:outline-none focus:ring-2 focus:ring-[#00a63e]">
+            {availableGardens.map((garden) => <option key={garden.id} value={garden.id}>{garden.nome}</option>)}
+          </select>
+          {activeGarden && availableGardens.find((garden) => garden.id === activeGardenId)?.roles.length === 2 && <div className="flex rounded-lg border border-gray-200 p-0.5" role="group" aria-label="Função ativa">
+            {(['MEMBER', 'ADMIN'] as const).map((role) => <button key={role} type="button" aria-pressed={activeGarden.role === role} onClick={() => { selectGarden(activeGarden.id_horta, role); setCurrentPage('home'); setAdminNavigationIntent(null); }} className={`rounded-md px-3 py-1.5 text-[11px] font-semibold ${activeGarden.role === role ? 'bg-[#eaf7ed] text-[#16803d]' : 'text-[#718075] hover:bg-gray-50'}`}>{role === 'ADMIN' ? 'Administrador' : 'Participante'}</button>)}
+          </div>}
+        </div>}
         <div className={`mx-auto w-full pb-24 lg:pb-8 ${isAdmin ? 'pt-0 lg:pt-10' : ''}`}>
           {currentPage === 'home' && (
-            isAdmin
+            !activeGardenId
+              ? <ExplorePage />
+              : isAdmin
               ? <AdminHomePage onNavigate={navigate} />
               : <HomePage onNavigate={(page) => navigate(page)} />
           )}
@@ -152,13 +178,13 @@ export default function App() {
           {currentPage === 'profile' && (
             isAdmin
               ? <AdminProfilePage
-                    onLogout={() => setCurrentPage('home')}
+                    onLogout={handleLogout}
                     editGardenOnOpen={adminNavigationIntent?.editGarden}
                   />
               : <ProfilePage
                   coins={coins}
                   tasksCompleted={tasksCompleted}
-                  onLogout={() => setCurrentPage('home')}
+                  onLogout={handleLogout}
                   onNavigate={navigate}
                 />
           )}

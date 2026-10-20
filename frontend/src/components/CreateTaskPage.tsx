@@ -15,7 +15,6 @@ interface TaskFormState {
   tipo: string;
   dificuldade: number;
   moedas: number;
-  mudas: number;
   tempo: number;
 }
 
@@ -26,7 +25,6 @@ const initialForm: TaskFormState = {
   tipo: 'Manutenção',
   dificuldade: 0,
   moedas: 50,
-  mudas: 0,
   tempo: 30,
 };
 
@@ -152,7 +150,7 @@ export default function CreateTaskPage({ onBack, onCreated }: CreateTaskPageProp
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[13px] text-[#4a5565] mb-1">Moedas</label>
               <input
@@ -160,16 +158,6 @@ export default function CreateTaskPage({ onBack, onCreated }: CreateTaskPageProp
                 min={0}
                 value={form.moedas}
                 onChange={(e) => updateField('moedas', Number(e.target.value))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e]"
-              />
-            </div>
-            <div>
-              <label className="block text-[13px] text-[#4a5565] mb-1">Mudas</label>
-              <input
-                type="number"
-                min={0}
-                value={form.mudas}
-                onChange={(e) => updateField('mudas', Number(e.target.value))}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#00a63e]"
               />
             </div>

@@ -25,7 +25,6 @@ interface Task {
   dificuldade: number;
   moedas: number;
   xp: number;
-  mudas: number;
   tempo: number;
   concluido?: boolean;
   status: 'available' | 'in_progress' | 'pending_review' | 'proof_submitted' | 'completed';
@@ -60,9 +59,9 @@ interface TasksPageProps {
 }
 
 export default function TasksPage({ navigationIntent }: TasksPageProps) {
-  const { token, user, isAdmin } = useAuth();
+  const { token, user, isAdmin, activeGardenId } = useAuth();
   const idPerfil = user?.id_perfil || 1;
-  const idHorta = user?.roles.find((r) => r.role === 'ADMIN')?.id_horta || 1;
+  const idHorta = activeGardenId;
 
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [acceptedTaskTitle, setAcceptedTaskTitle] = useState('');
@@ -87,7 +86,6 @@ export default function TasksPage({ navigationIntent }: TasksPageProps) {
     dificuldade: 0,
     moedas: 50,
     xp: 50,
-    mudas: 0,
     tempo: 30,
   });
 
@@ -95,8 +93,8 @@ export default function TasksPage({ navigationIntent }: TasksPageProps) {
     setIsLoadingTasks(true);
     try {
       const tasksUrl = isAdmin && token
-        ? `${API_URL}/admin/tarefas`
-        : `${API_URL}/tarefas_disponiveis`;
+        ? `${API_URL}/admin/tarefas?id_horta=${idHorta ?? ''}`
+        : `${API_URL}/tarefas_disponiveis?id_horta=${idHorta ?? ''}`;
       const tasksResponse = await fetch(
         tasksUrl,
             token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
@@ -123,7 +121,7 @@ export default function TasksPage({ navigationIntent }: TasksPageProps) {
       } else {
         setTarefasConcluidasHorta([]);
         if (token) {
-          const mineResponse = await fetch(`${API_URL}/minhas_tarefas`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+          const mineResponse = await fetch(`${API_URL}/minhas_tarefas?id_horta=${idHorta ?? ''}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
           if (!mineResponse.ok) throw new Error('Falha ao carregar suas tarefas em andamento');
           setMyTasks(await mineResponse.json());
         }
@@ -145,7 +143,9 @@ export default function TasksPage({ navigationIntent }: TasksPageProps) {
     const filtered = tasks.filter((task) => {
       const matchesCategory = taskCategory === 'Todas' || task.tipo === taskCategory;
       const matchesStatus = !statusFilter
-        || (statusFilter === 'completed' ? task.concluido || task.status === 'completed' : !task.concluido && task.status === statusFilter);
+        || (statusFilter === 'completed' ? task.concluido || task.status === 'completed'
+          : statusFilter === 'proof_pending' ? !task.concluido && (task.status === 'pending_review' || task.status === 'proof_submitted')
+            : !task.concluido && task.status === statusFilter);
       return matchesCategory && matchesStatus;
     });
     return [...filtered].sort((a, b) => taskOrder === 'xp'
@@ -174,7 +174,7 @@ export default function TasksPage({ navigationIntent }: TasksPageProps) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ id_tarefa: idTarefa }),
+        body: JSON.stringify({ id_tarefa: idTarefa, id_horta: idHorta }),
       });
 
       if (response.status === 409) {
@@ -219,7 +219,7 @@ export default function TasksPage({ navigationIntent }: TasksPageProps) {
       const response = await fetch(`${API_URL}/concluir_tarefa`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_tarefa: idTarefa }),
+        body: JSON.stringify({ id_tarefa: idTarefa, id_horta: idHorta }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Não foi possível enviar a tarefa.');
@@ -238,7 +238,6 @@ export default function TasksPage({ navigationIntent }: TasksPageProps) {
       dificuldade: 0,
       moedas: 50,
       xp: 50,
-      mudas: 0,
       tempo: 30,
     });
   };
@@ -326,7 +325,6 @@ export default function TasksPage({ navigationIntent }: TasksPageProps) {
       dificuldade: Number(task.dificuldade) || 0,
       moedas: Number(task.moedas) || 0,
       xp: Number(task.xp) || 0,
-      mudas: Number(task.mudas) || 0,
       tempo: Number(task.tempo) || 30,
     });
 
@@ -372,6 +370,7 @@ export default function TasksPage({ navigationIntent }: TasksPageProps) {
     in_progress: 'Em andamento',
     pending_review: 'Aguardando comprovação',
     proof_submitted: 'Comprovação enviada',
+    proof_pending: 'Comprovações pendentes',
     completed: 'Concluídas',
   };
 
@@ -401,7 +400,7 @@ export default function TasksPage({ navigationIntent }: TasksPageProps) {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="px-2 text-[16px] font-bold text-neutral-950">{statusFilter ? `Tarefas: ${statusFilterLabels[statusFilter]}` : 'Tarefas Disponíveis'}</h1>
           <div className="flex items-center gap-2">
-            {isAdmin && <select aria-label="Filtrar tarefas por status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as AdminTaskStatusFilter | '')} className="max-w-[190px] rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[11px] focus:border-[#00a63e] focus:outline-none"><option value="">Todas as situações</option><option value="available">Disponíveis</option><option value="in_progress">Em andamento</option><option value="pending_review">Aguardando comprovação</option><option value="proof_submitted">Comprovação enviada</option><option value="completed">Concluídas</option></select>}
+            {isAdmin && <select aria-label="Filtrar tarefas por status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as AdminTaskStatusFilter | '')} className="max-w-[190px] rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[11px] focus:border-[#00a63e] focus:outline-none"><option value="">Todas as situações</option><option value="available">Disponíveis</option><option value="in_progress">Em andamento</option><option value="proof_pending">Comprovações pendentes</option><option value="pending_review">Aguardando envio da foto</option><option value="proof_submitted">Aguardando análise do Admin</option><option value="completed">Concluídas</option></select>}
             {isAdmin && (
               <button
                 onClick={() => {
@@ -436,7 +435,7 @@ export default function TasksPage({ navigationIntent }: TasksPageProps) {
                 </div>
                 {task.status === 'in_progress' && !canRetryProof && <button onClick={() => finalizeTask(task.id)} className="shrink-0 rounded-lg bg-[#00a63e] px-3.5 py-2 text-[11px] font-semibold text-white hover:bg-[#008236]">Finalizar tarefa</button>}
               </div>
-              {showProofPanel && <TaskProofUpload taskId={task.id} hasPhoto={Boolean(task.has_completion_photo)} canRetry={canRetryProof} rejectionReason={task.completion_review_note} onUploaded={() => { void fetchData(); }} />}
+              {showProofPanel && <TaskProofUpload taskId={task.id} idHorta={idHorta ?? 0} hasPhoto={Boolean(task.has_completion_photo)} canRetry={canRetryProof} rejectionReason={task.completion_review_note} onUploaded={() => { void fetchData(); }} />}
             </article>;
           })}</div>
         </section>}
@@ -498,7 +497,7 @@ export default function TasksPage({ navigationIntent }: TasksPageProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <div>
                 <label className="text-[13px] text-[#4a5565] mb-1 block">Moedas (recompensa)</label>
                 <input
@@ -518,16 +517,6 @@ export default function TasksPage({ navigationIntent }: TasksPageProps) {
                   placeholder="XP"
                   value={formData.xp}
                   onChange={(e) => setFormData({ ...formData, xp: Number(e.target.value) })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
-                />
-              </div>
-              <div>
-                <label className="text-[13px] text-[#4a5565] mb-1 block">Mudas (recompensa)</label>
-                <input
-                  type="number"
-                  placeholder="Mudas"
-                  value={formData.mudas}
-                  onChange={(e) => setFormData({ ...formData, mudas: Number(e.target.value) })}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
                 />
               </div>
@@ -713,21 +702,6 @@ export default function TasksPage({ navigationIntent }: TasksPageProps) {
                         />
                       </div>
 
-                      <div>
-                        <label className="text-[13px] text-[#4a5565] mb-1 block">Mudas (recompensa)</label>
-                        <input
-                          type="number"
-                          placeholder="Mudas"
-                          value={formData.mudas}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              mudas: Number(e.target.value),
-                            })
-                          }
-                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px]"
-                        />
-                      </div>
 
                       <div>
                         <label className="text-[13px] text-[#4a5565] mb-1 block">Tempo (minutos)</label>

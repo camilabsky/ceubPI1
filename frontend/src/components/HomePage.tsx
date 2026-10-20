@@ -78,7 +78,7 @@ const missionImages = [
 ];
 
 export default function HomePage({ onNavigate }: HomePageProps) {
-  const { token, user } = useAuth();
+  const { token, user, activeGardenId } = useAuth();
   const [inProgressTasks, setInProgressTasks] = useState<Task[]>([]);
   const [availableTasks, setAvailableTasks] = useState<Task[]>([]);
   const [coins, setCoins] = useState(0);
@@ -93,9 +93,9 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     setIsLoading(true);
     try {
       const [mineRes, availableRes, progressRes] = await Promise.all([
-        fetch(`${API_URL}/minhas_tarefas`, { method: 'POST', headers: authHeaders() }),
-        fetch(`${API_URL}/tarefas_disponiveis`, { headers: authHeaders() }),
-        fetch(`${API_URL}/me/gamificacao`, { headers: authHeaders() }),
+        fetch(`${API_URL}/minhas_tarefas?id_horta=${activeGardenId ?? ''}`, { method: 'POST', headers: authHeaders() }),
+        fetch(`${API_URL}/tarefas_disponiveis?id_horta=${activeGardenId ?? ''}`, { headers: authHeaders() }),
+        fetch(`${API_URL}/me/gamificacao?id_horta=${activeGardenId ?? ''}`, { headers: authHeaders() }),
       ]);
       if (!mineRes.ok || !availableRes.ok || !progressRes.ok) throw new Error('Não foi possível carregar seu painel.');
       const [mine, available, progress] = await Promise.all([
@@ -115,7 +115,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     }
   };
 
-  useEffect(() => { fetchData(); }, [token]);
+  useEffect(() => { fetchData(); }, [token, activeGardenId]);
 
   const taskCountsByHorta = useMemo(() => new Set((stats?.hortas ?? []).map((horta) => horta.id)).size, [stats?.hortas]);
   const visibleAchievements = (stats?.achievements ?? []).slice(0, 3);
@@ -134,7 +134,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       const response = await fetch(`${API_URL}/iniciar_tarefa`, {
         method: 'POST',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_tarefa: task.id }),
+        body: JSON.stringify({ id_tarefa: task.id, id_horta: activeGardenId }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Não foi possível aceitar esta tarefa.');
@@ -154,7 +154,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       const response = await fetch(`${API_URL}/concluir_tarefa`, {
         method: 'POST',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_tarefa: task.id }),
+        body: JSON.stringify({ id_tarefa: task.id, id_horta: activeGardenId }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Não foi possível concluir esta tarefa.');
@@ -194,7 +194,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         {!available && <p className="mt-1.5 text-[9px] text-[#849087]">Recompensas liberadas após aprovação da comprovação.</p>}
         <div className="mt-auto pt-3">
           {!available && <div className="mb-2.5 flex items-center gap-2 text-[10px] font-medium text-[#728076]"><span className={`size-1.5 rounded-full ${task.status === 'pending_review' ? 'bg-[#c89d31]' : 'bg-[#37a45b]'}`} />{task.status === 'pending_review' ? 'Aguardando foto de comprovação' : task.status === 'proof_submitted' ? 'Foto vinculada à tarefa' : 'Sua participação está em andamento'}</div>}
-          {(task.status === 'pending_review' || task.status === 'proof_submitted' || task.completion_review_status === 'rejected') && <TaskProofUpload taskId={task.id} hasPhoto={Boolean(task.has_completion_photo)} canRetry={task.completion_review_status === 'rejected'} rejectionReason={task.completion_review_note} onUploaded={() => { void fetchData(); }} />}
+          {(task.status === 'pending_review' || task.status === 'proof_submitted' || task.completion_review_status === 'rejected') && <TaskProofUpload taskId={task.id} idHorta={activeGardenId ?? 0} hasPhoto={Boolean(task.has_completion_photo)} canRetry={task.completion_review_status === 'rejected'} rejectionReason={task.completion_review_note} onUploaded={() => { void fetchData(); }} />}
           {available || (task.status === 'in_progress' && task.completion_review_status !== 'rejected') ? <button
             onClick={() => available ? acceptTask(task) : finalizeTask(task)}
             disabled={workingTaskId === task.id}
