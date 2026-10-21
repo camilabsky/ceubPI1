@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Check, Compass, Leaf, LoaderCircle, MapPin, MapPinned, Search, Sprout, Users, X } from 'lucide-react';
+import { Check, Compass, ExternalLink, Leaf, LoaderCircle, MapPin, MapPinned, Search, Sprout, Users, X, Mail, Phone, ShieldCheck, ClipboardList } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_URL } from '../config';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,7 +14,15 @@ type Horta = {
   latitude: number | string | null;
   longitude: number | string | null;
   endereco: string | null;
+  cidade: string | null;
+  uf: string | null;
+  contato: string | null;
   participantes: number | string;
+};
+
+type DetalhesHorta = Horta & {
+  responsaveis: string[];
+  atividades_disponiveis: number | string;
 };
 
 type Filtro = 'Todas' | 'Mais próximas' | 'Mais ativas' | 'Novas hortas';
@@ -96,6 +104,9 @@ export default function ExplorePage() {
   const [posicao, setPosicao] = useState<Position | null>(() => readSessionPosition('couve:user-position'));
   const [selecionada, setSelecionada] = useState<Horta | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
+  const [detalhes, setDetalhes] = useState<DetalhesHorta | null>(null);
+  const [carregandoDetalhes, setCarregandoDetalhes] = useState(false);
+  const [erroDetalhes, setErroDetalhes] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [entrando, setEntrando] = useState(false);
 
@@ -124,6 +135,24 @@ export default function ExplorePage() {
     carregar();
     return () => { ativo = false; };
   }, [token]);
+
+  useEffect(() => {
+    if (!modalAberto || !selecionada) return;
+    const controller = new AbortController();
+    setDetalhes(null);
+    setErroDetalhes('');
+    setCarregandoDetalhes(true);
+    fetch(`${API_URL}/hortas/${selecionada.id}/detalhes`, { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Não foi possível carregar os detalhes da horta.');
+        return data as DetalhesHorta;
+      })
+      .then(setDetalhes)
+      .catch((error) => { if (error.name !== 'AbortError') setErroDetalhes(error instanceof Error ? error.message : 'Não foi possível carregar os detalhes da horta.'); })
+      .finally(() => { if (!controller.signal.aborted) setCarregandoDetalhes(false); });
+    return () => controller.abort();
+  }, [modalAberto, selecionada?.id]);
 
   useEffect(() => {
     let ativo = true;
@@ -164,7 +193,7 @@ export default function ExplorePage() {
 
   const listaVisivel = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase('pt-BR');
-    const encontrados = hortas.filter((horta) => `${horta.nome} ${horta.endereco ?? ''} ${horta.descricao ?? ''}`.toLocaleLowerCase('pt-BR').includes(termo));
+    const encontrados = hortas.filter((horta) => `${horta.nome} ${horta.endereco ?? ''} ${horta.descricao ?? ''} ${horta.cidade ?? ''} ${horta.uf ?? ''} ${horta.contato ?? ''}`.toLocaleLowerCase('pt-BR').includes(termo));
     if (filtro === 'Mais ativas') return [...encontrados].sort((a, b) => Number(b.participantes) - Number(a.participantes));
     if (filtro === 'Novas hortas') return [...encontrados].sort((a, b) => b.id - a.id);
     if (filtro === 'Mais próximas' && posicao) {
@@ -217,6 +246,12 @@ export default function ExplorePage() {
   };
 
   const center = coordinates(selecionada ?? hortas[0] ?? ({} as Horta)) ?? posicao ?? { lat: -15.7939, lng: -47.8828 };
+  const hortaDetalhada = detalhes?.id === selecionada?.id ? detalhes : null;
+  const linkMapa = hortaDetalhada
+    ? coordinates(hortaDetalhada)
+      ? `https://www.google.com/maps/search/?api=1&query=${coordinates(hortaDetalhada)!.lat},${coordinates(hortaDetalhada)!.lng}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([hortaDetalhada.endereco, hortaDetalhada.cidade, hortaDetalhada.uf].filter(Boolean).join(', '))}`
+    : '';
 
   return (
     <main className="min-h-screen bg-[#f7f9f7] px-4 pb-8 pt-5 text-[#17201a] sm:px-6 sm:pt-7 lg:px-9">
@@ -291,7 +326,7 @@ export default function ExplorePage() {
                 </div>
                 <div className="min-w-0 flex-1 p-2.5 sm:p-3.5">
                   <div className="flex items-start justify-between gap-2"><h3 className="truncate text-[14px] font-bold leading-5 text-[#1c2b20]">{horta.nome}</h3></div>
-                  <p className="mt-1 flex items-center gap-1 truncate text-[11px] text-[#758178]"><MapPin className="size-3 shrink-0 text-[#829187]" />{horta.endereco || 'Localização não informada'}</p>
+                  <p className="mt-1 flex items-center gap-1 truncate text-[11px] text-[#758178]"><MapPin className="size-3 shrink-0 text-[#829187]" />{[horta.endereco, horta.cidade && horta.uf ? `${horta.cidade}/${horta.uf}` : horta.cidade || horta.uf].filter(Boolean).join(' · ') || 'Localização não informada'}</p>
                   <p className="mt-2 line-clamp-2 min-h-[32px] text-[11px] leading-[16px] text-[#58665c]">{horta.descricao || 'Um espaço coletivo para plantar, aprender e compartilhar com a comunidade.'}</p>
                   <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-medium text-[#6c7a70]">
                     <span className="inline-flex items-center gap-1"><Users className="size-3.5 text-[#829187]" />{Number(horta.participantes)} participantes</span>
@@ -307,11 +342,37 @@ export default function ExplorePage() {
         </div>
       </section>
 
-      {selecionada && modalAberto && <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#102017]/35 p-4" onClick={() => setModalAberto(false)}>
-        <div role="dialog" aria-modal="true" aria-label={selecionada.nome} className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-          <div className="relative h-48 bg-[#eaf1e9]"><img src={fotos[Math.max(0, hortas.findIndex((horta) => horta.id === selecionada.id)) % fotos.length]} alt={`Horta ${selecionada.nome}`} className="h-full w-full object-cover" /><button onClick={() => setModalAberto(false)} className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full bg-white/95 text-[#34453a] shadow-sm" aria-label="Fechar"><X className="size-4" /></button></div>
-          <div className="p-5"><span className="inline-flex items-center gap-1.5 rounded-full bg-[#eaf7ed] px-2.5 py-1 text-[11px] font-semibold text-[#16803d]"><span className="size-1.5 rounded-full bg-[#22a052]" />Comunidade ativa</span><h2 className="mt-3 text-[20px] font-bold">{selecionada.nome}</h2><p className="mt-1 flex items-center gap-1.5 text-[12px] text-[#718075]"><MapPin className="size-3.5" />{selecionada.endereco || 'Localização não informada'}</p><p className="mt-4 text-[13px] leading-6 text-[#58665c]">{selecionada.descricao || 'Um espaço coletivo para plantar, aprender e compartilhar com a comunidade.'}</p><div className="mt-4 flex items-center gap-2 text-[12px] text-[#657369]"><Users className="size-4 text-[#16803d]" />{Number(selecionada.participantes)} participantes</div><button onClick={participar} disabled={entrando} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#168a3c] text-[13px] font-semibold text-white transition hover:bg-[#117331] disabled:opacity-60">{entrando && <LoaderCircle className="size-4 animate-spin" />}{entrando ? 'Entrando...' : user?.roles.some((role) => role.id_horta === selecionada.id && role.role === 'MEMBER') ? 'Você já participa desta horta' : 'Participar desta horta'}</button></div>
-        </div>
+      {selecionada && modalAberto && <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#102017]/45 p-3 sm:p-6" onClick={() => setModalAberto(false)}>
+        <section role="dialog" aria-modal="true" aria-label={`Detalhes de ${selecionada.nome}`} className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-[#f8faf8] shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <header className="relative border-b border-[#e5ebe5] bg-white px-5 py-5 pr-14 sm:px-7">
+            <button onClick={() => setModalAberto(false)} className="absolute right-4 top-4 flex size-9 items-center justify-center rounded-full bg-[#f2f6f2] text-[#34453a] hover:bg-[#e8f1e9]" aria-label="Fechar detalhes"><X className="size-4" /></button>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#eaf7ed] px-2.5 py-1 text-[11px] font-semibold text-[#16803d]"><span className="size-1.5 rounded-full bg-[#22a052]" />Horta comunitária</span>
+            <h2 className="mt-3 text-[22px] font-bold tracking-tight text-[#17201a] sm:text-[26px]">{(hortaDetalhada ?? selecionada).nome}</h2>
+            <p className="mt-1 flex items-center gap-1.5 text-[13px] text-[#718075]"><MapPin className="size-4 shrink-0" />{[(hortaDetalhada ?? selecionada).cidade && (hortaDetalhada ?? selecionada).uf ? `${(hortaDetalhada ?? selecionada).cidade}/${(hortaDetalhada ?? selecionada).uf}` : (hortaDetalhada ?? selecionada).cidade || (hortaDetalhada ?? selecionada).uf, (hortaDetalhada ?? selecionada).endereco].filter(Boolean).join(' · ') || 'Localização não informada'}</p>
+            {(hortaDetalhada ?? selecionada).descricao && <p className="mt-3 max-w-2xl text-[13px] leading-6 text-[#58665c]">{(hortaDetalhada ?? selecionada).descricao}</p>}
+          </header>
+
+          <div className="overflow-y-auto px-4 py-4 sm:px-7 sm:py-6">
+            {carregandoDetalhes && <div role="status" className="mb-4 rounded-xl border border-[#e2e9e2] bg-white p-4 text-[13px] text-[#66736a]">Carregando informações da horta...</div>}
+            {erroDetalhes && <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-[13px] text-red-800">{erroDetalhes}</div>}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <article className="rounded-xl border border-[#e4eae4] bg-white p-4 sm:col-span-2"><div className="flex items-center gap-2"><Leaf className="size-4 text-[#16803d]" /><h3 className="text-[14px] font-semibold text-[#243328]">Sobre a horta</h3></div><p className="mt-2 text-[13px] leading-6 text-[#58665c]">{hortaDetalhada?.descricao || 'Descrição e objetivos não informados.'}</p></article>
+
+              <article className="rounded-xl border border-[#e4eae4] bg-white p-4"><div className="flex items-center gap-2"><MapPin className="size-4 text-[#16803d]" /><h3 className="text-[14px] font-semibold text-[#243328]">Localização</h3></div><div className="mt-2 space-y-1 text-[12px] leading-5 text-[#58665c]">{hortaDetalhada?.endereco && <p>{hortaDetalhada.endereco}</p>}{(hortaDetalhada?.cidade || hortaDetalhada?.uf) && <p>{[hortaDetalhada.cidade, hortaDetalhada.uf].filter(Boolean).join(' / ')}</p>}{!hortaDetalhada?.endereco && !hortaDetalhada?.cidade && !hortaDetalhada?.uf && <p>Endereço não informado.</p>}</div>{hortaDetalhada && linkMapa && <a href={linkMapa} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#16803d] hover:underline">Abrir no mapa <ExternalLink className="size-3.5" /></a>}</article>
+
+              <article className="rounded-xl border border-[#e4eae4] bg-white p-4"><div className="flex items-center gap-2"><ShieldCheck className="size-4 text-[#16803d]" /><h3 className="text-[14px] font-semibold text-[#243328]">Responsável pela horta</h3></div>{hortaDetalhada?.responsaveis?.length ? <ul className="mt-2 space-y-1 text-[13px] text-[#58665c]">{hortaDetalhada.responsaveis.map((nome, index) => <li key={`${nome}-${index}`}>{nome}</li>)}</ul> : <p className="mt-2 text-[12px] text-[#89948b]">Responsável não informado.</p>}</article>
+
+              {hortaDetalhada?.contato && <article className="rounded-xl border border-[#e4eae4] bg-white p-4"><div className="flex items-center gap-2"><Mail className="size-4 text-[#16803d]" /><h3 className="text-[14px] font-semibold text-[#243328]">Contato</h3></div><a href={hortaDetalhada.contato.includes('@') ? `mailto:${hortaDetalhada.contato}` : `tel:${hortaDetalhada.contato.replace(/[^+0-9]/g, '')}`} className="mt-2 inline-flex items-center gap-1.5 break-all text-[13px] text-[#16803d] hover:underline">{hortaDetalhada.contato.includes('@') ? <Mail className="size-3.5 shrink-0" /> : <Phone className="size-3.5 shrink-0" />}{hortaDetalhada.contato}</a></article>}
+
+              <article className="rounded-xl border border-[#e4eae4] bg-white p-4"><div className="flex items-center gap-2"><Users className="size-4 text-[#16803d]" /><h3 className="text-[14px] font-semibold text-[#243328]">Sobre a comunidade</h3></div><p className="mt-2 text-[13px] text-[#58665c]">{hortaDetalhada ? `${Number(hortaDetalhada.participantes) || 0} ${Number(hortaDetalhada.participantes) === 1 ? 'membro' : 'membros'}` : `${Number(selecionada.participantes) || 0} membros`}</p></article>
+
+              <article className="rounded-xl border border-[#e4eae4] bg-white p-4"><div className="flex items-center gap-2"><ClipboardList className="size-4 text-[#16803d]" /><h3 className="text-[14px] font-semibold text-[#243328]">Atividades</h3></div><p className="mt-2 text-[13px] text-[#58665c]">{hortaDetalhada ? Number(hortaDetalhada.atividades_disponiveis) > 0 ? `${Number(hortaDetalhada.atividades_disponiveis)} atividades disponíveis` : 'Nenhuma atividade disponível no momento.' : 'Informações de atividades indisponíveis.'}</p></article>
+            </div>
+          </div>
+
+          <footer className="border-t border-[#e5ebe5] bg-white p-4 sm:px-7"><button onClick={participar} disabled={entrando || Boolean(erroDetalhes)} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#168a3c] text-[13px] font-semibold text-white transition hover:bg-[#117331] disabled:opacity-60">{entrando && <LoaderCircle className="size-4 animate-spin" />}{entrando ? 'Entrando...' : user?.roles.some((role) => role.id_horta === selecionada.id && role.role === 'MEMBER') ? 'Você já participa desta horta' : 'Participar desta horta'}</button></footer>
+        </section>
       </div>}
     </main>
   );

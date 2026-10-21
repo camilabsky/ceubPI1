@@ -9,7 +9,10 @@ CREATE TABLE IF NOT EXISTS Horta (
   descricao varchar(255),
   latitude DECIMAL(10, 8) NULL,
   longitude DECIMAL(11, 8) NULL,
-  endereco varchar(255) NULL
+  endereco varchar(255) NULL,
+  cidade varchar(100) NULL,
+  uf char(2) NULL,
+  contato varchar(160) NULL
 );
 
 CREATE TABLE IF NOT EXISTS Usuario (
@@ -21,6 +24,7 @@ CREATE TABLE IF NOT EXISTS Usuario (
   id_perfil int NULL,
   cidade varchar(100) NULL,
   uf char(2) NULL,
+  telefone varchar(24) NULL,
   last_login_at datetime NULL,
   CONSTRAINT fk_usuario_perfil
   FOREIGN KEY (id_perfil)

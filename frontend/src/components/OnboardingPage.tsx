@@ -14,6 +14,7 @@ export default function OnboardingPage({ onExplore }: { onExplore: () => void })
     sessionStorage.getItem(RASCUNHO) ? 'auto' : 'choose'
   );
   const [horta, setHorta] = useState<HortaDraft>(HORTA_VAZIA);
+  const [confirmarCriacao, setConfirmarCriacao] = useState(false);
   const [saving, setSaving] = useState(false);
   const started = useRef(false);
 
@@ -45,7 +46,7 @@ export default function OnboardingPage({ onExplore }: { onExplore: () => void })
     }
   };
 
-  // Rascunho vindo do cadastro: envia sozinho e, se falhar, abre o formulário preenchido
+  // Mantém rascunhos de versões anteriores, mas sempre exige revisão e confirmação explícitas.
   useEffect(() => {
     if (view !== 'auto' || started.current || !token) return;
     started.current = true;
@@ -53,23 +54,18 @@ export default function OnboardingPage({ onExplore }: { onExplore: () => void })
     sessionStorage.removeItem(RASCUNHO);
     let d: HortaDraft = HORTA_VAZIA;
     try {
-      d = JSON.parse(raw ?? '');
+      d = { ...HORTA_VAZIA, ...JSON.parse(raw ?? '') };
     } catch {
       /* rascunho inválido: cai no formulário vazio */
     }
     setHorta(d);
-    if (validarHorta(d, true)) {
-      setView('create');
-      return;
-    }
-    enviar(d).then((ok) => {
-      if (!ok) setView('create');
-    });
+    setView('create');
   }, [view, token]);
 
   const criarHorta = async () => {
     const erro = validarHorta(horta, true);
     if (erro) return toast.error(erro);
+    if (!confirmarCriacao) { setConfirmarCriacao(true); return; }
     await enviar(horta);
   };
 
@@ -141,7 +137,9 @@ export default function OnboardingPage({ onExplore }: { onExplore: () => void })
             <h1 className="text-[22px] font-semibold text-[#030213]">Criar uma horta</h1>
             <p className="mt-1 mb-6 text-[14px] text-[#4a5565]">Você será o administrador dela.</p>
 
-            <HortaFields value={horta} onChange={setHorta} mostrarDescricao permitirEnderecoSemCoordenadas />
+            <HortaFields value={horta} onChange={(draft) => { setHorta(draft); setConfirmarCriacao(false); }} mostrarDescricao permitirEnderecoSemCoordenadas />
+
+            {confirmarCriacao && <div className="mt-4 rounded-lg bg-[#F0FDF4] p-4 text-[13px] text-[#34483a]"><h2 className="font-semibold">Confirme os dados da horta</h2><p className="mt-2"><strong>{horta.nome}</strong> — {horta.cidade}/{horta.uf.toUpperCase()}</p><p>{horta.endereco}</p><p>{horta.descricao}</p><p>Contato: {horta.contato}</p><button type="button" onClick={() => setConfirmarCriacao(false)} className="mt-2 text-[#16803d] underline">Editar dados</button></div>}
 
             <button
               onClick={criarHorta}
@@ -149,7 +147,7 @@ export default function OnboardingPage({ onExplore }: { onExplore: () => void })
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-[#16A34A] py-3 text-[14px] font-semibold text-white hover:bg-[#166534] disabled:opacity-60"
             >
               {saving && <Loader2 className="size-4 animate-spin" />}
-              Criar horta
+              {confirmarCriacao ? 'Confirmar criação' : 'Revisar dados da horta'}
             </button>
           </>
         )}

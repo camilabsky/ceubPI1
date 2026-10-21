@@ -5,6 +5,7 @@ import { ArrowRight, Bell, CheckCircle2, ClipboardList, Gift, MapPin, Plus, Sett
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import { HortaMap } from './HortaMap';
+import HomeGardensSection from './HomeGardensSection';
 import type { AdminNavigationIntent, AppPage } from '../types/adminNavigation';
 
 const GardenAnalyticsCharts = lazy(() => import('./GardenAnalyticsCharts'));
@@ -218,6 +219,8 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
               <span className="max-w-[260px] truncate">{hortaAdmin?.endereco || 'Endereço não cadastrado'}</span>
             </div>
           </header>
+
+          <HomeGardensSection onExplore={() => onNavigate('explore')} onHome={() => onNavigate('home')} />
 
           <section className="grid grid-cols-2 gap-3 xl:grid-cols-3" aria-label="Resumo da horta">
             <MetricCard label="Tarefas disponíveis" value={availableTasks.length} icon={<ClipboardList className="size-5 text-[#bd8514]" />} tint="bg-amber-50" onClick={() => onNavigate('tasks', { taskStatusFilter: 'available' })} />

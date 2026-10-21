@@ -17,8 +17,8 @@ async function request(path, { token, method = 'GET', body } = {}) {
 
 async function register(name, gardenName, gardenId) {
   const result = await request('/auth/register', { method: 'POST', body: {
-    nome: name, email: `${name.toLowerCase()}-${suffix}@example.test`, senha: 'RoleAudit!123',
-    ...(gardenName ? { nome_nova_horta: gardenName, latitude: -15.79, longitude: -47.88, endereco: 'Endereço de teste isolado' } : {}),
+    nome: name, email: `${name.toLowerCase()}-${suffix}@example.test`, senha: 'RoleAudit!123', telefone: '(61) 99999-0000', cidade: 'Brasília', uf: 'DF',
+    ...(gardenName ? { nome_nova_horta: gardenName, descricao: 'Horta comunitária de teste', latitude: -15.79, longitude: -47.88, endereco: 'Endereço de teste isolado', cidade_horta: 'Brasília', uf_horta: 'DF', contato: 'horta@example.test' } : {}),
     ...(gardenId ? { id_horta: gardenId } : {}),
   } });
   assert.equal(result.status, 201, JSON.stringify(result.data));

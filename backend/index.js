@@ -94,7 +94,7 @@ function tokenFromHeader(authorizationHeader) {
 
 async function getUserRoles(id_usuario) {
     const [roles] = await db.query(
-        `SELECT uhr.papel AS role, uhr.id_horta, h.nome AS horta_nome, h.latitude, h.longitude, h.endereco, h.descricao
+        `SELECT uhr.papel AS role, uhr.id_horta, h.nome AS horta_nome, h.latitude, h.longitude, h.endereco, h.descricao, h.cidade, h.uf, h.contato
         FROM UsuarioHortaRole uhr
         LEFT JOIN Horta h ON h.id = uhr.id_horta
         WHERE uhr.id_usuario = ?`,
@@ -206,31 +206,37 @@ app.post('/auth/register', async (req, res) => {
     const { senha, id_horta, nome_nova_horta, latitude, longitude, endereco } = req.body;
     const nome = typeof req.body.nome === 'string' ? req.body.nome.trim() : '';
     const email = typeof req.body.email === 'string' ? req.body.email.trim() : '';
+    const telefone = typeof req.body.telefone === 'string' ? req.body.telefone.trim() : '';
+    const cidade = typeof req.body.cidade === 'string' ? req.body.cidade.trim() : '';
+    const uf = typeof req.body.uf === 'string' ? req.body.uf.trim().toUpperCase() : '';
+    const estados = new Set(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
 
-    if (!nome || !email || !senha) {
-        return res.status(400).send({ error: 'Nome, email e senha sao obrigatorios' });
+    if (!nome || !email || typeof senha !== 'string' || senha.length < 6 || senha.length > 128 || !telefone || !cidade || !uf) {
+        return res.status(400).send({ error: 'Nome, email, telefone, cidade, UF e senha sao obrigatorios' });
     }
-    if (nome.length > 128 || email.length > 128) {
-        return res.status(400).send({ error: 'Nome ou email excede o limite permitido' });
+    if (nome.length > 128 || email.length > 128 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || telefone.length > 24 || !/^\+?[0-9 ()-]{8,20}$/.test(telefone) || cidade.length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade) || !estados.has(uf)) {
+        return res.status(400).send({ error: 'Confira o e-mail, telefone, cidade e UF informados' });
     }
 
     if (id_horta && nome_nova_horta) {
         return res.status(400).send({ error: 'Informe apenas id_horta OU nome_nova_horta, nao os dois' });
     }
 
-    let lat, lng;
+    const descricao = typeof req.body.descricao === 'string' ? req.body.descricao.trim() : '';
+    const cidadeHorta = typeof req.body.cidade_horta === 'string' ? req.body.cidade_horta.trim() : '';
+    const ufHorta = typeof req.body.uf_horta === 'string' ? req.body.uf_horta.trim().toUpperCase() : '';
+    const contato = typeof req.body.contato === 'string' ? req.body.contato.trim() : '';
+    let lat = null, lng = null;
     if (nome_nova_horta) {
-        if (!endereco || !endereco.trim()) {
-            return res.status(400).send({ error: 'Endereco da horta e obrigatorio' });
-        }
-        lat = Number(latitude);
-        lng = Number(longitude);
-        if (Number.isNaN(lat) || lat < -90 || lat > 90) {
-            return res.status(400).send({ error: 'Latitude invalida ou nao informada' });
-        }
-        if (Number.isNaN(lng) || lng < -180 || lng > 180) {
-            return res.status(400).send({ error: 'Longitude invalida ou nao informada' });
-        }
+        if (typeof nome_nova_horta !== 'string' || !nome_nova_horta.trim() || nome_nova_horta.trim().length > 128) return res.status(400).send({ error: 'Informe um nome válido para a horta' });
+        if (!descricao || descricao.length > 255) return res.status(400).send({ error: 'Informe a descrição e os objetivos da horta (até 255 caracteres)' });
+        if (typeof endereco !== 'string' || !endereco.trim() || endereco.trim().length > 255) return res.status(400).send({ error: 'Informe um endereço válido para a horta' });
+        if (!cidadeHorta || cidadeHorta.length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidadeHorta) || !estados.has(ufHorta)) return res.status(400).send({ error: 'Informe uma cidade e UF válidas para a horta' });
+        if (!contato || contato.length > 160 || (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contato) && !/^\+?[0-9 ()-]{8,20}$/.test(contato))) return res.status(400).send({ error: 'Informe um telefone ou e-mail de contato válido para a horta' });
+        const hasLat = latitude !== '' && latitude != null;
+        const hasLng = longitude !== '' && longitude != null;
+        if (hasLat !== hasLng) return res.status(400).send({ error: 'Informe latitude e longitude juntas ou deixe ambas vazias' });
+        if (hasLat) { lat = Number(latitude); lng = Number(longitude); if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) return res.status(400).send({ error: 'Informe coordenadas válidas para a localização' }); }
     }
 
     const connection = await db.getConnection();
@@ -252,8 +258,8 @@ app.post('/auth/register', async (req, res) => {
         const id_perfil = perfilResult.insertId;
 
         const [userResult] = await connection.query(
-            'INSERT INTO Usuario (nome, email, password_hash, id_perfil) VALUES (?, ?, ?, ?)',
-            [nome, email, senhaHash, id_perfil]
+            'INSERT INTO Usuario (nome, email, password_hash, id_perfil, telefone, cidade, uf) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [nome, email, senhaHash, id_perfil, telefone, cidade, uf]
         );
         const id_usuario = userResult.insertId;
 
@@ -262,8 +268,8 @@ app.post('/auth/register', async (req, res) => {
 
         if (nome_nova_horta) {
             const [hortaResult] = await connection.query(
-                'INSERT INTO Horta (nome, latitude, longitude, endereco) VALUES (?, ?, ?, ?)',
-                [nome_nova_horta, lat, lng, endereco.trim()]
+                'INSERT INTO Horta (nome, descricao, latitude, longitude, endereco, cidade, uf, contato) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [nome_nova_horta.trim(), descricao, lat, lng, endereco.trim(), cidadeHorta, ufHorta, contato]
             );
             idHortaFinal = hortaResult.insertId;
             papel = 'ADMIN';
@@ -1053,17 +1059,43 @@ app.get('/tarefas_disponiveis', requireAuth, async (req, res) => {
 app.get('/hortas', async (req, res) => {
     try {
         const [results] = await db.query(
-            `SELECT h.id, h.nome, h.descricao, h.latitude, h.longitude, h.endereco,
+            `SELECT h.id, h.nome, h.descricao, h.latitude, h.longitude, h.endereco, h.cidade, h.uf, h.contato,
                     COUNT(CASE WHEN uhr.papel = 'MEMBER' THEN 1 END) AS participantes
              FROM Horta h
              LEFT JOIN UsuarioHortaRole uhr ON uhr.id_horta = h.id
-             GROUP BY h.id, h.nome, h.descricao, h.latitude, h.longitude, h.endereco
+             GROUP BY h.id, h.nome, h.descricao, h.latitude, h.longitude, h.endereco, h.cidade, h.uf, h.contato
              ORDER BY h.nome ASC`
         );
         return res.send(results);
     } catch (error) {
         console.error('Erro em /hortas:', error);
         return res.status(500).send({ error: 'Erro ao listar hortas' });
+    }
+});
+
+app.get('/hortas/:id/detalhes', async (req, res) => {
+    const id_horta = Number(req.params.id);
+    if (!Number.isInteger(id_horta) || id_horta <= 0) return res.status(400).send({ error: 'Horta invalida' });
+    try {
+        const [hortas] = await db.query(
+            `SELECT h.id, h.nome, h.descricao, h.latitude, h.longitude, h.endereco, h.cidade, h.uf, h.contato,
+                    (SELECT COUNT(DISTINCT garden_member.id_usuario) FROM UsuarioHortaRole garden_member WHERE garden_member.id_horta = h.id AND garden_member.papel = 'MEMBER') AS participantes,
+                    (SELECT COUNT(*) FROM Tarefas t WHERE t.id_horta = h.id AND t.id_perfil IS NULL AND t.status = 'available' AND t.concluido = false AND t.deleted_at IS NULL) AS atividades_disponiveis
+             FROM Horta h WHERE h.id = ? LIMIT 1`,
+            [id_horta]
+        );
+        if (!hortas.length) return res.status(404).send({ error: 'Horta nao encontrada' });
+        const [admins] = await db.query(
+            `SELECT u.nome FROM UsuarioHortaRole admin_link
+             INNER JOIN Usuario u ON u.id = admin_link.id_usuario
+             WHERE admin_link.id_horta = ? AND admin_link.papel = 'ADMIN'
+             ORDER BY u.nome ASC`,
+            [id_horta]
+        );
+        return res.send({ ...hortas[0], responsaveis: admins.map((admin) => admin.nome) });
+    } catch (error) {
+        console.error('Erro ao carregar detalhes da horta:', error);
+        return res.status(500).send({ error: 'Nao foi possivel carregar os detalhes da horta' });
     }
 });
 
@@ -1617,6 +1649,10 @@ app.get('/admin/horta/participantes', requireAuth, requireHortaAdmin, async (req
 
 app.post('/hortas', requireAuth, async (req, res) => {
     const { nome, descricao, latitude, longitude, endereco } = req.body;
+    const cidade = typeof req.body.cidade === 'string' ? req.body.cidade.trim() : '';
+    const uf = typeof req.body.uf === 'string' ? req.body.uf.trim().toUpperCase() : '';
+    const contato = typeof req.body.contato === 'string' ? req.body.contato.trim() : '';
+    const estados = new Set(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
 
     if (typeof nome !== 'string' || !nome.trim()) {
         return res.status(400).send({ error: 'Nome da horta e obrigatorio' });
@@ -1624,12 +1660,14 @@ app.post('/hortas', requireAuth, async (req, res) => {
     if (nome.trim().length > 128) {
         return res.status(400).send({ error: 'Nome da horta deve ter no maximo 128 caracteres' });
     }
-    if (typeof descricao === 'string' && descricao.trim().length > 255) {
-        return res.status(400).send({ error: 'Descricao deve ter no maximo 255 caracteres' });
+    if (typeof descricao !== 'string' || !descricao.trim() || descricao.trim().length > 255) {
+        return res.status(400).send({ error: 'Informe a descrição e os objetivos da horta (até 255 caracteres)' });
     }
-    if (typeof endereco !== 'string' || !endereco.trim()) {
-        return res.status(400).send({ error: 'Endereco da horta e obrigatorio' });
+    if (typeof endereco !== 'string' || !endereco.trim() || endereco.trim().length > 255) {
+        return res.status(400).send({ error: 'Informe um endereço válido para a horta' });
     }
+    if (!cidade || cidade.length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade) || !estados.has(uf)) return res.status(400).send({ error: 'Informe uma cidade e UF válidas para a horta' });
+    if (!contato || contato.length > 160 || (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contato) && !/^\+?[0-9 ()-]{8,20}$/.test(contato))) return res.status(400).send({ error: 'Informe um telefone ou e-mail de contato válido para a horta' });
 
     const hasLatitude = latitude !== '' && latitude != null;
     const hasLongitude = longitude !== '' && longitude != null;
@@ -1644,8 +1682,8 @@ app.post('/hortas', requireAuth, async (req, res) => {
         await connection.beginTransaction();
 
         const [hortaResult] = await connection.query(
-            'INSERT INTO Horta (nome, descricao, latitude, longitude, endereco) VALUES (?, ?, ?, ?, ?)',
-            [nome.trim(), typeof descricao === 'string' && descricao.trim() ? descricao.trim() : null, lat, lng, endereco.trim()]
+            'INSERT INTO Horta (nome, descricao, latitude, longitude, endereco, cidade, uf, contato) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [nome.trim(), descricao.trim(), lat, lng, endereco.trim(), cidade, uf, contato]
         );
         const id_horta = hortaResult.insertId;
 
@@ -1942,6 +1980,9 @@ app.put('/admin/recompensas/:id', requireAuth, async (req, res) => {
 app.put('/admin/horta', requireAuth, requireHortaAdmin, async (req, res) => {
     try {
         const { latitude, longitude, endereco, descricao } = req.body;
+        const cidade = typeof req.body.cidade === 'string' ? req.body.cidade.trim() : '';
+        const uf = typeof req.body.uf === 'string' ? req.body.uf.trim().toUpperCase() : '';
+        const contato = typeof req.body.contato === 'string' ? req.body.contato.trim() : '';
         const hasLatitude = latitude !== '' && latitude != null;
         const hasLongitude = longitude !== '' && longitude != null;
         if (hasLatitude !== hasLongitude) return res.status(400).send({ error: 'Informe latitude e longitude juntas ou deixe ambas vazias' });
@@ -1951,13 +1992,18 @@ app.put('/admin/horta', requireAuth, requireHortaAdmin, async (req, res) => {
         if (hasLongitude && (!Number.isFinite(lng) || lng < -180 || lng > 180)) return res.status(400).send({ error: 'Longitude invalida' });
         if (typeof endereco !== 'string' || endereco.trim().length > 255) return res.status(400).send({ error: 'Informe um endereço válido com no máximo 255 caracteres' });
         if (typeof descricao === 'string' && descricao.trim().length > 255) return res.status(400).send({ error: 'Descrição deve ter no máximo 255 caracteres' });
+        if (cidade.length > 100 || (cidade && !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade))) return res.status(400).send({ error: 'Informe uma cidade válida' });
+        const estados = new Set(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
+        if (uf && !estados.has(uf)) return res.status(400).send({ error: 'Informe uma UF brasileira válida' });
+        if ((cidade && !uf) || (!cidade && uf)) return res.status(400).send({ error: 'Informe cidade e UF juntas' });
+        if (contato.length > 160 || (contato && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contato) && !/^\+?[0-9 ()-]{8,20}$/.test(contato))) return res.status(400).send({ error: 'Informe um contato válido' });
 
         await db.query(
-            'UPDATE Horta SET latitude = ?, longitude = ?, endereco = ?, descricao = ? WHERE id = ?',
-            [lat, lng, endereco.trim() || null, typeof descricao === 'string' && descricao.trim() ? descricao.trim() : null, req.id_horta]
+            'UPDATE Horta SET latitude = ?, longitude = ?, endereco = ?, descricao = ?, cidade = ?, uf = ?, contato = ? WHERE id = ?',
+            [lat, lng, endereco.trim() || null, typeof descricao === 'string' && descricao.trim() ? descricao.trim() : null, cidade || null, uf || null, contato || null, req.id_horta]
         );
 
-        return res.send({ message: 'Informações da horta atualizadas', latitude: lat, longitude: lng, endereco: endereco.trim() || null, descricao: typeof descricao === 'string' && descricao.trim() ? descricao.trim() : null });
+        return res.send({ message: 'Informações da horta atualizadas', latitude: lat, longitude: lng, endereco: endereco.trim() || null, descricao: typeof descricao === 'string' && descricao.trim() ? descricao.trim() : null, cidade: cidade || null, uf: uf || null, contato: contato || null });
     } catch (error) {
         console.error('Erro em PUT /admin/horta:', error);
         return res.status(500).send({ error: 'Erro ao atualizar localizacao da horta' });
@@ -2001,6 +2047,13 @@ async function ensureGamificationSchema() {
     if (cityColumns.length === 0) await db.query('ALTER TABLE Usuario ADD COLUMN cidade varchar(100) NULL');
     const [stateColumns] = await db.query("SHOW COLUMNS FROM Usuario LIKE 'uf'");
     if (stateColumns.length === 0) await db.query('ALTER TABLE Usuario ADD COLUMN uf char(2) NULL');
+    const [phoneColumns] = await db.query("SHOW COLUMNS FROM Usuario LIKE 'telefone'");
+    if (phoneColumns.length === 0) await db.query('ALTER TABLE Usuario ADD COLUMN telefone varchar(24) NULL');
+    const gardenColumns = [['cidade', 'varchar(100) NULL'], ['uf', 'char(2) NULL'], ['contato', 'varchar(160) NULL']];
+    for (const [column, definition] of gardenColumns) {
+        const [columns] = await db.query(`SHOW COLUMNS FROM Horta LIKE '${column}'`);
+        if (columns.length === 0) await db.query(`ALTER TABLE Horta ADD COLUMN ${column} ${definition}`);
+    }
     const [statusColumns] = await db.query("SHOW COLUMNS FROM Tarefas LIKE 'status'");
     if (statusColumns.length === 0) {
         await db.query('ALTER TABLE Tarefas ADD COLUMN status varchar(24) NULL');

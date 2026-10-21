@@ -163,7 +163,7 @@ export default function App() {
       <Sidebar currentPage={currentPage} onNavigate={navigate} isAdmin={isAdmin} />
 
       <div className="w-full lg:ml-64">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-white px-4 py-2.5 sm:px-6">
+        <div className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-white px-4 py-2.5 sm:px-6">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
           {hasGardenSelector && <>
           <label htmlFor="active-garden" className="text-[12px] font-medium text-[#526056]">Horta ativa</label>

@@ -14,25 +14,33 @@ interface RegisterPageProps {
 
 const inputBase =
   'w-full border border-[#E2E8E3] rounded-lg pl-10 py-2.5 text-[14px] outline-none focus:border-[#16A34A]';
+const UFS = new Set(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
 
 export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
   const { register, isAuthenticating } = useAuth();
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
+  const [telefone, setTelefone] = useState('');
+  const [cidade, setCidade] = useState('');
+  const [uf, setUf] = useState('');
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [showSenha, setShowSenha] = useState(false);
   const [showConfirmar, setShowConfirmar] = useState(false);
   const [escolha, setEscolha] = useState<'participar' | 'criar'>('participar');
   const [horta, setHorta] = useState<HortaDraft>(HORTA_VAZIA);
+  const [confirmarCriacao, setConfirmarCriacao] = useState(false);
   const enviando = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nome || !email || !senha || !confirmarSenha) {
+    if (!nome.trim() || !email.trim() || !telefone.trim() || !cidade.trim() || !uf.trim() || !senha || !confirmarSenha) {
       toast.error('Preencha todos os campos');
       return;
     }
+    if (!/^\+?[0-9 ()-]{8,20}$/.test(telefone.trim())) { toast.error('Informe um telefone válido'); return; }
+    if (!UFS.has(uf.trim().toUpperCase())) { toast.error('Informe uma UF brasileira válida'); return; }
+    if (cidade.trim().length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade.trim())) { toast.error('Informe uma cidade válida'); return; }
     if (senha.length < 6) {
       toast.error('A senha deve ter no mínimo 6 caracteres');
       return;
@@ -43,11 +51,12 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
     }
 
     if (escolha === 'criar') {
-      const erro = validarHorta(horta);
+      const erro = validarHorta(horta, true);
       if (erro) {
         toast.error(erro);
         return;
       }
+      if (!confirmarCriacao) { setConfirmarCriacao(true); return; }
     }
 
     if (enviando.current) return;
@@ -57,12 +66,13 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
         escolha === 'criar'
           ? {
               nome_nova_horta: horta.nome.trim(),
-              latitude: Number(horta.lat),
-              longitude: Number(horta.lng),
+              latitude: horta.lat.trim() ? Number(horta.lat) : null,
+              longitude: horta.lng.trim() ? Number(horta.lng) : null,
               endereco: horta.endereco.trim(),
+              descricao: horta.descricao.trim(), cidade_horta: horta.cidade.trim(), uf_horta: horta.uf.trim().toUpperCase(), contato: horta.contato.trim(),
             }
           : {};
-      await register(nome, email, senha, opts);
+      await register(nome, email, senha, { telefone: telefone.trim(), cidade: cidade.trim(), uf: uf.trim().toUpperCase(), ...opts });
       toast.success('Cadastro realizado com sucesso!');
     } catch (error: any) {
       toast.error(error.message || 'Erro ao cadastrar');
@@ -137,11 +147,12 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-[13px] text-[#4a5565] mb-2">Nome completo</label>
+                  <label className="block text-[13px] text-[#4a5565] mb-2">Nome completo *</label>
                   <div className="relative">
                     <User className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#66736A]" />
                     <input
                       type="text"
+                      required
                       value={nome}
                       onChange={(e) => setNome(e.target.value)}
                       className={`${inputBase} pr-4`}
@@ -151,11 +162,12 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                 </div>
 
                 <div>
-                  <label className="block text-[13px] text-[#4a5565] mb-2">E-mail</label>
+                  <label className="block text-[13px] text-[#4a5565] mb-2">E-mail *</label>
                   <div className="relative">
                     <Mail className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#66736A]" />
                     <input
                       type="email"
+                      required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className={`${inputBase} pr-4`}
@@ -164,12 +176,16 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                   </div>
                 </div>
 
+                <div><label className="block text-[13px] text-[#4a5565] mb-2">Telefone *</label><input type="tel" required value={telefone} onChange={(e) => setTelefone(e.target.value)} className={`${inputBase} px-3`} placeholder="(61) 99999-9999" /></div>
+                <div className="grid grid-cols-[1fr_5rem] gap-2"><div><label className="block text-[13px] text-[#4a5565] mb-2">Cidade *</label><input required maxLength={100} value={cidade} onChange={(e) => setCidade(e.target.value)} className={`${inputBase} px-3`} placeholder="Sua cidade" /></div><div><label className="block text-[13px] text-[#4a5565] mb-2">UF *</label><input required maxLength={2} value={uf} onChange={(e) => setUf(e.target.value.toUpperCase())} className={`${inputBase} px-3`} placeholder="DF" /></div></div>
+
                 <div>
-                  <label className="block text-[13px] text-[#4a5565] mb-2">Senha</label>
+                  <label className="block text-[13px] text-[#4a5565] mb-2">Senha *</label>
                   <div className="relative">
                     <Lock className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#66736A]" />
                     <input
                       type={showSenha ? 'text' : 'password'}
+                      required
                       value={senha}
                       onChange={(e) => setSenha(e.target.value)}
                       className={`${inputBase} pr-10`}
@@ -187,11 +203,12 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                 </div>
 
                 <div>
-                  <label className="block text-[13px] text-[#4a5565] mb-2">Confirmar senha</label>
+                  <label className="block text-[13px] text-[#4a5565] mb-2">Confirmar senha *</label>
                   <div className="relative">
                     <Lock className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#66736A]" />
                     <input
                       type={showConfirmar ? 'text' : 'password'}
+                      required
                       value={confirmarSenha}
                       onChange={(e) => setConfirmarSenha(e.target.value)}
                       className={`${inputBase} pr-10`}
@@ -214,7 +231,7 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                   className="w-full bg-[#16A34A] text-white text-[14px] py-3 rounded-lg hover:bg-[#166534] transition-colors disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 font-semibold"
                 >
                   <UserPlus className="size-4" />
-                  {isAuthenticating ? 'Criando conta...' : 'Criar minha conta'}
+                  {isAuthenticating ? 'Criando conta...' : escolha === 'criar' && confirmarCriacao ? 'Confirmar cadastro e criar horta' : escolha === 'criar' ? 'Revisar dados da horta' : 'Criar minha conta'}
                 </button>
               </form>
 
@@ -289,7 +306,8 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                   {escolha === 'criar' && (
               <div className="mt-6 border-t border-[#E2E8E3] pt-5">
                 <h4 className="mb-4 text-[15px] font-bold text-[#17201A]">Dados da sua horta</h4>
-                <HortaFields value={horta} onChange={setHorta} mostrarDescricao={false} />
+                <HortaFields value={horta} onChange={(draft) => { setHorta(draft); setConfirmarCriacao(false); }} mostrarDescricao />
+                {confirmarCriacao && <div className="mt-4 rounded-lg bg-[#F0FDF4] p-4 text-[13px] text-[#34483a]"><h5 className="font-semibold">Confirme os dados da horta</h5><p className="mt-2"><strong>{horta.nome}</strong> — {horta.cidade}/{horta.uf.toUpperCase()}</p><p>{horta.endereco}</p><p>{horta.descricao}</p><p>Contato: {horta.contato}</p><button type="button" onClick={() => setConfirmarCriacao(false)} className="mt-2 text-[#16803d] underline">Editar dados</button></div>}
               </div>
             )}
           </div>

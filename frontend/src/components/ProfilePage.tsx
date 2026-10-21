@@ -185,7 +185,7 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
           </div>
         </section>
 
-        <ProfileCommunitySections onNavigate={() => onNavigate?.('explore')} />
+        <ProfileCommunitySections />
 
         <section className="mt-4 grid grid-cols-3 gap-2 sm:gap-3" aria-label="Seu impacto na comunidade">
           <div className="rounded-[14px] border border-gray-200 bg-white p-3 sm:p-4"><div className="flex size-8 items-center justify-center rounded-full bg-green-50"><CheckCircle2 className="size-4 text-[#00a63e]" /></div><p className="mt-2 text-[19px] font-bold leading-5 text-neutral-950">{completed}</p><p className="mt-1 text-[10px] text-[#66736a] sm:text-[11px]">Tarefas concluídas</p></div>

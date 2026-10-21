@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { HortaMap } from './HortaMap';
-import ProfileCommunitySections from './ProfileCommunitySections';
 import ProfileLocationEditor from './ProfileLocationEditor';
 
 interface Task {
@@ -47,6 +46,9 @@ export default function AdminProfilePage({
   const [isFetchingGeoLocation, setIsFetchingGeoLocation] = useState(false);
   const [newEndereco, setNewEndereco] = useState('');
   const [newDescricaoHorta, setNewDescricaoHorta] = useState('');
+  const [newCidadeHorta, setNewCidadeHorta] = useState('');
+  const [newUfHorta, setNewUfHorta] = useState('');
+  const [newContatoHorta, setNewContatoHorta] = useState('');
   const [isLeavingMemberRole, setIsLeavingMemberRole] = useState(false);
 
   const leaveMemberRole = async () => {
@@ -71,7 +73,9 @@ export default function AdminProfilePage({
     setNewLongitude(garden?.longitude != null ? String(garden.longitude) : '');
     setNewEndereco(garden?.endereco || '');
     setNewDescricaoHorta(garden?.descricao || '');
-    setNewDescricaoHorta(garden?.descricao || '');
+    setNewCidadeHorta(garden?.cidade || '');
+    setNewUfHorta(garden?.uf || '');
+    setNewContatoHorta(garden?.contato || '');
     setIsEditingLocation(true);
     requestAnimationFrame(() => document.getElementById('admin-garden-location')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   }, [editGardenOnOpen, user]);
@@ -171,6 +175,8 @@ export default function AdminProfilePage({
   if (hasLongitude && (!Number.isFinite(lng) || Math.abs(lng!) > 180)) return toast.error('Longitude inválida');
   if (newEndereco.trim().length > 255) return toast.error('O endereço deve ter no máximo 255 caracteres');
   if (newDescricaoHorta.trim().length > 255) return toast.error('A descrição deve ter no máximo 255 caracteres');
+  if (newCidadeHorta.trim() && !newUfHorta.trim()) return toast.error('Informe a UF junto com a cidade');
+  if (newContatoHorta.trim().length > 160) return toast.error('O contato deve ter no máximo 160 caracteres');
 
   setIsSavingLocation(true);
   try {
@@ -183,7 +189,7 @@ export default function AdminProfilePage({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ latitude: lat, longitude: lng, endereco: newEndereco, descricao: newDescricaoHorta }),
+        body: JSON.stringify({ latitude: lat, longitude: lng, endereco: newEndereco, descricao: newDescricaoHorta, cidade: newCidadeHorta, uf: newUfHorta, contato: newContatoHorta }),
       }
     );
 
@@ -330,10 +336,6 @@ const handleUseCurrentLocation = () => {
       </div>
     </div>
 
-    <div className="px-4 mb-6">
-      <ProfileCommunitySections />
-    </div>
-
     {/* Estatísticas */}
     <div className="px-4 mb-6">
       <h2 className="text-[16px] font-semibold text-neutral-950 mb-4 px-2">
@@ -478,6 +480,9 @@ const handleUseCurrentLocation = () => {
           setNewLongitude(horta?.longitude != null ? String(horta.longitude) : '');
           setNewEndereco(horta?.endereco || '');
           setNewDescricaoHorta(horta?.descricao || '');
+          setNewCidadeHorta(horta?.cidade || '');
+          setNewUfHorta(horta?.uf || '');
+          setNewContatoHorta(horta?.contato || '');
           setIsEditingLocation(true);
         }}
         className="w-full flex items-center gap-3 text-left"
@@ -506,6 +511,8 @@ const handleUseCurrentLocation = () => {
       </button>
       {activeGarden?.role === 'ADMIN' && <div className="mt-3 space-y-3 pl-12">
         <p className="text-[12px] leading-5 text-[#66736a]">{activeGarden.descricao || 'Descrição não cadastrada.'}</p>
+        <p className="text-[12px] text-[#66736a]">{[activeGarden.cidade, activeGarden.uf].filter(Boolean).join(' / ') || 'Cidade e UF não informadas'}</p>
+        {activeGarden.contato && <p className="text-[12px] text-[#66736a]">Contato: {activeGarden.contato}</p>}
         <p className="text-[11px] text-[#718075]">{activeGarden.latitude != null && activeGarden.longitude != null ? `${activeGarden.latitude}, ${activeGarden.longitude}` : 'Coordenadas não informadas'}</p>
         <HortaMap latitude={activeGarden.latitude} longitude={activeGarden.longitude} nome={activeGarden.horta_nome} endereco={activeGarden.endereco} height="180px" />
       </div>}
@@ -540,6 +547,10 @@ const handleUseCurrentLocation = () => {
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500 min-h-16"
         />
       </div>
+
+        <div className="grid grid-cols-[1fr_5rem] gap-3"><div><label className="text-[12px] text-gray-500 mb-1 block">Cidade</label><input maxLength={100} value={newCidadeHorta} onChange={(event) => setNewCidadeHorta(event.target.value)} placeholder="Cidade" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div><div><label className="text-[12px] text-gray-500 mb-1 block">UF</label><input maxLength={2} value={newUfHorta} onChange={(event) => setNewUfHorta(event.target.value.toUpperCase())} placeholder="UF" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div></div>
+
+        <div><label className="text-[12px] text-gray-500 mb-1 block">Contato</label><input maxLength={160} value={newContatoHorta} onChange={(event) => setNewContatoHorta(event.target.value)} placeholder="Telefone ou e-mail" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div>
 
         <div>
           <label className="text-[12px] text-gray-500 mb-1 block">Descrição da horta</label>

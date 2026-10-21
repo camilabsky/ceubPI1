@@ -4,6 +4,7 @@ import { ArrowRight, Award, CheckCircle2, Clock3, Coins, Flame, Leaf, LoaderCirc
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import TaskProofUpload from './TaskProofUpload';
+import HomeGardensSection from './HomeGardensSection';
 
 interface Task {
   id: number;
@@ -226,6 +227,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               <ArrowRight className="size-3.5 text-[#7b8a7d]" />
             </button>
           </header>
+
+          <HomeGardensSection onExplore={() => onNavigate('explore')} onHome={() => onNavigate('home')} />
 
           <section className="relative isolate overflow-hidden rounded-[20px] bg-gradient-to-r from-[#087a3c] via-[#078c42] to-[#0a7540] px-5 py-5 text-white shadow-[0_10px_28px_#087a3c22] sm:px-6">
             <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-24 -z-10 size-64 rounded-full border-[30px] border-white/[0.06]" />

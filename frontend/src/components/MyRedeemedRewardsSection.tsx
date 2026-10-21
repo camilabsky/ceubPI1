@@ -15,7 +15,7 @@ function formatRedemptionDate(value: string | null) {
 }
 
 export default function MyRedeemedRewardsSection({ rewards, loading = false, error }: { rewards: RedeemedReward[]; loading?: boolean; error?: string | null }) {
-  return <section className="mb-5 rounded-[14px] border border-gray-200 bg-white p-4 sm:p-5">
+  return <section className="mt-4 mb-5 rounded-[14px] border border-gray-200 bg-white p-4 sm:p-5">
     <div className="mb-4">
       <h2 className="text-[15px] font-semibold text-neutral-950">Minhas recompensas</h2>
       <p className="mt-0.5 text-[12px] text-[#718075]">Seu histórico de recompensas resgatadas nas hortas.</p>

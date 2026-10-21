@@ -9,6 +9,9 @@ interface Role {
   longitude: number | null;
   endereco: string | null;
   descricao: string | null;
+  cidade: string | null;
+  uf: string | null;
+  contato: string | null;
 }
 
 interface User {
@@ -47,9 +50,16 @@ register: (
   opts: {
     id_horta?: number;
     nome_nova_horta?: string;
-    latitude?: number;
-    longitude?: number;
+    latitude?: number | null;
+    longitude?: number | null;
     endereco?: string;
+    descricao?: string;
+    cidade_horta?: string;
+    uf_horta?: string;
+    contato?: string;
+    telefone?: string;
+    cidade?: string;
+    uf?: string;
   }
 ) => Promise<void>;
   
@@ -230,9 +240,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       opts: {
         id_horta?: number;
         nome_nova_horta?: string;
-        latitude?: number;
-        longitude?: number;
+        latitude?: number | null;
+        longitude?: number | null;
         endereco?: string;
+        descricao?: string;
+        cidade_horta?: string;
+        uf_horta?: string;
+        contato?: string;
+        telefone?: string;
+        cidade?: string;
+        uf?: string;
       }
     ) => {
     setIsAuthenticating(true);
