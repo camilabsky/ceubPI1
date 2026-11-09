@@ -51,15 +51,24 @@ function canRequestPasswordReset(ip) {
 
 function passwordResetMailer() {
     const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM } = process.env;
-    const port = Number(SMTP_PORT);
+       const port = Number(SMTP_PORT);
     let resetUrl;
     try {
         resetUrl = new URL(process.env.PASSWORD_RESET_URL);
     } catch {
+        console.error('[passwordResetMailer] PASSWORD_RESET_URL inválida:', JSON.stringify(process.env.PASSWORD_RESET_URL));
         return null;
     }
     if (!SMTP_HOST || !Number.isInteger(port) || port < 1 || port > 65535 || !SMTP_USER || !SMTP_PASS || !SMTP_FROM
         || (resetUrl.protocol !== 'https:' && resetUrl.hostname !== 'localhost' && resetUrl.hostname !== '127.0.0.1')) {
+        console.error('[passwordResetMailer] config inválida:', {
+            SMTP_HOST: Boolean(SMTP_HOST),
+            SMTP_PORT: JSON.stringify(SMTP_PORT),
+            SMTP_USER: Boolean(SMTP_USER),
+            SMTP_PASS: Boolean(SMTP_PASS),
+            SMTP_FROM: Boolean(SMTP_FROM),
+            resetProtocol: resetUrl.protocol,
+        });
         return null;
     }
     return {
