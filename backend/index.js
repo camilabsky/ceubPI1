@@ -49,6 +49,34 @@ function canRequestPasswordReset(ip) {
     return true;
 }
 
+function brevoTransport() {
+    return {
+        async sendMail({ from, to, subject, text, html }) {
+            const match = /^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/.exec(from);
+            const sender = match
+                ? { name: match[1].trim() || undefined, email: match[2].trim() }
+                : { email: String(from).trim() };
+            const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+                method: 'POST',
+                headers: {
+                    'api-key': process.env.BREVO_API_KEY,
+                    'content-type': 'application/json',
+                    accept: 'application/json',
+                },
+                body: JSON.stringify({
+                    sender,
+                    to: [{ email: to }],
+                    subject,
+                    textContent: text,
+                    htmlContent: html,
+                }),
+            });
+            if (!res.ok) throw new Error(`Brevo API ${res.status}: ${await res.text()}`);
+            return res.json();
+        },
+    };
+}
+
 function passwordResetMailer() {
     const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM } = process.env;
        const port = Number(SMTP_PORT);
@@ -72,12 +100,14 @@ function passwordResetMailer() {
         return null;
     }
     return {
-        transporter: nodemailer.createTransport({
-            host: SMTP_HOST,
-            port,
-            secure: port === 465,
-            auth: { user: SMTP_USER, pass: SMTP_PASS },
-        }),
+                transporter: process.env.BREVO_API_KEY
+            ? brevoTransport()
+            : nodemailer.createTransport({
+                host: SMTP_HOST,
+                port,
+                secure: port === 465,
+                auth: { user: SMTP_USER, pass: SMTP_PASS },
+            }),
         from: SMTP_FROM,
         resetUrl,
     };
