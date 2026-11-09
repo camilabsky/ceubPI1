@@ -59,7 +59,7 @@ export default function LoginPage({ onSwitchToRegister }: LoginPageProps) {
       toast.success('Se houver uma conta ativa com esse e-mail, as instruções foram enviadas.');
       setForgotOpen(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Não foi possível solicitar a recuperação.');
+      toast.error(error instanceof Error ? error.message : 'Não foi possível enviar o e-mail agora. Tente novamente mais tarde ou contate o administrador.');
     } finally {
       setForgotLoading(false);
     }

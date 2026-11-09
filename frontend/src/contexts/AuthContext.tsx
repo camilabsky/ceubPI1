@@ -215,7 +215,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Não foi possível conectar ao serviço de autenticação. Tente novamente mais tarde.');
     }
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'Não foi possível solicitar a recuperação agora.');
+    if (!response.ok) {
+      if (response.status === 500 || response.status === 503) {
+        throw new Error('Não foi possível enviar o e-mail agora. Tente novamente mais tarde ou contate o administrador.');
+      }
+      throw new Error(data.error || 'Não foi possível solicitar a recuperação agora.');
+    }
   };
 
   const resetPassword = async (resetToken: string, novaSenha: string) => {
@@ -230,7 +235,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Não foi possível conectar ao serviço de autenticação. Tente novamente mais tarde.');
     }
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'Não foi possível redefinir a senha.');
+    if (!response.ok) {
+      if (response.status === 500 || response.status === 503) {
+        throw new Error('Não foi possível redefinir a senha agora. Tente novamente mais tarde ou contate o administrador.');
+      }
+      throw new Error(data.error || 'Não foi possível redefinir a senha.');
+    }
   };
 
     const register = async (
