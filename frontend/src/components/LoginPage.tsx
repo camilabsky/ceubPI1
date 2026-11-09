@@ -21,7 +21,7 @@ export default function LoginPage({ onSwitchToRegister }: LoginPageProps) {
   const [senha, setSenha] = useState('');
   const [showSenha, setShowSenha] = useState(false);
   const [loginError, setLoginError] = useState('');
-  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('forgot') === '1');
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement>(null);

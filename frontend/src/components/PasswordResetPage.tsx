@@ -11,6 +11,8 @@ export default function PasswordResetPage({ token }: { token: string }) {
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [concluido, setConcluido] = useState(false);
+  const isLinkExpirado = erro.toLowerCase().includes('expirado') || erro.toLowerCase().includes('inválido');
+
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -51,7 +53,7 @@ export default function PasswordResetPage({ token }: { token: string }) {
         ) : (
           <>
             <h1 className="text-xl font-bold text-[#17201A]">Criar nova senha</h1>
-            <p className="mt-2 text-sm text-[#66736A]">O link é válido por 30 minutos e pode ser usado uma única vez.</p>
+            <p className="mt-2 text-sm text-[#66736A]">O link é válido por 5 minutos e pode ser usado uma única vez.</p>
             <form onSubmit={submit} className="mt-5 space-y-4">
               <div>
                 <label className="block text-[13px] text-[#4a5565] mb-2">Nova senha</label>
@@ -103,7 +105,25 @@ export default function PasswordResetPage({ token }: { token: string }) {
                 </div>
               </div>
 
-              {erro && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-800">{erro}</p>}
+              {erro && (
+                <div role="alert" className="rounded-lg bg-red-50 p-3 text-[13px] text-red-800 space-y-2">
+                  <p>{erro}</p>
+                  {isLinkExpirado && (
+                    <div className="pt-2 border-t border-red-200">
+                      <p className="text-[12px] text-red-700 mb-2">
+                        O link de recuperação expirou ou já foi utilizado. Solicite um novo link para redefinir sua senha.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => window.location.replace(window.location.pathname + '?forgot=1')}
+                        className="w-full rounded-lg bg-[#16A34A] py-2 text-xs font-semibold text-white hover:bg-[#166534] transition-colors"
+                      >
+                        Pedir um novo link
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               <button
                 type="submit"
                 disabled={enviando}
@@ -111,6 +131,15 @@ export default function PasswordResetPage({ token }: { token: string }) {
               >
                 {enviando ? 'Salvando…' : 'Redefinir senha'}
               </button>
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => window.location.replace(window.location.pathname + '?forgot=1')}
+                  className="text-[12px] text-[#66736A] hover:text-[#16A34A] hover:underline"
+                >
+                  Pedir um novo link de recuperação
+                </button>
+              </div>
             </form>
           </>
         )}

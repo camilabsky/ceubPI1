@@ -35,6 +35,7 @@ const pool = mysql.createPool({
 const db = pool;
 const taskProofDir = path.join(__dirname, 'uploads', 'task-proofs');
 const passwordResetRequests = new Map();
+const PASSWORD_RESET_TTL_MINUTES = 5;
 
 function canRequestPasswordReset(ip) {
     const now = Date.now();
@@ -589,8 +590,8 @@ app.post('/auth/password/forgot', async (req, res) => {
             );
             await conn.query(
                 `INSERT INTO PasswordResetToken (id_usuario, token_hash, expires_at)
-                 VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 MINUTE))`,
-                [users[0].id, tokenHash]
+                 VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
+                [users[0].id, tokenHash, PASSWORD_RESET_TTL_MINUTES]
             );
         }
         await conn.commit();
@@ -602,7 +603,7 @@ app.post('/auth/password/forgot', async (req, res) => {
             from: mailer.from,
             to: email,
             subject: 'Redefinição de senha do Couve',
-            text: `Foi solicitada uma redefinição de senha para esta conta. Se você fez a solicitação, use este link em até 30 minutos: ${resetUrl.toString()}\n\nSe não solicitou, ignore esta mensagem.`,
+            text: `Foi solicitada uma redefinição de senha para esta conta. Se você fez a solicitação, use este link em até ${PASSWORD_RESET_TTL_MINUTES} minutos: ${resetUrl.toString()}\n\nSe não solicitou, ignore esta mensagem.`,
         });
         return res.send({ message: 'Se houver uma conta ativa com esse e-mail, enviaremos as instruções de redefinição.' });
     } catch (error) {
