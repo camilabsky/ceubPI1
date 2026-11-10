@@ -115,7 +115,7 @@ export default function ExplorePage() {
     const carregar = async () => {
       try {
         const [hortasRes, saldoRes] = await Promise.all([
-          fetch(`${API_URL}/hortas`),
+          fetch(`${API_URL}/hortas`, { cache: 'no-store' }),
           fetch(`${API_URL}/minhas_moedas`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }),
         ]);
         if (!hortasRes.ok) throw new Error('Não foi possível carregar as hortas.');
@@ -142,7 +142,7 @@ export default function ExplorePage() {
     setDetalhes(null);
     setErroDetalhes('');
     setCarregandoDetalhes(true);
-    fetch(`${API_URL}/hortas/${selecionada.id}/detalhes`, { signal: controller.signal })
+    fetch(`${API_URL}/hortas/${selecionada.id}/detalhes`, { signal: controller.signal, cache: 'no-store' })
       .then(async (response) => {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || 'Não foi possível carregar os detalhes da horta.');

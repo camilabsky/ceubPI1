@@ -89,7 +89,7 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
       const [tasksRes, historyRes, gardensRes] = await Promise.all([
         fetch(`${API_URL}/admin/tarefas?id_horta=${idHorta}`, { headers: authHeaders() }),
         fetch(`${API_URL}/admin/horta/historico?id_horta=${idHorta}`, { headers: authHeaders() }),
-        fetch(`${API_URL}/hortas`),
+        fetch(`${API_URL}/hortas`, { cache: 'no-store' }),
       ]);
       if (!tasksRes.ok || !historyRes.ok || !gardensRes.ok) throw new Error('Não foi possível carregar os dados da horta.');
 

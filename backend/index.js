@@ -129,7 +129,7 @@ async function getUserRoles(id_usuario) {
     const [roles] = await db.query(
         `SELECT uhr.papel AS role, uhr.id_horta, h.nome AS horta_nome, h.latitude, h.longitude, h.endereco, h.descricao, h.cidade, h.uf, h.contato
         FROM UsuarioHortaRole uhr
-        LEFT JOIN Horta h ON h.id = uhr.id_horta
+        INNER JOIN Horta h ON h.id = uhr.id_horta
         WHERE uhr.id_usuario = ?`,
         [id_usuario]
     );
@@ -138,7 +138,9 @@ async function getUserRoles(id_usuario) {
 
 async function isAdminForHorta(id_usuario, id_horta) {
     const [rows] = await db.query(
-        'SELECT 1 FROM UsuarioHortaRole WHERE id_usuario = ? AND id_horta = ? AND papel = "ADMIN" LIMIT 1',
+        `SELECT 1 FROM UsuarioHortaRole uhr
+        INNER JOIN Horta h ON h.id = uhr.id_horta
+        WHERE uhr.id_usuario = ? AND uhr.id_horta = ? AND uhr.papel = "ADMIN" LIMIT 1`,
         [id_usuario, id_horta]
     );
     return rows.length > 0;
@@ -146,7 +148,9 @@ async function isAdminForHorta(id_usuario, id_horta) {
 
 async function isMemberForHorta(id_usuario, id_horta) {
     const [rows] = await db.query(
-        'SELECT 1 FROM UsuarioHortaRole WHERE id_usuario = ? AND id_horta = ? AND papel = \'MEMBER\' LIMIT 1',
+        `SELECT 1 FROM UsuarioHortaRole uhr
+        INNER JOIN Horta h ON h.id = uhr.id_horta
+        WHERE uhr.id_usuario = ? AND uhr.id_horta = ? AND uhr.papel = 'MEMBER' LIMIT 1`,
         [id_usuario, id_horta]
     );
     return rows.length > 0;
@@ -430,6 +434,9 @@ app.post('/auth/google', async (req, res) => {
 
 app.get('/auth/me', requireAuth, async (req, res) => {
     try {
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
         const [users] = await db.query(
             'SELECT id, nome, email, id_perfil FROM Usuario WHERE id = ? LIMIT 1',
             [req.user.id]
@@ -1091,6 +1098,9 @@ app.get('/tarefas_disponiveis', requireAuth, async (req, res) => {
 
 app.get('/hortas', async (req, res) => {
     try {
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
         const [results] = await db.query(
             `SELECT h.id, h.nome, h.descricao, h.latitude, h.longitude, h.endereco, h.cidade, h.uf, h.contato,
                     COUNT(CASE WHEN uhr.papel = 'MEMBER' THEN 1 END) AS participantes
@@ -1107,6 +1117,9 @@ app.get('/hortas', async (req, res) => {
 });
 
 app.get('/hortas/:id/detalhes', async (req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     const id_horta = Number(req.params.id);
     if (!Number.isInteger(id_horta) || id_horta <= 0) return res.status(400).send({ error: 'Horta invalida' });
     try {

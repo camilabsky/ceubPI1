@@ -83,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   const availableGardens = Object.values((user?.roles ?? []).reduce<Record<number, { id: number; nome: string; roles: Role['role'][] }>>((items, role) => {
+    if (!role.id_horta || !role.horta_nome) return items;
     const garden = items[role.id_horta] ?? (items[role.id_horta] = { id: role.id_horta, nome: role.horta_nome, roles: [] });
     if (!garden.roles.includes(role.role)) garden.roles.push(role.role);
     return items;
@@ -175,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao carregar usuário:', error);
       setToken(null);
       localStorage.removeItem('token');
+      persistSelection(null, null);
     } finally {
       setIsLoading(false);
     }

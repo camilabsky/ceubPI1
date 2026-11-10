@@ -1,9 +1,15 @@
 const assert = require('node:assert/strict');
 const mysql = require('mysql2/promise');
 
-const api = 'http://localhost:8082';
+const api = process.env.API_URL || 'http://localhost:8082';
 const suffix = `${Date.now()}`;
-const db = mysql.createPool({ host: '127.0.0.1', port: 3308, user: 'user', password: 'password', database: 'horta' });
+const db = mysql.createPool({
+  host: process.env.DB_HOST || '127.0.0.1',
+  port: Number(process.env.DB_PORT || 3308),
+  user: process.env.DB_USER || 'user',
+  password: process.env.DB_PASSWORD || 'password',
+  database: process.env.DB_NAME || 'horta'
+});
 
 async function request(path, { token, method = 'GET', body } = {}) {
   const response = await fetch(`${api}${path}`, {
