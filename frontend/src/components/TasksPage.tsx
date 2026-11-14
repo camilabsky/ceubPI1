@@ -294,6 +294,10 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
     }
   };
 
+  // Mesma regra do backend: só pode excluir tarefa que ninguém iniciou
+  const podeExcluirTarefa = (task: Task) =>
+    task.status === 'available' && task.id_perfil == null && !task.concluido;
+
   const handleDeleteTask = async (id: number) => {
     if (!isAdmin || !token) return;
     if (!window.confirm('Tem certeza que deseja deletar esta tarefa?')) return;
@@ -305,14 +309,17 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
       });
 
       if (!response.ok) {
-        throw new Error('Falha ao deletar tarefa');
+        // Lê a mensagem do backend (ex.: 409 "tarefa já iniciada")
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Falha ao deletar tarefa');
       }
 
       toast.success('Tarefa removida');
       await fetchData();
     } catch (error) {
       console.error('Error deleting task:', error);
-      toast.error('Erro ao deletar tarefa');
+      toast.error(error instanceof Error ? error.message : 'Erro ao deletar tarefa');
+      await fetchData(); // atualiza a lista: a tarefa pode ter sido aceita nesse meio-tempo
     }
   };
 
@@ -788,8 +795,9 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
 
                             <button
                               onClick={() => handleDeleteTask(task.id)}
-                              className="p-2 hover:bg-red-50 rounded-lg text-red-600"
-                              title="Deletar"
+                              disabled={!podeExcluirTarefa(task)}
+                              className="p-2 hover:bg-red-50 rounded-lg text-red-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+                              title={podeExcluirTarefa(task) ? 'Deletar' : 'Tarefas já iniciadas não podem ser excluídas'}
                             >
                               <Trash2 className="size-4" />
                             </button>

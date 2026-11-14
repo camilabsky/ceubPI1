@@ -1342,7 +1342,18 @@ app.delete('/admin/tarefas/:id', requireAuth, async (req, res) => {
             return res.status(403).send({ error: 'Apenas admin da horta pode deletar' });
         }
 
-        await db.query('UPDATE Tarefas SET deleted_at = NOW(), updated_at = NOW() WHERE id = ?', [id]);
+        // Só exclui se a tarefa ainda NÃO foi iniciada. A condição fica dentro do
+        // próprio UPDATE para evitar condição de corrida: se um participante aceitar
+        // a tarefa entre o SELECT acima e este UPDATE, nenhuma linha é afetada.
+        const [result] = await db.query(
+            `UPDATE Tarefas SET deleted_at = NOW(), updated_at = NOW()
+             WHERE id = ? AND deleted_at IS NULL
+               AND status = 'available' AND id_perfil IS NULL AND concluido = false`,
+            [id]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(409).send({ error: 'Esta tarefa já foi iniciada por um participante e não pode ser excluída.' });
+        }
         return res.send({ message: 'Tarefa removida' });
     } catch (error) {
         console.error('Erro em DELETE /admin/tarefas/:id:', error);
