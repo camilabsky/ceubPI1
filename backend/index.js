@@ -156,6 +156,17 @@ async function isMemberForHorta(id_usuario, id_horta) {
     return rows.length > 0;
 }
 
+// Recebe o telefone em qualquer formato e devolve só os dígitos, ou null se inválido.
+// Aceita 10 dígitos (fixo) ou 11 dígitos começando com 9 (celular), com DDD de 11 a 99.
+function normalizarTelefone(valor) {
+    if (typeof valor !== 'string') return null;
+    const digitos = valor.replace(/\D/g, '');
+    if (digitos.length !== 10 && digitos.length !== 11) return null;
+    if (Number(digitos.slice(0, 2)) < 11) return null;
+    if (digitos.length === 11 && digitos[2] !== '9') return null;
+    return digitos;
+}
+
 function requireAuth(req, res, next) {
     try {
         const token = tokenFromHeader(req.headers.authorization);
@@ -243,15 +254,15 @@ app.post('/auth/register', async (req, res) => {
     const { senha, id_horta, nome_nova_horta, latitude, longitude, endereco } = req.body;
     const nome = typeof req.body.nome === 'string' ? req.body.nome.trim() : '';
     const email = typeof req.body.email === 'string' ? req.body.email.trim() : '';
-    const telefone = typeof req.body.telefone === 'string' ? req.body.telefone.trim() : '';
+    const telefone = normalizarTelefone(req.body.telefone);
     const cidade = typeof req.body.cidade === 'string' ? req.body.cidade.trim() : '';
     const uf = typeof req.body.uf === 'string' ? req.body.uf.trim().toUpperCase() : '';
     const estados = new Set(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
 
     if (!nome || !email || typeof senha !== 'string' || senha.length < 6 || senha.length > 128 || !telefone || !cidade || !uf) {
-        return res.status(400).send({ error: 'Nome, email, telefone, cidade, UF e senha sao obrigatorios' });
+        return res.status(400).send({ error: 'Nome, email, telefone (com DDD), cidade, UF e senha sao obrigatorios' });
     }
-    if (nome.length > 128 || email.length > 128 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || telefone.length > 24 || !/^\+?[0-9 ()-]{8,20}$/.test(telefone) || cidade.length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade) || !estados.has(uf)) {
+    if (nome.length > 128 || email.length > 128 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || cidade.length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade) || !estados.has(uf)) {
         return res.status(400).send({ error: 'Confira o e-mail, telefone, cidade e UF informados' });
     }
 
