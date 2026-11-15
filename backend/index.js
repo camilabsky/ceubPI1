@@ -1938,8 +1938,16 @@ app.delete('/hortas/:id/sair', requireAuth, async (req, res) => {
             return res.status(409).send({ error: 'Você não participa desta horta como participante.' });
         }
 
-        const [inProgress] = await conn.query(
-            `SELECT COUNT(*) AS total FROM Tarefas
+        // Devolve para a fila as tarefas que o participante tinha iniciado nesta horta.
+        // Sem isso, elas ficariam presas: ninguém mais consegue aceitá-las e o admin
+        // não consegue excluí-las, porque estão "iniciadas".
+        const [liberadas] = await conn.query(
+            `UPDATE Tarefas
+             SET id_perfil = NULL, status = 'available',
+                 completion_photo_url = NULL, completion_submitted_at = NULL,
+                 completion_latitude = NULL, completion_longitude = NULL,
+                 completion_review_status = 'approved', completion_ai_status = 'not_requested',
+                 completion_review_note = NULL, updated_at = NOW()
              WHERE id_perfil = ? AND id_horta = ? AND concluido = false
                AND status IN ('in_progress', 'pending_review', 'proof_submitted') AND deleted_at IS NULL`,
             [req.user.id_perfil, id_horta]
@@ -1958,7 +1966,7 @@ app.delete('/hortas/:id/sair', requireAuth, async (req, res) => {
         await conn.commit();
         return res.send({
             ok: true,
-            in_progress_tasks: Number(inProgress[0]?.total) || 0,
+            in_progress_tasks: liberadas.affectedRows,
             user: { id: req.user.id, nome: req.user.nome, email: req.user.email, id_perfil: req.user.id_perfil ?? null, roles }
         });
     } catch (error) {
