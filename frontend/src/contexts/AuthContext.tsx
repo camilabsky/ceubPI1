@@ -64,6 +64,7 @@ register: (
 ) => Promise<void>;
   
   updateUser: (dados: { nome?: string; email?: string }) => Promise<void>;
+  deleteAccount: (senha: string, confirmacao: string) => Promise<void>;
   logout: () => void;
   
   updatePassword: (
@@ -382,8 +383,25 @@ if (!response.ok) {
     persistSelection(null, null);
   };
 
+  const deleteAccount = async (senha: string, confirmacao: string) => {
+    if (!token) throw new Error('Sessão expirada. Entre novamente.');
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}/auth/me`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ senha, confirmacao }),
+      });
+    } catch {
+      throw new Error('Não foi possível conectar ao servidor. Tente novamente.');
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Não foi possível excluir a conta.');
+    logout(); // limpa token, usuário e horta ativa do navegador
+  };
+
   return (
-        <AuthContext.Provider value={{token,user,isAdmin,activeGardenId,activeGarden,availableGardens,selectGarden,refreshUser,leaveGarden,refreshActiveAssociation,isLoading,isAuthenticating,login,requestPasswordReset,resetPassword,logout,register,updateUser,updatePassword,loginWithGoogle,applyUser}}
+        <AuthContext.Provider value={{token,user,isAdmin,activeGardenId,activeGarden,availableGardens,selectGarden,refreshUser,leaveGarden,refreshActiveAssociation,isLoading,isAuthenticating,login,requestPasswordReset,resetPassword,logout,deleteAccount,register,updateUser,updatePassword,loginWithGoogle,applyUser}}
 >
         {children}
     </AuthContext.Provider>

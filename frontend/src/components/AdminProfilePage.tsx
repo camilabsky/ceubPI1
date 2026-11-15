@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { HortaMap } from './HortaMap';
 import ProfileLocationEditor from './ProfileLocationEditor';
+import DeleteAccountSection from './DeleteAccountSection';
 
 interface Task {
   id: number;
@@ -782,6 +783,8 @@ const handleUseCurrentLocation = () => {
           Sair da conta
         </span>
       </button>
+
+      <DeleteAccountSection onDeleted={onLogout} />
     </div>
   </div>
 );

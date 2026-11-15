@@ -5,6 +5,7 @@ import { API_URL } from '../config';
 import { useAuth } from '../contexts/AuthContext';
 import ProfileCommunitySections from './ProfileCommunitySections';
 import ProfileLocationEditor from './ProfileLocationEditor';
+import DeleteAccountSection from './DeleteAccountSection';
 
 interface ProfilePageProps {
   coins: number;
@@ -233,6 +234,8 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
 
 
         <div className="mt-4 flex items-center justify-between rounded-[14px] border border-gray-200 bg-white px-4 py-3"><div><p className="text-[12px] font-semibold text-[#34453a]">Impacto na comunidade</p><p className="text-[11px] text-[#718075]">Tarefas concluídas ajudam sua horta a crescer.</p></div><button onClick={() => { logout(); onLogout?.(); }} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium text-[#66736a] hover:bg-gray-50"><LogOut className="size-4" />Sair</button></div>
+
+        <DeleteAccountSection onDeleted={onLogout} />
       </div>
 
       {editOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4" onClick={() => setEditOpen(false)}><form onSubmit={saveProfile} onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"><div className="mb-5 flex items-center justify-between"><div><h2 className="text-[17px] font-bold text-neutral-950">Editar perfil</h2><p className="mt-1 text-[12px] text-[#718075]">Atualize seus dados da comunidade.</p></div><button type="button" onClick={() => setEditOpen(false)} aria-label="Fechar" className="flex size-8 items-center justify-center rounded-full text-[#718075] hover:bg-gray-100"><X className="size-4" /></button></div><label className="mb-3 block text-[12px] font-medium text-[#4a5565]">Nome<input value={editName} onChange={(event) => setEditName(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-200 px-3 text-[13px] outline-none focus:border-[#00a63e]" /></label><label className="block text-[12px] font-medium text-[#4a5565]">E-mail<input type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-200 px-3 text-[13px] outline-none focus:border-[#00a63e]" /></label><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setEditOpen(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-[12px] font-semibold text-[#66736a]">Cancelar</button><button type="submit" disabled={saving} className="rounded-lg bg-[#00a63e] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#008236] disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar alterações'}</button></div></form></div>}

@@ -156,19 +156,41 @@ async function isMemberForHorta(id_usuario, id_horta) {
     return rows.length > 0;
 }
 
-function requireAuth(req, res, next) {
+// Recebe o telefone em qualquer formato e devolve só os dígitos, ou null se inválido.
+// Aceita 10 dígitos (fixo) ou 11 dígitos começando com 9 (celular), com DDD de 11 a 99.
+function normalizarTelefone(valor) {
+    if (typeof valor !== 'string') return null;
+    const digitos = valor.replace(/\D/g, '');
+    if (digitos.length !== 10 && digitos.length !== 11) return null;
+    if (Number(digitos.slice(0, 2)) < 11) return null;
+    if (digitos.length === 11 && digitos[2] !== '9') return null;
+    return digitos;
+}
+
+async function requireAuth(req, res, next) {
+    let payload;
     try {
         const token = tokenFromHeader(req.headers.authorization);
         if (!token) {
             return res.status(401).send({ error: 'Token ausente' });
         }
-
-        const payload = jwt.verify(token, JWT_SECRET);
-        req.user = payload;
-        next();
+        payload = jwt.verify(token, JWT_SECRET);
     } catch (error) {
         return res.status(401).send({ error: 'Token invalido' });
     }
+    try {
+        // O JWT continua válido por 8h mesmo depois de a conta ser excluída.
+        // Por isso conferimos no banco se o usuário ainda está ativo.
+        const [rows] = await db.query('SELECT ativo FROM Usuario WHERE id = ? LIMIT 1', [payload.id]);
+        if (rows.length === 0 || !rows[0].ativo) {
+            return res.status(401).send({ error: 'Conta inativa ou excluída' });
+        }
+    } catch (error) {
+        console.error('Erro ao validar sessão:', error);
+        return res.status(500).send({ error: 'Erro ao validar sessão' });
+    }
+    req.user = payload;
+    next();
 }
 
 async function requireHortaAdmin(req, res, next) {
@@ -243,15 +265,15 @@ app.post('/auth/register', async (req, res) => {
     const { senha, id_horta, nome_nova_horta, latitude, longitude, endereco } = req.body;
     const nome = typeof req.body.nome === 'string' ? req.body.nome.trim() : '';
     const email = typeof req.body.email === 'string' ? req.body.email.trim() : '';
-    const telefone = typeof req.body.telefone === 'string' ? req.body.telefone.trim() : '';
+    const telefone = normalizarTelefone(req.body.telefone);
     const cidade = typeof req.body.cidade === 'string' ? req.body.cidade.trim() : '';
     const uf = typeof req.body.uf === 'string' ? req.body.uf.trim().toUpperCase() : '';
     const estados = new Set(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
 
     if (!nome || !email || typeof senha !== 'string' || senha.length < 6 || senha.length > 128 || !telefone || !cidade || !uf) {
-        return res.status(400).send({ error: 'Nome, email, telefone, cidade, UF e senha sao obrigatorios' });
+        return res.status(400).send({ error: 'Nome, email, telefone (com DDD), cidade, UF e senha sao obrigatorios' });
     }
-    if (nome.length > 128 || email.length > 128 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || telefone.length > 24 || !/^\+?[0-9 ()-]{8,20}$/.test(telefone) || cidade.length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade) || !estados.has(uf)) {
+    if (nome.length > 128 || email.length > 128 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || cidade.length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade) || !estados.has(uf)) {
         return res.status(400).send({ error: 'Confira o e-mail, telefone, cidade e UF informados' });
     }
 
@@ -564,6 +586,100 @@ app.put('/auth/me', requireAuth, async (req, res) => {
         });
     }
 }); 
+
+// Exclusão de conta pelo próprio usuário.
+// Estratégia: anonimizar + desativar (soft delete), em vez de apagar a linha.
+app.delete('/auth/me', requireAuth, async (req, res) => {
+    const confirmacao = typeof req.body?.confirmacao === 'string' ? req.body.confirmacao.trim() : '';
+    const senha = typeof req.body?.senha === 'string' ? req.body.senha : '';
+    if (confirmacao !== 'EXCLUIR') {
+        return res.status(400).send({ error: 'Digite EXCLUIR para confirmar a exclusão da conta' });
+    }
+
+    const conn = await db.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        // 1. Trava a linha do usuário até o fim da transação
+        const [users] = await conn.query(
+            'SELECT id, password_hash, id_perfil FROM Usuario WHERE id = ? AND ativo = true LIMIT 1 FOR UPDATE',
+            [req.user.id]
+        );
+        if (users.length === 0) {
+            await conn.rollback();
+            return res.status(404).send({ error: 'Usuário não encontrado' });
+        }
+        const usuario = users[0];
+
+        // 2. Contas com senha precisam confirmar a senha (contas Google não têm senha)
+        if (usuario.password_hash) {
+            const senhaOk = senha && await bcrypt.compare(senha, usuario.password_hash);
+            if (!senhaOk) {
+                await conn.rollback();
+                return res.status(401).send({ error: 'Senha incorreta' });
+            }
+        }
+
+        // 3. Não deixar uma horta sem nenhum administrador ativo
+        const [hortasSemOutroAdmin] = await conn.query(
+            `SELECT h.nome FROM UsuarioHortaRole r
+             JOIN Horta h ON h.id = r.id_horta
+             WHERE r.id_usuario = ? AND r.papel = 'ADMIN'
+               AND NOT EXISTS (
+                   SELECT 1 FROM UsuarioHortaRole outro
+                   JOIN Usuario ou ON ou.id = outro.id_usuario AND ou.ativo = true
+                   WHERE outro.id_horta = r.id_horta AND outro.papel = 'ADMIN' AND outro.id_usuario <> r.id_usuario
+               )`,
+            [usuario.id]
+        );
+        if (hortasSemOutroAdmin.length > 0) {
+            await conn.rollback();
+            const nomes = hortasSemOutroAdmin.map((h) => h.nome).join(', ');
+            return res.status(409).send({ error: `Você é o único administrador de: ${nomes}. Defina outro administrador antes de excluir sua conta.` });
+        }
+
+        // 4. Devolve tarefas não concluídas para a fila, para outros participantes
+        if (usuario.id_perfil) {
+            await conn.query(
+                `UPDATE Tarefas
+                 SET id_perfil = NULL, status = 'available',
+                     completion_photo_url = NULL, completion_submitted_at = NULL,
+                     completion_latitude = NULL, completion_longitude = NULL,
+                     completion_review_status = 'approved', completion_ai_status = 'not_requested',
+                     completion_review_note = NULL, updated_at = NOW()
+                 WHERE id_perfil = ? AND concluido = false AND deleted_at IS NULL`,
+                [usuario.id_perfil]
+            );
+        }
+
+        // 5. Remove vínculos com hortas e tokens de recuperação de senha
+        await conn.query('DELETE FROM UsuarioHortaRole WHERE id_usuario = ?', [usuario.id]);
+        await conn.query('DELETE FROM PasswordResetToken WHERE id_usuario = ?', [usuario.id]);
+
+        // 6. Anonimiza dados pessoais e desativa a conta.
+        //    O e-mail vira um valor único fictício para liberar o original
+        //    (a coluna é UNIQUE) caso a pessoa queira se cadastrar de novo.
+        await conn.query(
+            `UPDATE Usuario
+             SET nome = 'Usuário removido', email = CONCAT('removido-', id, '@excluido.couve'),
+                 password_hash = NULL, telefone = NULL, cidade = NULL, uf = NULL, ativo = false
+             WHERE id = ?`,
+            [usuario.id]
+        );
+        if (usuario.id_perfil) {
+            await conn.query("UPDATE Perfil SET nome = 'Usuário removido' WHERE id = ?", [usuario.id_perfil]);
+        }
+
+        await conn.commit();
+        return res.send({ message: 'Conta excluída com sucesso' });
+    } catch (error) {
+        await conn.rollback();
+        console.error('Erro em DELETE /auth/me:', error);
+        return res.status(500).send({ error: 'Não foi possível excluir a conta' });
+    } finally {
+        conn.release();
+    }
+});
 
 app.post('/auth/password/forgot', async (req, res) => {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
@@ -1331,7 +1447,18 @@ app.delete('/admin/tarefas/:id', requireAuth, async (req, res) => {
             return res.status(403).send({ error: 'Apenas admin da horta pode deletar' });
         }
 
-        await db.query('UPDATE Tarefas SET deleted_at = NOW(), updated_at = NOW() WHERE id = ?', [id]);
+        // Só exclui se a tarefa ainda NÃO foi iniciada. A condição fica dentro do
+        // próprio UPDATE para evitar condição de corrida: se um participante aceitar
+        // a tarefa entre o SELECT acima e este UPDATE, nenhuma linha é afetada.
+        const [result] = await db.query(
+            `UPDATE Tarefas SET deleted_at = NOW(), updated_at = NOW()
+             WHERE id = ? AND deleted_at IS NULL
+               AND status = 'available' AND id_perfil IS NULL AND concluido = false`,
+            [id]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(409).send({ error: 'Esta tarefa já foi iniciada por um participante e não pode ser excluída.' });
+        }
         return res.send({ message: 'Tarefa removida' });
     } catch (error) {
         console.error('Erro em DELETE /admin/tarefas/:id:', error);

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import hortaLoginImg from '../assets/hortalogin.png';
 import HortaFields, { HORTA_VAZIA, validarHorta, type HortaDraft } from './HortaFields';
+import { apenasDigitos, formatarTelefone, telefoneValido } from '../lib/telefone';
 
 interface RegisterPageProps {
   onSwitchToLogin: () => void;
@@ -38,7 +39,7 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
       toast.error('Preencha todos os campos');
       return;
     }
-    if (!/^\+?[0-9 ()-]{8,20}$/.test(telefone.trim())) { toast.error('Informe um telefone válido'); return; }
+    if (!telefoneValido(telefone)) { toast.error('Informe um telefone válido com DDD, ex.: (61) 99999-9999'); return; }
     if (!UFS.has(uf.trim().toUpperCase())) { toast.error('Informe uma UF brasileira válida'); return; }
     if (cidade.trim().length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade.trim())) { toast.error('Informe uma cidade válida'); return; }
     if (senha.length < 6) {
@@ -72,7 +73,7 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
               descricao: horta.descricao.trim(), cidade_horta: horta.cidade.trim(), uf_horta: horta.uf.trim().toUpperCase(), contato: horta.contato.trim(),
             }
           : {};
-      await register(nome, email, senha, { telefone: telefone.trim(), cidade: cidade.trim(), uf: uf.trim().toUpperCase(), ...opts });
+      await register(nome, email, senha, { telefone: apenasDigitos(telefone), cidade: cidade.trim(), uf: uf.trim().toUpperCase(), ...opts });
       toast.success('Cadastro realizado com sucesso!');
     } catch (error: any) {
       toast.error(error.message || 'Erro ao cadastrar');
@@ -176,7 +177,7 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                   </div>
                 </div>
 
-                <div><label className="block text-[13px] text-[#4a5565] mb-2">Telefone *</label><input type="tel" required value={telefone} onChange={(e) => setTelefone(e.target.value)} className={`${inputBase} px-3`} placeholder="(61) 99999-9999" /></div>
+                <div><label className="block text-[13px] text-[#4a5565] mb-2">Telefone *</label><input type="tel" inputMode="numeric" autoComplete="tel-national" required maxLength={15} value={telefone} onChange={(e) => setTelefone(formatarTelefone(e.target.value))} className={`${inputBase} px-3`} placeholder="(61) 99999-9999" /></div>
                 <div className="grid grid-cols-[1fr_5rem] gap-2"><div><label className="block text-[13px] text-[#4a5565] mb-2">Cidade *</label><input required maxLength={100} value={cidade} onChange={(e) => setCidade(e.target.value)} className={`${inputBase} px-3`} placeholder="Sua cidade" /></div><div><label className="block text-[13px] text-[#4a5565] mb-2">UF *</label><input required maxLength={2} value={uf} onChange={(e) => setUf(e.target.value.toUpperCase())} className={`${inputBase} px-3`} placeholder="DF" /></div></div>
 
                 <div>
