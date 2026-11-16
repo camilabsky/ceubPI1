@@ -1,6 +1,6 @@
 import { API_URL } from './config';
 import { useState, useEffect, useRef } from 'react';
-import { Home, ListTodo, Gift, User, Compass, LogOut, ChartNoAxesCombined } from 'lucide-react';
+import { Home, ListTodo, Gift, User, Compass, LogOut, ChartNoAxesCombined, ClipboardCheck } from 'lucide-react';
 import { Toaster } from './components/ui/sonner';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './components/LoginPage';
@@ -8,6 +8,7 @@ import HomePage from './components/HomePage';
 import DashboardPage from './components/DashboardPage';
 import AdminHomePage from './components/AdminHomePage';
 import TasksPage from './components/TasksPage';
+import MyTasksPage from './components/MyTasksPage';
 import RewardsPage from './components/RewardsPage';
 import ProfilePage from './components/ProfilePage';
 import RegisterPage from './components/RegisterPage';
@@ -67,7 +68,7 @@ export default function App() {
   const { token, user, isAdmin, isLoading, activeGarden, activeGardenId, availableGardens, selectGarden, logout } = useAuth();
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
   const [currentPage, setCurrentPage] = useState<Page>('home');
-  const tasksReturnPage = useRef<Page>('home');
+  const taskPageReturn = useRef<Record<'tasks' | 'my-tasks', Page>>({ tasks: 'home', 'my-tasks': 'home' });
   const [adminNavigationIntent, setAdminNavigationIntent] = useState<AdminNavigationIntent | null>(null);
 
   const handleLogout = () => {
@@ -78,14 +79,16 @@ export default function App() {
   };
 
   const navigate = (page: Page, intent?: AdminNavigationIntent) => {
-    const destination = page === 'explore' && isAdmin ? 'home' : page;
-    if (destination === 'tasks' && currentPage !== 'tasks') tasksReturnPage.current = currentPage;
+    const destination = (page === 'explore' || page === 'my-tasks') && isAdmin ? 'home' : page;
+    if (destination === 'tasks' && currentPage !== 'tasks') taskPageReturn.current.tasks = currentPage;
+    if (destination === 'my-tasks' && currentPage !== 'my-tasks') taskPageReturn.current['my-tasks'] = currentPage;
     setAdminNavigationIntent(intent || null);
     setCurrentPage(destination);
   };
 
-  const returnFromTasks = () => {
-    const destination = tasksReturnPage.current === 'explore' && isAdmin ? 'home' : tasksReturnPage.current;
+  const returnFromTaskPage = (sourcePage: 'tasks' | 'my-tasks') => {
+    const returnPage = taskPageReturn.current[sourcePage];
+    const destination = returnPage === 'explore' && isAdmin ? 'home' : returnPage;
     navigate(destination);
   };
 
@@ -97,7 +100,8 @@ export default function App() {
     { page: 'home' as Page, label: 'Início', icon: Home },
     { page: 'dashboard' as Page, label: 'Dashboard', icon: ChartNoAxesCombined },
     ...(!isAdmin ? [{ page: 'explore' as Page, label: 'Explorar', icon: Compass }] : []),
-    { page: 'tasks' as Page, label: 'Tarefas', icon: ListTodo },
+    { page: 'tasks' as Page, label: isAdmin ? 'Tarefas' : 'Disponíveis', icon: ListTodo },
+    ...(!isAdmin ? [{ page: 'my-tasks' as Page, label: 'Minhas tarefas', icon: ClipboardCheck }] : []),
     { page: 'rewards' as Page, label: 'Recompensas', icon: Gift },
     { page: 'profile' as Page, label: 'Perfil', icon: User },
   ];
@@ -190,8 +194,9 @@ export default function App() {
           {currentPage === 'explore' && !isAdmin && <ExplorePage />}
           {currentPage === 'dashboard' && <DashboardPage onNavigate={navigate} />}
           {currentPage === 'tasks' && (
-            <TasksPage navigationIntent={adminNavigationIntent} onBack={returnFromTasks} />
+            <TasksPage navigationIntent={adminNavigationIntent} onBack={() => returnFromTaskPage('tasks')} />
           )}
+          {currentPage === 'my-tasks' && !isAdmin && <MyTasksPage onBack={() => returnFromTaskPage('my-tasks')} />}
           {currentPage === 'rewards' && (
             <RewardsPage navigationIntent={adminNavigationIntent} />
           )}

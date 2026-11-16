@@ -3,6 +3,7 @@ import { API_URL } from '../config';
 import { ArrowRight, Award, CheckCircle2, Clock3, Leaf, LoaderCircle, MapPin, Play, Sprout } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
+import type { AppPage } from '../types/adminNavigation';
 import TaskProofUpload from './TaskProofUpload';
 import HomeGardensSection from './HomeGardensSection';
 
@@ -24,7 +25,7 @@ interface Task {
 }
 
 interface HomePageProps {
-  onNavigate: (page: 'home' | 'explore' | 'tasks' | 'rewards' | 'profile') => void;
+  onNavigate: (page: AppPage) => void;
 }
 
 const difficultyNames = ['Fácil', 'Médio', 'Difícil'];
@@ -178,7 +179,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           <section>
             <div className="mb-3 flex items-end justify-between gap-3">
               <div><h2 className="text-[17px] font-bold text-[#202b22]">Minhas tarefas</h2><p className="mt-0.5 text-[12px] text-[#738076]">Continue contribuindo para sua horta.</p></div>
-              <button onClick={() => onNavigate('tasks')} className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#16803d] hover:underline">Ver todas <ArrowRight className="size-3.5" /></button>
+              <button onClick={() => onNavigate('my-tasks')} className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#16803d] hover:underline">Ver todas <ArrowRight className="size-3.5" /></button>
             </div>
             {isLoading ? <div className="flex h-36 items-center justify-center gap-2 rounded-xl border border-[#e4e9e4] bg-white text-[12px] text-[#738076]"><LoaderCircle className="size-4 animate-spin" />Carregando tarefas...</div> : inProgressTasks.length === 0 ? <div className="flex flex-col items-center rounded-xl border border-dashed border-[#dce5dc] bg-white px-5 py-8 text-center"><div className="flex size-10 items-center justify-center rounded-full bg-[#eff7f0] text-[#16803d]"><Leaf className="size-5" /></div><p className="mt-2 text-[13px] font-semibold text-[#26362a]">Você ainda não aceitou nenhuma tarefa</p><p className="mt-1 max-w-sm text-[11px] text-[#78847b]">Encontre uma atividade e comece a contribuir com sua comunidade.</p><button onClick={() => onNavigate('tasks')} className="mt-3 rounded-lg bg-[#168a3c] px-3.5 py-2 text-[11px] font-semibold text-white hover:bg-[#117331]">Explorar tarefas</button></div> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{inProgressTasks.slice(0, 3).map((task) => <TaskCard key={task.id} task={task} />)}</div>}
           </section>

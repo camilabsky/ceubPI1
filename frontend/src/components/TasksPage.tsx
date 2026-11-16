@@ -12,7 +12,6 @@ import {
 } from './ui/alert-dialog';
 import { Button } from './ui/button';
 import { useAuth } from '../contexts/AuthContext';
-import TaskProofUpload from './TaskProofUpload';
 import AdminTaskReview from './AdminTaskReview';
 import type { AdminNavigationIntent, AdminTaskStatusFilter } from '../types/adminNavigation';
 
@@ -60,14 +59,12 @@ interface TasksPageProps {
 }
 
 export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) {
-  const { token, user, isAdmin, activeGardenId } = useAuth();
-  const idPerfil = user?.id_perfil || 1;
+  const { token, isAdmin, activeGardenId } = useAuth();
   const idHorta = activeGardenId;
 
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [acceptedTaskTitle, setAcceptedTaskTitle] = useState('');
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [myTasks, setMyTasks] = useState<Task[]>([]);
   const [taskCategory, setTaskCategory] = useState('Todas');
   const [taskOrder, setTaskOrder] = useState<'recommended' | 'xp' | 'easy'>('recommended');
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
@@ -107,7 +104,6 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
       setTasks(tasksData);
 
       if (isAdmin && token) {
-        setMyTasks([]);
         const historyResponse = await fetch(
           `${API_URL}/admin/horta/historico?id_horta=${idHorta}`,
           { headers: { Authorization: `Bearer ${token}` } }
@@ -121,11 +117,6 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
         setTarefasConcluidasHorta(historyData.tarefas_concluidas_horta || []);
       } else {
         setTarefasConcluidasHorta([]);
-        if (token) {
-          const mineResponse = await fetch(`${API_URL}/minhas_tarefas?id_horta=${idHorta ?? ''}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
-          if (!mineResponse.ok) throw new Error('Falha ao carregar suas tarefas em andamento');
-          setMyTasks(await mineResponse.json());
-        }
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -143,10 +134,11 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
   const visibleTasks = useMemo(() => {
     const filtered = tasks.filter((task) => {
       const matchesCategory = taskCategory === 'Todas' || task.tipo === taskCategory;
+      const isCompleted = task.concluido || task.status === 'completed';
       const matchesStatus = !statusFilter
-        || (statusFilter === 'completed' ? task.concluido || task.status === 'completed'
-          : statusFilter === 'proof_pending' ? !task.concluido && (task.status === 'pending_review' || task.status === 'proof_submitted')
-            : !task.concluido && task.status === statusFilter);
+        || (statusFilter === 'completed' && isCompleted)
+        || (statusFilter === 'pending_review' && !isCompleted && task.status === 'pending_review')
+        || (statusFilter === 'proof_submitted' && !isCompleted && task.status === 'proof_submitted');
       return matchesCategory && matchesStatus;
     });
     return [...filtered].sort((a, b) => taskOrder === 'xp'
@@ -214,22 +206,6 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
     }
   };
 
-  const finalizeTask = async (idTarefa: number) => {
-    if (!token) return;
-    try {
-      const response = await fetch(`${API_URL}/concluir_tarefa`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_tarefa: idTarefa, id_horta: idHorta }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || 'Não foi possível enviar a tarefa.');
-      toast.success(result.message || 'Tarefa aguardando comprovação.');
-      await fetchData();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Erro ao finalizar tarefa.');
-    }
-  };
   const resetTaskForm = () => {
     setEditingId(null);
     setFormData({
@@ -367,18 +343,16 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
 
   const getAdminTaskStatus = (task: Task) => {
     if (task.concluido || task.status === 'completed') return { label: 'Concluída', styles: 'bg-green-50 text-green-700' };
-    if (task.status === 'proof_submitted') return { label: 'Comprovação enviada', styles: 'bg-purple-50 text-purple-700' };
-    if (task.status === 'pending_review') return { label: 'Aguardando comprovação', styles: 'bg-orange-50 text-orange-800' };
+    if (task.completion_review_status === 'rejected') return { label: 'Comprovação recusada', styles: 'bg-red-50 text-red-700' };
+    if (task.status === 'proof_submitted') return { label: 'Aguardando análise', styles: 'bg-purple-50 text-purple-700' };
+    if (task.status === 'pending_review') return { label: 'Aguardando envio da foto', styles: 'bg-orange-50 text-orange-800' };
     if (task.status === 'in_progress' || task.id_perfil != null) return { label: 'Em andamento', styles: 'bg-blue-50 text-blue-700' };
     return { label: 'Disponível', styles: 'bg-amber-50 text-amber-700' };
   };
 
   const statusFilterLabels: Record<AdminTaskStatusFilter, string> = {
-    available: 'Disponíveis',
-    in_progress: 'Em andamento',
-    pending_review: 'Aguardando comprovação',
-    proof_submitted: 'Comprovação enviada',
-    proof_pending: 'Comprovações pendentes',
+    pending_review: 'Aguardando envio da foto',
+    proof_submitted: 'Aguardando análise da comprovação',
     completed: 'Concluídas',
   };
 
@@ -411,7 +385,7 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
             <h1 className="px-2 text-[16px] font-bold text-neutral-950">{statusFilter ? `Tarefas: ${statusFilterLabels[statusFilter]}` : 'Tarefas Disponíveis'}</h1>
           </div>
           <div className="flex items-center gap-2">
-            {isAdmin && <select aria-label="Filtrar tarefas por status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as AdminTaskStatusFilter | '')} className="max-w-[190px] rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[11px] focus:border-[#00a63e] focus:outline-none"><option value="">Todas as situações</option><option value="available">Disponíveis</option><option value="in_progress">Em andamento</option><option value="proof_pending">Comprovações pendentes</option><option value="pending_review">Aguardando envio da foto</option><option value="proof_submitted">Aguardando análise do Admin</option><option value="completed">Concluídas</option></select>}
+            {isAdmin && <select aria-label="Filtrar tarefas por situação" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as AdminTaskStatusFilter | '')} className="max-w-[220px] rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[11px] focus:border-[#00a63e] focus:outline-none"><option value="">Todas as tarefas</option><option value="pending_review">Aguardando envio da foto</option><option value="proof_submitted">Aguardando análise da comprovação</option><option value="completed">Concluídas</option></select>}
             {isAdmin && (
               <button
                 onClick={() => {
@@ -429,27 +403,6 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
             </div>
           </div>
         </div>
-
-        {!isAdmin && myTasks.length > 0 && <section className="mb-5 rounded-[14px] border border-gray-200 bg-white p-4">
-          <div className="mb-3"><h2 className="text-[15px] font-semibold text-neutral-950">Minhas tarefas</h2><p className="mt-0.5 text-[11px] text-[#717182]">Acompanhe atividades e envios para comprovação.</p></div>
-          <div className="space-y-2">{myTasks.map((task) => {
-            const canRetryProof = task.status === 'in_progress' && task.completion_review_status === 'rejected';
-            const showProofPanel = task.status === 'pending_review' || task.status === 'proof_submitted'
-              || canRetryProof || (task.status === 'completed' && task.completion_ai_status === 'analyzed');
-            return <article key={task.id} className="rounded-xl border border-gray-100 p-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="truncate text-[13px] font-semibold text-neutral-950">{task.titulo}</p>
-                  <span className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${canRetryProof ? 'bg-red-50 text-red-700' : task.status === 'pending_review' ? 'bg-amber-50 text-amber-800' : 'bg-green-50 text-green-800'}`}>
-                    {canRetryProof ? 'Comprovação recusada' : task.status === 'pending_review' ? 'Aguardando comprovação' : task.status === 'proof_submitted' ? 'Comprovação enviada' : task.status === 'completed' ? 'Tarefa concluída' : 'Em andamento'}
-                  </span>
-                </div>
-                {task.status === 'in_progress' && !canRetryProof && <button onClick={() => finalizeTask(task.id)} className="shrink-0 rounded-lg bg-[#00a63e] px-3.5 py-2 text-[11px] font-semibold text-white hover:bg-[#008236]">Finalizar tarefa</button>}
-              </div>
-              {showProofPanel && <TaskProofUpload taskId={task.id} idHorta={idHorta ?? 0} hasPhoto={Boolean(task.has_completion_photo)} canRetry={canRetryProof} rejectionReason={task.completion_review_note} onUploaded={() => { void fetchData(); }} />}
-            </article>;
-          })}</div>
-        </section>}
 
         {isAdmin && showFormTask && (
           <div className="bg-white rounded-[14px] border border-gray-200 p-5 space-y-4 mb-5">

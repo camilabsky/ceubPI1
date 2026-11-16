@@ -1,6 +1,6 @@
-export type AppPage = 'home' | 'dashboard' | 'explore' | 'tasks' | 'rewards' | 'profile';
+export type AppPage = 'home' | 'dashboard' | 'explore' | 'tasks' | 'my-tasks' | 'rewards' | 'profile';
 
-export type AdminTaskStatusFilter = 'available' | 'in_progress' | 'pending_review' | 'proof_submitted' | 'proof_pending' | 'completed';
+export type AdminTaskStatusFilter = 'pending_review' | 'proof_submitted' | 'completed';
 
 export interface AdminNavigationIntent {
   taskStatusFilter?: AdminTaskStatusFilter;

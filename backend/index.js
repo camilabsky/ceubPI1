@@ -844,6 +844,7 @@ app.post('/minhas_tarefas', requireAuth, async (req, res) => {
     try {
         const id_perfil = Number(req.user.id_perfil);
         const id_horta = Number(req.query.id_horta || req.body?.id_horta);
+        const includeCompleted = req.query.include_completed === '1';
         if (!Number.isInteger(id_horta) || id_horta <= 0) return res.status(400).send({ error: 'id_horta invalido' });
         if (!await isMemberForHorta(req.user.id, id_horta)) return res.status(403).send({ error: 'Você não participa desta horta' });
         const [results] = await db.query(
@@ -851,11 +852,12 @@ app.post('/minhas_tarefas', requireAuth, async (req, res) => {
              FROM Tarefas t
              WHERE t.id_perfil = ? AND t.id_horta = ? AND (
                  (t.concluido = false AND t.status IN ('in_progress', 'pending_review', 'proof_submitted'))
+                 OR (? = true AND (t.concluido = true OR t.status = 'completed'))
                  OR (t.concluido = true AND t.completion_photo_url IS NOT NULL AND t.completion_ai_status = 'analyzed')
              )
                AND t.deleted_at IS NULL
              ORDER BY t.updated_at DESC, t.id DESC`,
-            [id_perfil, id_horta]
+            [id_perfil, id_horta, includeCompleted]
         );
         return res.send(results);
     } catch (error) {
