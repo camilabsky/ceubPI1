@@ -8,10 +8,17 @@ import HortaFields, { HORTA_VAZIA, payloadHorta, validarHorta, type HortaDraft }
 
 const RASCUNHO = 'rascunho_horta';
 
-export default function OnboardingPage({ onExplore }: { onExplore: () => void }) {
+interface OnboardingPageProps {
+  onExplore: () => void;
+  startInCreate?: boolean;
+  onCancelCreate?: () => void;
+  onCreated?: () => void;
+}
+
+export default function OnboardingPage({ onExplore, startInCreate = false, onCancelCreate, onCreated }: OnboardingPageProps) {
   const { token, user, applyUser, logout } = useAuth();
   const [view, setView] = useState<'choose' | 'create' | 'auto'>(() =>
-    sessionStorage.getItem(RASCUNHO) ? 'auto' : 'choose'
+    startInCreate ? 'create' : sessionStorage.getItem(RASCUNHO) ? 'auto' : 'choose'
   );
   const [horta, setHorta] = useState<HortaDraft>(HORTA_VAZIA);
   const [confirmarCriacao, setConfirmarCriacao] = useState(false);
@@ -36,7 +43,8 @@ export default function OnboardingPage({ onExplore }: { onExplore: () => void })
         return false;
       }
       toast.success('Horta criada!');
-      applyUser(data.user);
+      applyUser(data.user, data.id_horta);
+      onCreated?.();
       return true;
     } catch {
       toast.error('Erro de conexão ao criar horta');
@@ -70,8 +78,8 @@ export default function OnboardingPage({ onExplore }: { onExplore: () => void })
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-lg sm:p-8">
+    <div className={startInCreate ? 'fixed inset-0 z-[2000] flex items-center justify-center overflow-y-auto bg-black/40 p-4' : 'min-h-screen bg-gray-50 flex items-center justify-center p-4'}>
+      <div className={`w-full max-w-xl rounded-2xl bg-white p-6 shadow-lg sm:p-8 ${startInCreate ? 'my-auto max-h-[92vh] overflow-y-auto' : ''}`} role={startInCreate ? 'dialog' : undefined} aria-modal={startInCreate ? true : undefined} aria-labelledby={startInCreate ? 'create-garden-title' : undefined}>
         {view === 'auto' && (
           <div className="flex flex-col items-center gap-3 py-10">
             <Loader2 className="size-8 animate-spin text-[#16A34A]" />
@@ -129,12 +137,12 @@ export default function OnboardingPage({ onExplore }: { onExplore: () => void })
         {view === 'create' && (
           <>
             <button
-              onClick={() => setView('choose')}
+              onClick={() => startInCreate ? onCancelCreate?.() : setView('choose')}
               className="mb-4 flex items-center gap-1 text-[13px] text-[#4a5565] hover:text-[#030213]"
             >
               <ArrowLeft className="size-4" /> Voltar
             </button>
-            <h1 className="text-[22px] font-semibold text-[#030213]">Criar uma horta</h1>
+            <h1 id={startInCreate ? 'create-garden-title' : undefined} className="text-[22px] font-semibold text-[#030213]">Criar uma horta</h1>
             <p className="mt-1 mb-6 text-[14px] text-[#4a5565]">Você será o administrador dela.</p>
 
             <HortaFields value={horta} onChange={(draft) => { setHorta(draft); setConfirmarCriacao(false); }} mostrarDescricao permitirEnderecoSemCoordenadas />

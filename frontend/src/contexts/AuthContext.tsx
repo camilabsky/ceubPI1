@@ -36,7 +36,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticating: boolean;
       loginWithGoogle: (credential: string) => Promise<void>;
-      applyUser: (user: User) => void;
+      applyUser: (user: User, selectAdminGardenId?: number) => void;
 
   
   login: (email: string, senha: string) => Promise<void>;
@@ -47,20 +47,7 @@ register: (
   nome: string,
   email: string,
   senha: string,
-  opts: {
-    id_horta?: number;
-    nome_nova_horta?: string;
-    latitude?: number | null;
-    longitude?: number | null;
-    endereco?: string;
-    descricao?: string;
-    cidade_horta?: string;
-    uf_horta?: string;
-    contato?: string;
-    telefone?: string;
-    cidade?: string;
-    uf?: string;
-  }
+  dadosPessoais: { telefone?: string; cidade?: string; uf: string }
 ) => Promise<void>;
   
   updateUser: (dados: { nome?: string; email?: string }) => Promise<void>;
@@ -250,27 +237,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       nome: string,
       email: string,
       senha: string,
-      opts: {
-        id_horta?: number;
-        nome_nova_horta?: string;
-        latitude?: number | null;
-        longitude?: number | null;
-        endereco?: string;
-        descricao?: string;
-        cidade_horta?: string;
-        uf_horta?: string;
-        contato?: string;
-        telefone?: string;
-        cidade?: string;
-        uf?: string;
-      }
+      dadosPessoais: { telefone?: string; cidade?: string; uf: string }
     ) => {
     setIsAuthenticating(true);
     try {
       const res = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: nome.trim(), email: email.trim(), senha, ...opts })
+        body: JSON.stringify({ nome: nome.trim(), email: email.trim(), senha, ...dadosPessoais })
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -372,8 +346,11 @@ if (!response.ok) {
     }
   };
 
-    const applyUser = (novoUser: User) => {
+    const applyUser = (novoUser: User, selectAdminGardenId?: number) => {
     setUser(novoUser);
+    if (selectAdminGardenId != null && novoUser.roles.some((role) => role.id_horta === selectAdminGardenId && role.role === 'ADMIN')) {
+      persistSelection(selectAdminGardenId, 'ADMIN');
+    }
   };
 
   const logout = () => {

@@ -156,17 +156,6 @@ async function isMemberForHorta(id_usuario, id_horta) {
     return rows.length > 0;
 }
 
-// Recebe o telefone em qualquer formato e devolve só os dígitos, ou null se inválido.
-// Aceita 10 dígitos (fixo) ou 11 dígitos começando com 9 (celular), com DDD de 11 a 99.
-function normalizarTelefone(valor) {
-    if (typeof valor !== 'string') return null;
-    const digitos = valor.replace(/\D/g, '');
-    if (digitos.length !== 10 && digitos.length !== 11) return null;
-    if (Number(digitos.slice(0, 2)) < 11) return null;
-    if (digitos.length === 11 && digitos[2] !== '9') return null;
-    return digitos;
-}
-
 async function requireAuth(req, res, next) {
     let payload;
     try {
@@ -262,40 +251,30 @@ app.post('/auth/login', async (req, res) => {
 });
 
 app.post('/auth/register', async (req, res) => {
-    const { senha, id_horta, nome_nova_horta, latitude, longitude, endereco } = req.body;
+    const { senha } = req.body;
     const nome = typeof req.body.nome === 'string' ? req.body.nome.trim() : '';
     const email = typeof req.body.email === 'string' ? req.body.email.trim() : '';
-    const telefone = normalizarTelefone(req.body.telefone);
-    const cidade = typeof req.body.cidade === 'string' ? req.body.cidade.trim() : '';
+    const telefoneInformado = typeof req.body.telefone === 'string' ? req.body.telefone.trim() : req.body.telefone == null ? '' : null;
+    const telefone = telefoneInformado ? telefoneInformado.replace(/\D/g, '') : null;
+    const telefoneValido = !telefoneInformado || (telefone !== null
+        && (telefone.length === 10 || telefone.length === 11)
+        && Number(telefone.slice(0, 2)) >= 11
+        && (telefone.length !== 11 || telefone[2] === '9'));
+    const cidade = typeof req.body.cidade === 'string' ? req.body.cidade.trim() : req.body.cidade == null ? '' : null;
     const uf = typeof req.body.uf === 'string' ? req.body.uf.trim().toUpperCase() : '';
     const estados = new Set(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
 
-    if (!nome || !email || typeof senha !== 'string' || senha.length < 6 || senha.length > 128 || !telefone || !cidade || !uf) {
-        return res.status(400).send({ error: 'Nome, email, telefone (com DDD), cidade, UF e senha sao obrigatorios' });
+    if (!nome || !email || !uf || typeof senha !== 'string' || senha.length < 6 || senha.length > 128) {
+        return res.status(400).send({ error: 'Nome, email, UF e senha sao obrigatorios; a senha deve ter entre 6 e 128 caracteres' });
     }
-    if (nome.length > 128 || email.length > 128 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || cidade.length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade) || !estados.has(uf)) {
-        return res.status(400).send({ error: 'Confira o e-mail, telefone, cidade e UF informados' });
+    if (nome.length > 128 || email.length > 128 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !estados.has(uf)) {
+        return res.status(400).send({ error: 'Confira o nome, e-mail e UF informados' });
     }
-
-    if (id_horta && nome_nova_horta) {
-        return res.status(400).send({ error: 'Informe apenas id_horta OU nome_nova_horta, nao os dois' });
+    if (cidade === null || (cidade && (cidade.length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade)))) {
+        return res.status(400).send({ error: 'Informe uma cidade válida' });
     }
-
-    const descricao = typeof req.body.descricao === 'string' ? req.body.descricao.trim() : '';
-    const cidadeHorta = typeof req.body.cidade_horta === 'string' ? req.body.cidade_horta.trim() : '';
-    const ufHorta = typeof req.body.uf_horta === 'string' ? req.body.uf_horta.trim().toUpperCase() : '';
-    const contato = typeof req.body.contato === 'string' ? req.body.contato.trim() : '';
-    let lat = null, lng = null;
-    if (nome_nova_horta) {
-        if (typeof nome_nova_horta !== 'string' || !nome_nova_horta.trim() || nome_nova_horta.trim().length > 128) return res.status(400).send({ error: 'Informe um nome válido para a horta' });
-        if (!descricao || descricao.length > 255) return res.status(400).send({ error: 'Informe a descrição e os objetivos da horta (até 255 caracteres)' });
-        if (typeof endereco !== 'string' || !endereco.trim() || endereco.trim().length > 255) return res.status(400).send({ error: 'Informe um endereço válido para a horta' });
-        if (!cidadeHorta || cidadeHorta.length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidadeHorta) || !estados.has(ufHorta)) return res.status(400).send({ error: 'Informe uma cidade e UF válidas para a horta' });
-        if (!contato || contato.length > 160 || (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contato) && !/^\+?[0-9 ()-]{8,20}$/.test(contato))) return res.status(400).send({ error: 'Informe um telefone ou e-mail de contato válido para a horta' });
-        const hasLat = latitude !== '' && latitude != null;
-        const hasLng = longitude !== '' && longitude != null;
-        if (hasLat !== hasLng) return res.status(400).send({ error: 'Informe latitude e longitude juntas ou deixe ambas vazias' });
-        if (hasLat) { lat = Number(latitude); lng = Number(longitude); if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) return res.status(400).send({ error: 'Informe coordenadas válidas para a localização' }); }
+    if (telefoneInformado === null || !telefoneValido) {
+        return res.status(400).send({ error: 'Informe um telefone válido com DDD' });
     }
 
     const connection = await db.getConnection();
@@ -318,35 +297,9 @@ app.post('/auth/register', async (req, res) => {
 
         const [userResult] = await connection.query(
             'INSERT INTO Usuario (nome, email, password_hash, id_perfil, telefone, cidade, uf) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [nome, email, senhaHash, id_perfil, telefone, cidade, uf]
+            [nome, email, senhaHash, id_perfil, telefone, cidade || null, uf]
         );
         const id_usuario = userResult.insertId;
-
-        let idHortaFinal = id_horta;
-        let papel = 'MEMBER';
-
-        if (nome_nova_horta) {
-            const [hortaResult] = await connection.query(
-                'INSERT INTO Horta (nome, descricao, latitude, longitude, endereco, cidade, uf, contato) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                [nome_nova_horta.trim(), descricao, lat, lng, endereco.trim(), cidadeHorta, ufHorta, contato]
-            );
-            idHortaFinal = hortaResult.insertId;
-            papel = 'ADMIN';
-        } else if (id_horta) {
-            const [hortaRows] = await connection.query('SELECT id FROM Horta WHERE id = ? LIMIT 1', [id_horta]);
-
-            if (hortaRows.length === 0) {
-                await connection.rollback();
-                return res.status(404).send({ error: 'Horta nao encontrada' });
-            }
-        }
-
-                if (idHortaFinal) {
-            await connection.query(
-                'INSERT INTO UsuarioHortaRole (id_usuario, id_horta, papel) VALUES (?, ?, ?)',
-                [id_usuario, idHortaFinal, papel]
-            );
-        }
 
         await connection.commit();
 
@@ -364,7 +317,7 @@ app.post('/auth/register', async (req, res) => {
     } catch (error) {
         await connection.rollback();
         if (error.code === 'ER_DUP_ENTRY') {
-            return res.status(409).send({ error: 'Nome de horta ou email ja cadastrado' });
+            return res.status(409).send({ error: 'Ja existe um usuario com este email' });
         }
         console.error('Erro em /auth/register:', error);
         return res.status(500).send({ error: 'Erro ao cadastrar usuario' });

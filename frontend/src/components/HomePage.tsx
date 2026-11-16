@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { API_URL } from '../config';
-import { ArrowRight, Award, CheckCircle2, Clock3, Leaf, LoaderCircle, MapPin, Play, Sprout } from 'lucide-react';
+import { ArrowRight, Award, CheckCircle2, Clock3, Compass, Leaf, LoaderCircle, MapPin, Play, Plus, Sprout } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import type { AppPage } from '../types/adminNavigation';
 import TaskProofUpload from './TaskProofUpload';
 import HomeGardensSection from './HomeGardensSection';
+import OnboardingPage from './OnboardingPage';
+import GardenRoleMenu from './GardenRoleMenu';
 
 interface Task {
   id: number;
@@ -41,11 +43,17 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const [availableTasks, setAvailableTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [workingTaskId, setWorkingTaskId] = useState<number | null>(null);
+  const [createGardenOpen, setCreateGardenOpen] = useState(false);
 
   const authHeaders = () => ({ Authorization: `Bearer ${token}` });
 
   const fetchData = async (): Promise<void> => {
-    if (!token) return;
+    if (!token || !activeGardenId) {
+      setInProgressTasks([]);
+      setAvailableTasks([]);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     try {
       const [mineRes, availableRes] = await Promise.all([
@@ -166,11 +174,27 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               <p className="mt-1 text-[13px] text-[#6c786f]">Continue cultivando sua comunidade.</p>
               </div>
             </div>
-            <button onClick={() => onNavigate('rewards')} className="inline-flex w-fit items-center gap-2 rounded-full border border-[#dcebdc] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#34453a] shadow-sm transition hover:border-[#b9dabb] hover:bg-[#f8fcf8]">
-              Ver recompensas
-              <ArrowRight className="size-3.5 text-[#7b8a7d]" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => onNavigate('rewards')} className="inline-flex w-fit items-center gap-2 rounded-full border border-[#dcebdc] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#34453a] shadow-sm transition hover:border-[#b9dabb] hover:bg-[#f8fcf8]">
+                Ver recompensas
+                <ArrowRight className="size-3.5 text-[#7b8a7d]" />
+              </button>
+              <GardenRoleMenu />
+            </div>
           </header>
+
+          <section aria-label="Ações de hortas" className="grid gap-3 sm:grid-cols-2">
+            <button onClick={() => onNavigate('explore')} className="flex min-h-24 items-center gap-3 rounded-xl border border-[#cfe2d1] bg-white p-4 text-left shadow-sm transition hover:border-[#9dcda7] hover:bg-[#f8fcf8]">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#eaf7ed] text-[#16803d]"><Compass className="size-5" /></span>
+              <span className="min-w-0 flex-1"><span className="block text-[14px] font-semibold text-[#26362a]">Explorar hortas</span><span className="mt-0.5 block text-[11px] text-[#738076]">Encontre comunidades e veja os detalhes de cada horta.</span></span>
+              <ArrowRight className="size-4 shrink-0 text-[#16803d]" />
+            </button>
+            <button type="button" onClick={() => setCreateGardenOpen(true)} className="flex min-h-24 items-center gap-3 rounded-xl border border-[#cfe2d1] bg-white p-4 text-left shadow-sm transition hover:border-[#9dcda7] hover:bg-[#f8fcf8]">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#f0f3f0] text-[#849087]"><Plus className="size-5" /></span>
+              <span className="min-w-0 flex-1"><span className="block text-[14px] font-semibold text-[#26362a]">Criar minha horta</span><span className="mt-0.5 block text-[11px] text-[#738076]">Cadastre uma horta comunitária e torne-se administrador.</span></span>
+              <ArrowRight className="size-4 shrink-0 text-[#16803d]" />
+            </button>
+          </section>
 
           <HomeGardensSection onExplore={() => onNavigate('explore')} onHome={() => onNavigate('home')} />
 
@@ -194,6 +218,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
         </div>
       </main>
+      {createGardenOpen && <OnboardingPage onExplore={() => setCreateGardenOpen(false)} startInCreate onCancelCreate={() => setCreateGardenOpen(false)} onCreated={() => setCreateGardenOpen(false)} />}
     </>
   );
 }

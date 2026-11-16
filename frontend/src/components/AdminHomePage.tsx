@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { API_URL } from '../config';
-import { ArrowRight, Bell, CheckCircle2, Gift, MapPin, Plus, Settings, Sprout, User as UserIcon } from 'lucide-react';
+import { ArrowRight, Bell, CheckCircle2, Gift, MapPin, Plus, Settings, Sprout } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import { HortaMap } from './HortaMap';
 import HomeGardensSection from './HomeGardensSection';
+import GardenRoleMenu from './GardenRoleMenu';
 import type { AdminNavigationIntent, AppPage } from '../types/adminNavigation';
 
 interface Activity {
@@ -75,7 +76,7 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
         <button onClick={() => toast.info('Notificações chegam em breve')} aria-label="Notificações" className="flex size-9 items-center justify-center rounded-full border border-gray-200 bg-white transition-colors hover:border-[#00a63e]">
           <Bell className="size-4 text-[#4a5565]" />
         </button>
-        <div className="flex size-9 items-center justify-center rounded-full bg-[#00a63e]"><UserIcon className="size-4 text-white" /></div>
+        <GardenRoleMenu />
       </div>
 
       <div className="mt-3 grid min-w-0 gap-5 px-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-stretch lg:px-6">

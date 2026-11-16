@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Check, Compass, ExternalLink, Leaf, LoaderCircle, MapPin, MapPinned, Search, Sprout, Users, X, Mail, Phone, ShieldCheck, ClipboardList } from 'lucide-react';
+import { Check, Compass, ExternalLink, Leaf, LoaderCircle, MapPin, MapPinned, Search, Sprout, Plus, ArrowRight, Users, X, Mail, Phone, ShieldCheck, ClipboardList } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_URL } from '../config';
 import { useAuth } from '../contexts/AuthContext';
+import OnboardingPage from './OnboardingPage';
 
 type Horta = {
   id: number;
@@ -109,6 +110,7 @@ export default function ExplorePage() {
   const [erroDetalhes, setErroDetalhes] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [entrando, setEntrando] = useState(false);
+  const [criacaoAberta, setCriacaoAberta] = useState(false);
 
   useEffect(() => {
     let ativo = true;
@@ -288,6 +290,12 @@ export default function ExplorePage() {
         <span className="ml-auto text-[11px] text-[#78847b] sm:text-[12px]">{listaVisivel.length} {listaVisivel.length === 1 ? 'horta encontrada' : 'hortas encontradas'}</span>
       </div>
 
+      {user && user.roles.length === 0 && <button type="button" onClick={() => setCriacaoAberta(true)} className="mb-5 flex w-full items-center gap-3 rounded-xl border border-[#cfe2d1] bg-white p-4 text-left shadow-sm transition hover:border-[#9dcda7] hover:bg-[#f8fcf8] sm:p-5">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#eaf7ed] text-[#16803d]"><Plus className="size-5" /></span>
+        <span className="min-w-0 flex-1"><span className="block text-[14px] font-bold text-[#26362a] sm:text-[15px]">Criar minha horta</span><span className="mt-0.5 block text-[11px] text-[#738076] sm:text-[12px]">Cadastre uma comunidade e seja seu administrador.</span></span>
+        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-[#16803d] sm:text-[12px]">Criar <ArrowRight className="size-4" /></span>
+      </button>}
+
       <section className="grid min-h-[610px] grid-cols-[minmax(0,1.04fr)_minmax(430px,0.96fr)] gap-4 max-[1050px]:min-h-0 max-[1050px]:grid-cols-1 sm:gap-5">
         <div className="relative min-h-[610px] overflow-hidden rounded-2xl border border-[#e0e7e1] bg-[#e8eee8] shadow-[0_2px_10px_#183b2410] max-[1050px]:min-h-[380px] max-[640px]:min-h-[320px]">
           <MapContainer center={[center.lat, center.lng]} zoom={13} scrollWheelZoom className="h-full min-h-[610px] w-full max-[1050px]:min-h-[380px] max-[640px]:min-h-[320px]">
@@ -374,6 +382,7 @@ export default function ExplorePage() {
           <footer className="border-t border-[#e5ebe5] bg-white p-4 sm:px-7"><button onClick={participar} disabled={entrando || Boolean(erroDetalhes)} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#168a3c] text-[13px] font-semibold text-white transition hover:bg-[#117331] disabled:opacity-60">{entrando && <LoaderCircle className="size-4 animate-spin" />}{entrando ? 'Entrando...' : user?.roles.some((role) => role.id_horta === selecionada.id && role.role === 'MEMBER') ? 'Você já participa desta horta' : 'Participar desta horta'}</button></footer>
         </section>
       </div>}
+      {criacaoAberta && <OnboardingPage onExplore={() => setCriacaoAberta(false)} startInCreate onCancelCreate={() => setCriacaoAberta(false)} onCreated={() => setCriacaoAberta(false)} />}
     </main>
   );
 }
