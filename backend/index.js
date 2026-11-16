@@ -12,6 +12,7 @@ const nodemailer = require('nodemailer');
 const { ACHIEVEMENTS, getAchievementProgress, getActiveStreak, getLevelInfo, getNextStreak } = require('./gamification');
 const { distanceInMeters, isValidCoordinate } = require('./geolocation');
 const { GEMINI_MODEL, requestGeminiAnalysis, shouldAutoApprove } = require('./gemini');
+const { parsePhone, parseLocation } = require('./userContact');
 
 const app = express();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -243,17 +244,18 @@ app.post('/auth/register', async (req, res) => {
     const { senha } = req.body;
     const nome = typeof req.body.nome === 'string' ? req.body.nome.trim() : '';
     const email = typeof req.body.email === 'string' ? req.body.email.trim() : '';
-    const telefone = typeof req.body.telefone === 'string' ? req.body.telefone.trim() : '';
-    const cidade = typeof req.body.cidade === 'string' ? req.body.cidade.trim() : '';
-    const uf = typeof req.body.uf === 'string' ? req.body.uf.trim().toUpperCase() : '';
-    const estados = new Set(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
-
-    if (!nome || !email || typeof senha !== 'string' || senha.length < 6 || senha.length > 128 || !telefone || !cidade || !uf) {
-        return res.status(400).send({ error: 'Nome, email, telefone, cidade, UF e senha sao obrigatorios' });
+    if (!nome || !email || typeof senha !== 'string' || senha.length < 6 || senha.length > 128) {
+        return res.status(400).send({ error: 'Nome, email e senha (minimo 6 caracteres) sao obrigatorios' });
     }
-    if (nome.length > 128 || email.length > 128 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || telefone.length > 24 || !/^\+?[0-9 ()-]{8,20}$/.test(telefone) || cidade.length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade) || !estados.has(uf)) {
-        return res.status(400).send({ error: 'Confira o e-mail, telefone, cidade e UF informados' });
+    if (nome.length > 128 || email.length > 128 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).send({ error: 'Confira o nome e o e-mail informados' });
     }
+    const phone = parsePhone(req.body.telefone);
+    if (!phone.ok) return res.status(400).send({ error: phone.error });
+    const location = parseLocation(req.body.cidade, req.body.uf);
+    if (!location.ok) return res.status(400).send({ error: location.error });
+    const { telefone } = phone;
+    const { cidade, uf } = location;
 
     const connection = await db.getConnection();
     try {
@@ -418,15 +420,35 @@ app.get('/me/localizacao', requireAuth, async (req, res) => {
     }
 });
 
-app.put('/me/localizacao', requireAuth, async (req, res) => {
-    const cidade = typeof req.body?.cidade === 'string' ? req.body.cidade.trim() : '';
-    const uf = typeof req.body?.uf === 'string' ? req.body.uf.trim().toUpperCase() : '';
-    const estados = new Set(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
-    if ((cidade && !uf) || (!cidade && uf)) return res.status(400).send({ error: 'Informe cidade e UF juntas, ou deixe ambas vazias' });
-    if (cidade.length > 100 || (cidade && !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade))) {
-        return res.status(400).send({ error: 'Informe uma cidade válida com até 100 caracteres' });
+app.get('/me/telefone', requireAuth, async (req, res) => {
+    try {
+        const [rows] = await db.query('SELECT telefone FROM Usuario WHERE id = ? LIMIT 1', [req.user.id]);
+        if (!rows.length) return res.status(404).send({ error: 'Usuário não encontrado' });
+        return res.send({ telefone: rows[0].telefone || '' });
+    } catch (error) {
+        console.error('Erro ao carregar telefone do usuário:', error);
+        return res.status(500).send({ error: 'Não foi possível carregar seu telefone' });
     }
-    if (uf && !estados.has(uf)) return res.status(400).send({ error: 'Informe uma UF brasileira válida com duas letras' });
+});
+
+app.put('/me/telefone', requireAuth, async (req, res) => {
+    const phone = parsePhone(req.body?.telefone);
+    if (!phone.ok) return res.status(400).send({ error: phone.error });
+    try {
+        const [result] = await db.query('UPDATE Usuario SET telefone = ? WHERE id = ?', [phone.telefone, req.user.id]);
+        if (!result.affectedRows) return res.status(404).send({ error: 'Usuário não encontrado' });
+        return res.send({ telefone: phone.telefone || '' });
+    } catch (error) {
+        console.error('Erro ao salvar telefone do usuário:', error);
+        return res.status(500).send({ error: 'Não foi possível salvar seu telefone' });
+    }
+});
+
+app.put('/me/localizacao', requireAuth, async (req, res) => {
+    const location = parseLocation(req.body?.cidade, req.body?.uf);
+    if (!location.ok) return res.status(400).send({ error: location.error });
+    const cidade = location.cidade || '';
+    const uf = location.uf || '';
     try {
         const [users] = await db.query('SELECT id FROM Usuario WHERE id = ? LIMIT 1', [req.user.id]);
         if (!users.length) return res.status(404).send({ error: 'Usuário não encontrado' });
