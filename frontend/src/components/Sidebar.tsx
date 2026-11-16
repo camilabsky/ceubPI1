@@ -1,6 +1,6 @@
-import { Home, ListTodo, Gift, User, Sprout, Compass } from 'lucide-react';
+import { Home, ListTodo, Gift, User, Sprout, Compass, ChartNoAxesCombined } from 'lucide-react';
 
-type Page = 'home' | 'explore' | 'tasks' | 'rewards' | 'profile';
+type Page = 'home' | 'dashboard' | 'explore' | 'tasks' | 'rewards' | 'profile';
 
 interface SidebarProps {
   currentPage: Page;
@@ -11,6 +11,7 @@ interface SidebarProps {
 export default function Sidebar({ currentPage, onNavigate, isAdmin }: SidebarProps) {
   const items: { page: Page; label: string; icon: typeof Home }[] = [
     { page: 'home', label: 'Início', icon: Home },
+    { page: 'dashboard', label: 'Dashboard', icon: ChartNoAxesCombined },
     ...(!isAdmin ? [{ page: 'explore' as Page, label: 'Explorar', icon: Compass }] : []),
     { page: 'tasks', label: isAdmin ? 'Tarefas' : 'Minhas tarefas', icon: ListTodo },
     { page: 'rewards', label: 'Recompensas', icon: Gift },

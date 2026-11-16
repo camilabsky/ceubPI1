@@ -1,10 +1,11 @@
 import { API_URL } from './config';
 import { useState, useEffect, useRef } from 'react';
-import { Home, ListTodo, Gift, User, Compass, LogOut } from 'lucide-react';
+import { Home, ListTodo, Gift, User, Compass, LogOut, ChartNoAxesCombined } from 'lucide-react';
 import { Toaster } from './components/ui/sonner';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './components/LoginPage';
 import HomePage from './components/HomePage';
+import DashboardPage from './components/DashboardPage';
 import AdminHomePage from './components/AdminHomePage';
 import TasksPage from './components/TasksPage';
 import RewardsPage from './components/RewardsPage';
@@ -94,6 +95,7 @@ export default function App() {
   const [tasksCompleted, setTasksCompleted] = useState(0);
   const mobileNavItems = [
     { page: 'home' as Page, label: 'Início', icon: Home },
+    { page: 'dashboard' as Page, label: 'Dashboard', icon: ChartNoAxesCombined },
     ...(!isAdmin ? [{ page: 'explore' as Page, label: 'Explorar', icon: Compass }] : []),
     { page: 'tasks' as Page, label: 'Tarefas', icon: ListTodo },
     { page: 'rewards' as Page, label: 'Recompensas', icon: Gift },
@@ -186,6 +188,7 @@ export default function App() {
               : <HomePage onNavigate={(page) => navigate(page)} />
           )}
           {currentPage === 'explore' && !isAdmin && <ExplorePage />}
+          {currentPage === 'dashboard' && <DashboardPage onNavigate={navigate} />}
           {currentPage === 'tasks' && (
             <TasksPage navigationIntent={adminNavigationIntent} onBack={returnFromTasks} />
           )}

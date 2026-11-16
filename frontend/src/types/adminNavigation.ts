@@ -1,4 +1,4 @@
-export type AppPage = 'home' | 'explore' | 'tasks' | 'rewards' | 'profile';
+export type AppPage = 'home' | 'dashboard' | 'explore' | 'tasks' | 'rewards' | 'profile';
 
 export type AdminTaskStatusFilter = 'available' | 'in_progress' | 'pending_review' | 'proof_submitted' | 'proof_pending' | 'completed';
 
