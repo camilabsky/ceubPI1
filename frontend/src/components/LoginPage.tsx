@@ -1,22 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { LogIn, Sprout, Eye, EyeOff, Trophy, Handshake, Leaf } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
-import { GOOGLE_CLIENT_ID } from '../config';
+import GoogleSignInButton from './GoogleSignInButton';
 import hortaLoginImg from '../assets/hortalogin.png';
 
 interface LoginPageProps {
   onSwitchToRegister: () => void;
 }
 
-declare global {
-  interface Window {
-    google?: any;
-  }
-}
-
 export default function LoginPage({ onSwitchToRegister }: LoginPageProps) {
-  const { login, loginWithGoogle, requestPasswordReset, isAuthenticating } = useAuth();
+  const { login, requestPasswordReset, isAuthenticating } = useAuth();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [showSenha, setShowSenha] = useState(false);
@@ -24,7 +18,6 @@ export default function LoginPage({ onSwitchToRegister }: LoginPageProps) {
   const [forgotOpen, setForgotOpen] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('forgot') === '1');
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
-  const googleButtonRef = useRef<HTMLDivElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,43 +57,6 @@ export default function LoginPage({ onSwitchToRegister }: LoginPageProps) {
       setForgotLoading(false);
     }
   };
-
-  useEffect(() => {
-    const renderGoogleButton = () => {
-      if (!window.google || !googleButtonRef.current) return;
-
-      window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: async (response: { credential: string }) => {
-          try {
-            await loginWithGoogle(response.credential);
-            toast.success('Login realizado com sucesso!');
-          } catch (error) {
-            toast.error('Nao foi possivel entrar com Google');
-          }
-        },
-      });
-
-      window.google.accounts.id.renderButton(googleButtonRef.current, {
-        theme: 'outline',
-        size: 'large',
-        width: 328,
-        text: 'signin_with',
-      });
-    };
-
-    if (window.google) {
-      renderGoogleButton();
-    } else {
-      const interval = setInterval(() => {
-        if (window.google) {
-          clearInterval(interval);
-          renderGoogleButton();
-        }
-      }, 100);
-      return () => clearInterval(interval);
-    }
-  }, [loginWithGoogle]);
 
   return (
     <div className="min-h-screen bg-[#F7F9F7] flex items-center justify-center p-4 lg:p-8">
@@ -227,7 +183,7 @@ export default function LoginPage({ onSwitchToRegister }: LoginPageProps) {
               <div className="flex-1 h-px bg-[#E2E8E3]" />
             </div>
 
-            <div ref={googleButtonRef} className="flex justify-center" />
+            <GoogleSignInButton text="signin_with" />
 
             <button
               type="button"

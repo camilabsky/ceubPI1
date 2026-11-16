@@ -42,17 +42,12 @@ interface AuthContextType {
   login: (email: string, senha: string) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   resetPassword: (token: string, novaSenha: string) => Promise<void>;
-  // 1. Na interface AuthContextType (linha ~27-29):
-register: (
-  nome: string,
-  email: string,
-  senha: string,
-  opts: {
-    telefone?: string;
-    cidade?: string;
-    uf?: string;
-  }
-) => Promise<void>;
+  register: (
+    nome: string,
+    email: string,
+    senha: string,
+    opts?: { telefone?: string; cidade?: string; uf?: string }
+  ) => Promise<void>;
   
   updateUser: (dados: { nome?: string; email?: string }) => Promise<void>;
   logout: () => void;
@@ -244,7 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         telefone?: string;
         cidade?: string;
         uf?: string;
-      }
+      } = {}
     ) => {
     setIsAuthenticating(true);
     try {

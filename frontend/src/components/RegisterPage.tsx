@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
+import GoogleSignInButton from './GoogleSignInButton';
 import hortaLoginImg from '../assets/hortalogin.png';
 
 interface RegisterPageProps {
@@ -13,43 +14,30 @@ interface RegisterPageProps {
 
 const inputBase =
   'w-full border border-[#E2E8E3] rounded-lg pl-10 py-2.5 text-[14px] outline-none focus:border-[#16A34A]';
-const UFS = new Set(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
 
 export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
   const { register, isAuthenticating } = useAuth();
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
-  const [telefone, setTelefone] = useState('');
-  const [cidade, setCidade] = useState('');
-  const [uf, setUf] = useState('');
   const [senha, setSenha] = useState('');
-  const [confirmarSenha, setConfirmarSenha] = useState('');
   const [showSenha, setShowSenha] = useState(false);
-  const [showConfirmar, setShowConfirmar] = useState(false);
   const enviando = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nome.trim() || !email.trim() || !telefone.trim() || !cidade.trim() || !uf.trim() || !senha || !confirmarSenha) {
+    if (!nome.trim() || !email.trim() || !senha) {
       toast.error('Preencha todos os campos');
       return;
     }
-    if (!/^\+?[0-9 ()-]{8,20}$/.test(telefone.trim())) { toast.error('Informe um telefone válido'); return; }
-    if (!UFS.has(uf.trim().toUpperCase())) { toast.error('Informe uma UF brasileira válida'); return; }
-    if (cidade.trim().length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade.trim())) { toast.error('Informe uma cidade válida'); return; }
     if (senha.length < 6) {
       toast.error('A senha deve ter no mínimo 6 caracteres');
-      return;
-    }
-    if (senha !== confirmarSenha) {
-      toast.error('As senhas não conferem');
       return;
     }
 
     if (enviando.current) return;
     enviando.current = true;
     try {
-      await register(nome, email, senha, { telefone: telefone.trim(), cidade: cidade.trim(), uf: uf.trim().toUpperCase() });
+      await register(nome, email, senha);
       toast.success('Cadastro realizado com sucesso!');
     } catch (error: any) {
       toast.error(error.message || 'Erro ao cadastrar');
@@ -122,14 +110,24 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                 Entre para a plataforma e faça parte da nossa comunidade de hortas.
               </p>
 
+              <GoogleSignInButton text="continue_with" />
+
+              <div className="flex items-center gap-3 my-5">
+                <div className="flex-1 h-px bg-[#E2E8E3]" />
+                <span className="text-[12px] text-[#66736A]">ou com e-mail</span>
+                <div className="flex-1 h-px bg-[#E2E8E3]" />
+              </div>
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-[13px] text-[#4a5565] mb-2">Nome completo *</label>
+                  <label htmlFor="register-nome" className="block text-[13px] text-[#4a5565] mb-2">Nome</label>
                   <div className="relative">
                     <User className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#66736A]" />
                     <input
+                      id="register-nome"
                       type="text"
                       required
+                      autoComplete="name"
                       value={nome}
                       onChange={(e) => setNome(e.target.value)}
                       className={`${inputBase} pr-4`}
@@ -139,12 +137,14 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                 </div>
 
                 <div>
-                  <label className="block text-[13px] text-[#4a5565] mb-2">E-mail *</label>
+                  <label htmlFor="register-email" className="block text-[13px] text-[#4a5565] mb-2">E-mail</label>
                   <div className="relative">
                     <Mail className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#66736A]" />
                     <input
+                      id="register-email"
                       type="email"
                       required
+                      autoComplete="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className={`${inputBase} pr-4`}
@@ -153,16 +153,15 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                   </div>
                 </div>
 
-                <div><label className="block text-[13px] text-[#4a5565] mb-2">Telefone *</label><input type="tel" required value={telefone} onChange={(e) => setTelefone(e.target.value)} className={`${inputBase} px-3`} placeholder="(61) 99999-9999" /></div>
-                <div className="grid grid-cols-[1fr_5rem] gap-2"><div><label className="block text-[13px] text-[#4a5565] mb-2">Cidade *</label><input required maxLength={100} value={cidade} onChange={(e) => setCidade(e.target.value)} className={`${inputBase} px-3`} placeholder="Sua cidade" /></div><div><label className="block text-[13px] text-[#4a5565] mb-2">UF *</label><input required maxLength={2} value={uf} onChange={(e) => setUf(e.target.value.toUpperCase())} className={`${inputBase} px-3`} placeholder="DF" /></div></div>
-
                 <div>
-                  <label className="block text-[13px] text-[#4a5565] mb-2">Senha *</label>
+                  <label htmlFor="register-senha" className="block text-[13px] text-[#4a5565] mb-2">Senha (mín. 6 caracteres)</label>
                   <div className="relative">
                     <Lock className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#66736A]" />
                     <input
+                      id="register-senha"
                       type={showSenha ? 'text' : 'password'}
                       required
+                      autoComplete="new-password"
                       value={senha}
                       onChange={(e) => setSenha(e.target.value)}
                       className={`${inputBase} pr-10`}
@@ -171,33 +170,11 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                     <button
                       type="button"
                       onClick={() => setShowSenha((v) => !v)}
+                      aria-label={showSenha ? 'Ocultar senha' : 'Mostrar senha'}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-[#66736A]"
                       tabIndex={-1}
                     >
                       {showSenha ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[13px] text-[#4a5565] mb-2">Confirmar senha *</label>
-                  <div className="relative">
-                    <Lock className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#66736A]" />
-                    <input
-                      type={showConfirmar ? 'text' : 'password'}
-                      required
-                      value={confirmarSenha}
-                      onChange={(e) => setConfirmarSenha(e.target.value)}
-                      className={`${inputBase} pr-10`}
-                      placeholder="Confirme sua senha"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmar((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#66736A]"
-                      tabIndex={-1}
-                    >
-                      {showConfirmar ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                     </button>
                   </div>
                 </div>
@@ -208,22 +185,16 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                   className="w-full bg-[#16A34A] text-white text-[14px] py-3 rounded-lg hover:bg-[#166534] transition-colors disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 font-semibold"
                 >
                   <UserPlus className="size-4" />
-                  {isAuthenticating ? 'Criando conta...' : 'Criar minha conta'}
+                  {isAuthenticating ? 'Criando conta...' : 'Criar conta'}
                 </button>
               </form>
-
-              <div className="flex items-center gap-3 my-5">
-                <div className="flex-1 h-px bg-[#E2E8E3]" />
-                <span className="text-[12px] text-[#66736A]">ou</span>
-                <div className="flex-1 h-px bg-[#E2E8E3]" />
-              </div>
 
               <button
                 type="button"
                 onClick={onSwitchToLogin}
-                className="w-full text-center text-[13px] text-[#66736A] hover:underline"
+                className="mt-5 w-full text-center text-[13px] text-[#66736A] hover:underline"
               >
-                Já possui uma conta? <span className="font-semibold text-[#16A34A]">Entrar</span>
+                Já tem conta? <span className="font-semibold text-[#16A34A]">Entrar</span>
               </button>
             </div>
           </div>
