@@ -1627,7 +1627,7 @@ app.get('/admin/horta/historico', requireAuth, requireHortaAdmin, async (req, re
 app.get('/admin/horta/participantes', requireAuth, requireHortaAdmin, async (req, res) => {
     try {
         const [rows] = await db.query(
-            `SELECT u.id AS id_usuario, p.id AS id_perfil, p.nome, u.last_login_at,
+            `SELECT u.id AS id_usuario, p.id AS id_perfil, p.nome, u.telefone, u.last_login_at,
                     MAX(CASE WHEN t.concluido = true THEN t.completed_at ELSE NULL END) AS ultima_contribuicao_at,
                     COUNT(DISTINCT CASE WHEN t.concluido = true
                         AND t.completed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN t.id END) AS tarefas_30_dias,
@@ -1646,7 +1646,7 @@ app.get('/admin/horta/participantes', requireAuth, requireHortaAdmin, async (req
              LEFT JOIN Tarefas t ON t.id_perfil = p.id AND t.id_horta = uhr.id_horta
                  AND t.deleted_at IS NULL
              WHERE uhr.id_horta = ? AND uhr.papel = 'MEMBER'
-             GROUP BY u.id, p.id, p.nome, u.last_login_at
+             GROUP BY u.id, p.id, p.nome, u.telefone, u.last_login_at
              ORDER BY CASE activity_status WHEN 'inactive' THEN 0 WHEN 'attention' THEN 1 WHEN 'untracked' THEN 2 ELSE 3 END,
                       u.last_login_at ASC, p.nome ASC`,
             [req.id_horta]
@@ -1655,6 +1655,7 @@ app.get('/admin/horta/participantes', requireAuth, requireHortaAdmin, async (req
             id_usuario: Number(row.id_usuario),
             id_perfil: Number(row.id_perfil),
             nome: row.nome,
+            telefone: row.telefone || null,
             ultima_entrada_at: row.last_login_at,
             ultima_contribuicao_at: row.ultima_contribuicao_at,
             tarefas_30_dias: Number(row.tarefas_30_dias) || 0,
@@ -1737,23 +1738,32 @@ app.post('/hortas/:id/entrar', requireAuth, async (req, res) => {
     if (!Number.isInteger(id_horta) || id_horta <= 0) {
         return res.status(400).send({ error: 'Horta invalida' });
     }
+    const phone = parsePhone(req.body?.telefone);
+    if (!phone.ok) return res.status(400).send({ error: phone.error });
 
+    const conn = await db.getConnection();
     try {
-        const [hortaRows] = await db.query('SELECT id FROM Horta WHERE id = ? LIMIT 1', [id_horta]);
+        await conn.beginTransaction();
+        const [hortaRows] = await conn.query('SELECT id FROM Horta WHERE id = ? LIMIT 1', [id_horta]);
         if (hortaRows.length === 0) {
+            await conn.rollback();
             return res.status(404).send({ error: 'Horta nao encontrada' });
         }
 
-        const [existing] = await db.query(
+        const [existing] = await conn.query(
             "SELECT 1 FROM UsuarioHortaRole WHERE id_usuario = ? AND id_horta = ? AND papel = 'MEMBER' LIMIT 1",
             [req.user.id, id_horta]
         );
         if (existing.length === 0) {
-            await db.query(
+            await conn.query(
                 'INSERT INTO UsuarioHortaRole (id_usuario, id_horta, papel) VALUES (?, ?, ?)',
                 [req.user.id, id_horta, 'MEMBER']
             );
         }
+        if (phone.telefone) {
+            await conn.query('UPDATE Usuario SET telefone = ? WHERE id = ?', [phone.telefone, req.user.id]);
+        }
+        await conn.commit();
 
         const roles = await getUserRoles(req.user.id);
         return res.status(200).send({
@@ -1761,8 +1771,11 @@ app.post('/hortas/:id/entrar', requireAuth, async (req, res) => {
             user: { id: req.user.id, nome: req.user.nome, email: req.user.email, id_perfil: req.user.id_perfil ?? null, roles }
         });
     } catch (error) {
+        await conn.rollback();
         console.error('Erro em POST /hortas/:id/entrar:', error);
         return res.status(500).send({ error: 'Erro ao entrar na horta' });
+    } finally {
+        conn.release();
     }
 });
 
