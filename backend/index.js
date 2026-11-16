@@ -157,19 +157,30 @@ async function isMemberForHorta(id_usuario, id_horta) {
     return rows.length > 0;
 }
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
+    let payload;
     try {
         const token = tokenFromHeader(req.headers.authorization);
         if (!token) {
             return res.status(401).send({ error: 'Token ausente' });
         }
-
-        const payload = jwt.verify(token, JWT_SECRET);
-        req.user = payload;
-        next();
+        payload = jwt.verify(token, JWT_SECRET);
     } catch (error) {
         return res.status(401).send({ error: 'Token invalido' });
     }
+    try {
+        // O JWT continua válido por 8h mesmo depois de a conta ser excluída.
+        // Por isso conferimos no banco se o usuário ainda está ativo.
+        const [rows] = await db.query('SELECT ativo FROM Usuario WHERE id = ? LIMIT 1', [payload.id]);
+        if (rows.length === 0 || !rows[0].ativo) {
+            return res.status(401).send({ error: 'Conta inativa ou excluída' });
+        }
+    } catch (error) {
+        console.error('Erro ao validar sessão:', error);
+        return res.status(500).send({ error: 'Erro ao validar sessão' });
+    }
+    req.user = payload;
+    next();
 }
 
 async function requireHortaAdmin(req, res, next) {
@@ -277,7 +288,7 @@ app.post('/auth/register', async (req, res) => {
 
         const [userResult] = await connection.query(
             'INSERT INTO Usuario (nome, email, password_hash, id_perfil, telefone, cidade, uf) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [nome, email, senhaHash, id_perfil, telefone, cidade, uf]
+            [nome, email, senhaHash, id_perfil, telefone, cidade || null, uf]
         );
         const id_usuario = userResult.insertId;
 
@@ -543,6 +554,100 @@ app.put('/auth/me', requireAuth, async (req, res) => {
     }
 }); 
 
+// Exclusão de conta pelo próprio usuário.
+// Estratégia: anonimizar + desativar (soft delete), em vez de apagar a linha.
+app.delete('/auth/me', requireAuth, async (req, res) => {
+    const confirmacao = typeof req.body?.confirmacao === 'string' ? req.body.confirmacao.trim() : '';
+    const senha = typeof req.body?.senha === 'string' ? req.body.senha : '';
+    if (confirmacao !== 'EXCLUIR') {
+        return res.status(400).send({ error: 'Digite EXCLUIR para confirmar a exclusão da conta' });
+    }
+
+    const conn = await db.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        // 1. Trava a linha do usuário até o fim da transação
+        const [users] = await conn.query(
+            'SELECT id, password_hash, id_perfil FROM Usuario WHERE id = ? AND ativo = true LIMIT 1 FOR UPDATE',
+            [req.user.id]
+        );
+        if (users.length === 0) {
+            await conn.rollback();
+            return res.status(404).send({ error: 'Usuário não encontrado' });
+        }
+        const usuario = users[0];
+
+        // 2. Contas com senha precisam confirmar a senha (contas Google não têm senha)
+        if (usuario.password_hash) {
+            const senhaOk = senha && await bcrypt.compare(senha, usuario.password_hash);
+            if (!senhaOk) {
+                await conn.rollback();
+                return res.status(401).send({ error: 'Senha incorreta' });
+            }
+        }
+
+        // 3. Não deixar uma horta sem nenhum administrador ativo
+        const [hortasSemOutroAdmin] = await conn.query(
+            `SELECT h.nome FROM UsuarioHortaRole r
+             JOIN Horta h ON h.id = r.id_horta
+             WHERE r.id_usuario = ? AND r.papel = 'ADMIN'
+               AND NOT EXISTS (
+                   SELECT 1 FROM UsuarioHortaRole outro
+                   JOIN Usuario ou ON ou.id = outro.id_usuario AND ou.ativo = true
+                   WHERE outro.id_horta = r.id_horta AND outro.papel = 'ADMIN' AND outro.id_usuario <> r.id_usuario
+               )`,
+            [usuario.id]
+        );
+        if (hortasSemOutroAdmin.length > 0) {
+            await conn.rollback();
+            const nomes = hortasSemOutroAdmin.map((h) => h.nome).join(', ');
+            return res.status(409).send({ error: `Você é o único administrador de: ${nomes}. Defina outro administrador antes de excluir sua conta.` });
+        }
+
+        // 4. Devolve tarefas não concluídas para a fila, para outros participantes
+        if (usuario.id_perfil) {
+            await conn.query(
+                `UPDATE Tarefas
+                 SET id_perfil = NULL, status = 'available',
+                     completion_photo_url = NULL, completion_submitted_at = NULL,
+                     completion_latitude = NULL, completion_longitude = NULL,
+                     completion_review_status = 'approved', completion_ai_status = 'not_requested',
+                     completion_review_note = NULL, updated_at = NOW()
+                 WHERE id_perfil = ? AND concluido = false AND deleted_at IS NULL`,
+                [usuario.id_perfil]
+            );
+        }
+
+        // 5. Remove vínculos com hortas e tokens de recuperação de senha
+        await conn.query('DELETE FROM UsuarioHortaRole WHERE id_usuario = ?', [usuario.id]);
+        await conn.query('DELETE FROM PasswordResetToken WHERE id_usuario = ?', [usuario.id]);
+
+        // 6. Anonimiza dados pessoais e desativa a conta.
+        //    O e-mail vira um valor único fictício para liberar o original
+        //    (a coluna é UNIQUE) caso a pessoa queira se cadastrar de novo.
+        await conn.query(
+            `UPDATE Usuario
+             SET nome = 'Usuário removido', email = CONCAT('removido-', id, '@excluido.couve'),
+                 password_hash = NULL, telefone = NULL, cidade = NULL, uf = NULL, ativo = false
+             WHERE id = ?`,
+            [usuario.id]
+        );
+        if (usuario.id_perfil) {
+            await conn.query("UPDATE Perfil SET nome = 'Usuário removido' WHERE id = ?", [usuario.id_perfil]);
+        }
+
+        await conn.commit();
+        return res.send({ message: 'Conta excluída com sucesso' });
+    } catch (error) {
+        await conn.rollback();
+        console.error('Erro em DELETE /auth/me:', error);
+        return res.status(500).send({ error: 'Não foi possível excluir a conta' });
+    } finally {
+        conn.release();
+    }
+});
+
 app.post('/auth/password/forgot', async (req, res) => {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
@@ -706,6 +811,7 @@ app.post('/minhas_tarefas', requireAuth, async (req, res) => {
     try {
         const id_perfil = Number(req.user.id_perfil);
         const id_horta = Number(req.query.id_horta || req.body?.id_horta);
+        const includeCompleted = req.query.include_completed === '1';
         if (!Number.isInteger(id_horta) || id_horta <= 0) return res.status(400).send({ error: 'id_horta invalido' });
         if (!await isMemberForHorta(req.user.id, id_horta)) return res.status(403).send({ error: 'Você não participa desta horta' });
         const [results] = await db.query(
@@ -713,11 +819,12 @@ app.post('/minhas_tarefas', requireAuth, async (req, res) => {
              FROM Tarefas t
              WHERE t.id_perfil = ? AND t.id_horta = ? AND (
                  (t.concluido = false AND t.status IN ('in_progress', 'pending_review', 'proof_submitted'))
+                 OR (? = true AND (t.concluido = true OR t.status = 'completed'))
                  OR (t.concluido = true AND t.completion_photo_url IS NOT NULL AND t.completion_ai_status = 'analyzed')
              )
                AND t.deleted_at IS NULL
              ORDER BY t.updated_at DESC, t.id DESC`,
-            [id_perfil, id_horta]
+            [id_perfil, id_horta, includeCompleted]
         );
         return res.send(results);
     } catch (error) {
@@ -1309,7 +1416,18 @@ app.delete('/admin/tarefas/:id', requireAuth, async (req, res) => {
             return res.status(403).send({ error: 'Apenas admin da horta pode deletar' });
         }
 
-        await db.query('UPDATE Tarefas SET deleted_at = NOW(), updated_at = NOW() WHERE id = ?', [id]);
+        // Só exclui se a tarefa ainda NÃO foi iniciada. A condição fica dentro do
+        // próprio UPDATE para evitar condição de corrida: se um participante aceitar
+        // a tarefa entre o SELECT acima e este UPDATE, nenhuma linha é afetada.
+        const [result] = await db.query(
+            `UPDATE Tarefas SET deleted_at = NOW(), updated_at = NOW()
+             WHERE id = ? AND deleted_at IS NULL
+               AND status = 'available' AND id_perfil IS NULL AND concluido = false`,
+            [id]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(409).send({ error: 'Esta tarefa já foi iniciada por um participante e não pode ser excluída.' });
+        }
         return res.send({ message: 'Tarefa removida' });
     } catch (error) {
         console.error('Erro em DELETE /admin/tarefas/:id:', error);
@@ -1467,43 +1585,6 @@ app.get('/me/gamificacao', requireAuth, async (req, res) => {
             [id_perfil, req.user.id]
         );
 
-        const communityChallenges = [];
-        const challengeGardens = [...new Map(gardens
-            .filter((garden) => id_horta == null || Number(garden.id) === id_horta)
-            .map((garden) => [Number(garden.id), garden])).values()];
-        for (const garden of challengeGardens) {
-            const goalTasks = Math.max(5, (Number(garden.participantes) || 0) * 2);
-            await conn.query(
-                `INSERT IGNORE INTO DesafioComunitario (id_horta, period_start, period_end, goal_tasks)
-                 VALUES (?, ?, ?, ?)`,
-                [garden.id, clockRows[0].period_start, clockRows[0].period_end, goalTasks]
-            );
-            const [challengeRows] = await conn.query(
-                `SELECT d.id, d.id_horta, h.nome, d.period_start, d.period_end, d.goal_tasks, d.completed_at,
-                        (SELECT COUNT(*) FROM Tarefas t WHERE t.id_horta = d.id_horta AND t.concluido = true
-                         AND DATE(t.completed_at) BETWEEN d.period_start AND d.period_end) AS completed_tasks
-                 FROM DesafioComunitario d JOIN Horta h ON h.id = d.id_horta
-                 WHERE d.id_horta = ? AND d.period_start = ? LIMIT 1`,
-                [garden.id, clockRows[0].period_start]
-            );
-            if (!challengeRows.length) continue;
-            const challenge = challengeRows[0];
-            if (!challenge.completed_at && Number(challenge.completed_tasks) >= Number(challenge.goal_tasks)) {
-                await conn.query('UPDATE DesafioComunitario SET completed_at = NOW() WHERE id = ? AND completed_at IS NULL', [challenge.id]);
-                challenge.completed_at = new Date();
-            }
-            communityChallenges.push({
-                id: challenge.id,
-                id_horta: challenge.id_horta,
-                nome: challenge.nome,
-                starts_at: challenge.period_start,
-                ends_at: challenge.period_end,
-                goal_tasks: Number(challenge.goal_tasks) || 0,
-                completed_tasks: Number(challenge.completed_tasks) || 0,
-                completed: Boolean(challenge.completed_at),
-            });
-        }
-
         const [leaderboardRows] = await conn.query(
              `SELECT p.id, p.nome, COALESCE(pg.xp_total, 0) AS xp_total,
                     COUNT(DISTINCT t.id) AS tarefas_concluidas
@@ -1569,7 +1650,6 @@ app.get('/me/gamificacao', requireAuth, async (req, res) => {
             achievements,
             events,
             hortas: gardens,
-            community_challenges: communityChallenges,
             leaderboard,
             impact: { tasks_completed: tasks.length, gardens_count: gardens.length, seedlings_planted: mudasPlantadas },
         });
@@ -1605,21 +1685,9 @@ app.get('/admin/horta/historico', requireAuth, requireHortaAdmin, async (req, re
             [req.id_horta]
         );
 
-        const [desafiosComunitarios] = await db.query(
-            `SELECT d.id, d.goal_tasks, d.period_start, d.period_end, d.completed_at,
-                    (SELECT COUNT(*) FROM Tarefas t
-                     WHERE t.id_horta = d.id_horta AND t.concluido = true AND t.deleted_at IS NULL
-                       AND DATE(t.completed_at) BETWEEN d.period_start AND d.period_end) AS completed_tasks
-             FROM DesafioComunitario d
-             WHERE d.id_horta = ? AND d.period_start = DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
-             LIMIT 1`,
-            [req.id_horta]
-        );
-
         return res.send({
             tarefas_concluidas_horta: tarefasConcluidas,
             recompensas_resgatadas_horta: recompensasResgatadas,
-            desafio_comunitario: desafiosComunitarios[0] || null,
         });
     } catch (error) {
         console.error('Erro em /admin/horta/historico:', error);
@@ -1802,8 +1870,16 @@ app.delete('/hortas/:id/sair', requireAuth, async (req, res) => {
             return res.status(409).send({ error: 'Você não participa desta horta como participante.' });
         }
 
-        const [inProgress] = await conn.query(
-            `SELECT COUNT(*) AS total FROM Tarefas
+        // Devolve para a fila as tarefas que o participante tinha iniciado nesta horta.
+        // Sem isso, elas ficariam presas: ninguém mais consegue aceitá-las e o admin
+        // não consegue excluí-las, porque estão "iniciadas".
+        const [liberadas] = await conn.query(
+            `UPDATE Tarefas
+             SET id_perfil = NULL, status = 'available',
+                 completion_photo_url = NULL, completion_submitted_at = NULL,
+                 completion_latitude = NULL, completion_longitude = NULL,
+                 completion_review_status = 'approved', completion_ai_status = 'not_requested',
+                 completion_review_note = NULL, updated_at = NOW()
              WHERE id_perfil = ? AND id_horta = ? AND concluido = false
                AND status IN ('in_progress', 'pending_review', 'proof_submitted') AND deleted_at IS NULL`,
             [req.user.id_perfil, id_horta]
@@ -1822,7 +1898,7 @@ app.delete('/hortas/:id/sair', requireAuth, async (req, res) => {
         await conn.commit();
         return res.send({
             ok: true,
-            in_progress_tasks: Number(inProgress[0]?.total) || 0,
+            in_progress_tasks: liberadas.affectedRows,
             user: { id: req.user.id, nome: req.user.nome, email: req.user.email, id_perfil: req.user.id_perfil ?? null, roles }
         });
     } catch (error) {
@@ -2180,17 +2256,7 @@ async function ensureGamificationSchema() {
         UNIQUE KEY uq_perfil_conquista (id_perfil, achievement_key),
         CONSTRAINT fk_conquista_perfil FOREIGN KEY (id_perfil) REFERENCES Perfil(id)
     )`);
-    await db.query(`CREATE TABLE IF NOT EXISTS DesafioComunitario (
-        id int AUTO_INCREMENT PRIMARY KEY,
-        id_horta int NOT NULL,
-        period_start date NOT NULL,
-        period_end date NOT NULL,
-        goal_tasks int NOT NULL,
-        completed_at datetime NULL,
-        created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_horta_desafio_periodo (id_horta, period_start),
-        CONSTRAINT fk_desafio_horta FOREIGN KEY (id_horta) REFERENCES Horta(id)
-    )`);
+    await db.query('DROP TABLE IF EXISTS DesafioComunitario');
     await db.query(`UPDATE Tarefas
                     SET xp = GREATEST(0, COALESCE(xp, 0)),
                         moedas = GREATEST(0, COALESCE(moedas, 0)),

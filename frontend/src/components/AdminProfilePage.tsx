@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { HortaMap } from './HortaMap';
 import ProfileLocationEditor from './ProfileLocationEditor';
 import ProfilePhoneEditor from './ProfilePhoneEditor';
+import DeleteAccountSection from './DeleteAccountSection';
 
 interface Task {
   id: number;
@@ -56,7 +57,7 @@ export default function AdminProfilePage({
 
   const leaveMemberRole = async () => {
     if (!activeGarden || activeGarden.role !== 'ADMIN' || !user?.roles.some((role) => role.id_horta === activeGarden.id_horta && role.role === 'MEMBER') || isLeavingMemberRole) return;
-    const confirmed = window.confirm(`Sair como participante de ${activeGarden.horta_nome}? Você perderá acesso à comunidade como participante até voltar. Tarefas em andamento e registros históricos serão preservados, mas você não poderá continuar essas tarefas enquanto não voltar a participar. Sua administração desta horta e sua conta permanecerão ativas.`);
+    const confirmed = window.confirm(`Sair como participante de ${activeGarden.horta_nome}? Você perderá acesso à comunidade como participante até voltar. Suas tarefas em andamento voltarão a ficar disponíveis para outros participantes; seu histórico de tarefas concluídas é preservado. Sua administração desta horta e sua conta permanecerão ativas.`);
     if (!confirmed) return;
     setIsLeavingMemberRole(true);
     try {
@@ -799,6 +800,8 @@ const handleUseCurrentLocation = () => {
           Sair da conta
         </span>
       </button>
+
+      <DeleteAccountSection onDeleted={onLogout} />
     </div>
   </div>
 );

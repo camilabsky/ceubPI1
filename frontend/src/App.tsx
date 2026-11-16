@@ -1,12 +1,14 @@
 import { API_URL } from './config';
 import { useState, useEffect, useRef } from 'react';
-import { Home, ListTodo, Gift, User, Compass, LogOut } from 'lucide-react';
+import { Home, ListTodo, Gift, User, Compass, LogOut, ChartNoAxesCombined, ClipboardCheck } from 'lucide-react';
 import { Toaster } from './components/ui/sonner';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './components/LoginPage';
 import HomePage from './components/HomePage';
+import DashboardPage from './components/DashboardPage';
 import AdminHomePage from './components/AdminHomePage';
 import TasksPage from './components/TasksPage';
+import MyTasksPage from './components/MyTasksPage';
 import RewardsPage from './components/RewardsPage';
 import ProfilePage from './components/ProfilePage';
 import RegisterPage from './components/RegisterPage';
@@ -63,10 +65,10 @@ async function get_number_of_completed_tasks(id_perfil: Number, token: string) {
 }
 
 export default function App() {
-  const { token, user, isAdmin, isLoading, activeGarden, activeGardenId, availableGardens, selectGarden, logout } = useAuth();
+  const { token, user, isAdmin, isLoading, activeGardenId, availableGardens, selectGarden, logout } = useAuth();
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
   const [currentPage, setCurrentPage] = useState<Page>('home');
-  const tasksReturnPage = useRef<Page>('home');
+  const taskPageReturn = useRef<Record<'tasks' | 'my-tasks', Page>>({ tasks: 'home', 'my-tasks': 'home' });
   const [adminNavigationIntent, setAdminNavigationIntent] = useState<AdminNavigationIntent | null>(null);
 
   const handleLogout = () => {
@@ -77,25 +79,29 @@ export default function App() {
   };
 
   const navigate = (page: Page, intent?: AdminNavigationIntent) => {
-    const destination = page === 'explore' && isAdmin ? 'home' : page;
-    if (destination === 'tasks' && currentPage !== 'tasks') tasksReturnPage.current = currentPage;
+    const destination = (page === 'explore' || page === 'my-tasks') && isAdmin ? 'home' : page;
+    if (destination === 'tasks' && currentPage !== 'tasks') taskPageReturn.current.tasks = currentPage;
+    if (destination === 'my-tasks' && currentPage !== 'my-tasks') taskPageReturn.current['my-tasks'] = currentPage;
     setAdminNavigationIntent(intent || null);
     setCurrentPage(destination);
   };
 
-  const returnFromTasks = () => {
-    const destination = tasksReturnPage.current === 'explore' && isAdmin ? 'home' : tasksReturnPage.current;
+  const returnFromTaskPage = (sourcePage: 'tasks' | 'my-tasks') => {
+    const returnPage = taskPageReturn.current[sourcePage];
+    const destination = returnPage === 'explore' && isAdmin ? 'home' : returnPage;
     navigate(destination);
   };
 
-  const hasGardenSelector = availableGardens.length > 1 || (activeGardenId != null && availableGardens.find((garden) => garden.id === activeGardenId)?.roles.length === 2);
+  const hasGardenSelector = availableGardens.length > 1;
 
   const [coins, setCoins] = useState(0);
   const [tasksCompleted, setTasksCompleted] = useState(0);
   const mobileNavItems = [
     { page: 'home' as Page, label: 'Início', icon: Home },
+    { page: 'dashboard' as Page, label: 'Dashboard', icon: ChartNoAxesCombined },
     ...(!isAdmin ? [{ page: 'explore' as Page, label: 'Explorar', icon: Compass }] : []),
-    { page: 'tasks' as Page, label: 'Tarefas', icon: ListTodo },
+    { page: 'tasks' as Page, label: isAdmin ? 'Tarefas' : 'Disponíveis', icon: ListTodo },
+    ...(!isAdmin ? [{ page: 'my-tasks' as Page, label: 'Minhas tarefas', icon: ClipboardCheck }] : []),
     { page: 'rewards' as Page, label: 'Recompensas', icon: Gift },
     { page: 'profile' as Page, label: 'Perfil', icon: User },
   ];
@@ -166,25 +172,22 @@ export default function App() {
           <select id="active-garden" value={activeGardenId ?? ''} onChange={(event) => { selectGarden(Number(event.target.value)); setCurrentPage('home'); setAdminNavigationIntent(null); }} className="max-w-[min(60vw,18rem)] rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] text-neutral-900 focus:outline-none focus:ring-2 focus:ring-[#00a63e]">
             {availableGardens.map((garden) => <option key={garden.id} value={garden.id}>{garden.nome}</option>)}
           </select>
-          {activeGarden && availableGardens.find((garden) => garden.id === activeGardenId)?.roles.length === 2 && <div className="flex rounded-lg border border-gray-200 p-0.5" role="group" aria-label="Função ativa">
-            {(['MEMBER', 'ADMIN'] as const).map((role) => <button key={role} type="button" aria-pressed={activeGarden.role === role} onClick={() => { selectGarden(activeGarden.id_horta, role); setCurrentPage('home'); setAdminNavigationIntent(null); }} className={`rounded-md px-3 py-1.5 text-[11px] font-semibold ${activeGarden.role === role ? 'bg-[#eaf7ed] text-[#16803d]' : 'text-[#718075] hover:bg-gray-50'}`}>{role === 'ADMIN' ? 'Administrador' : 'Participante'}</button>)}
-          </div>}
           </>}
           </div>
           <button type="button" onClick={handleLogout} className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-[#526056] transition hover:border-red-200 hover:bg-red-50 hover:text-[#9b3d34]" aria-label="Sair da conta"><LogOut className="size-4" />Sair</button>
         </div>
         <div className={`mx-auto w-full pb-24 lg:pb-8 ${isAdmin ? 'pt-0 lg:pt-10' : ''}`}>
           {currentPage === 'home' && (
-            !activeGardenId
-              ? <ExplorePage />
-              : isAdmin
+            isAdmin
               ? <AdminHomePage onNavigate={navigate} />
               : <HomePage onNavigate={(page) => navigate(page)} />
           )}
-          {currentPage === 'explore' && !isAdmin && <ExplorePage />}
+          {currentPage === 'explore' && !isAdmin && <ExplorePage onCreateGarden={() => navigate('create-garden')} />}
+          {currentPage === 'dashboard' && <DashboardPage onNavigate={navigate} />}
           {currentPage === 'tasks' && (
-            <TasksPage navigationIntent={adminNavigationIntent} onBack={returnFromTasks} />
+            <TasksPage navigationIntent={adminNavigationIntent} onBack={() => returnFromTaskPage('tasks')} />
           )}
+          {currentPage === 'my-tasks' && !isAdmin && <MyTasksPage onBack={() => returnFromTaskPage('my-tasks')} />}
           {currentPage === 'rewards' && (
             <RewardsPage navigationIntent={adminNavigationIntent} />
           )}

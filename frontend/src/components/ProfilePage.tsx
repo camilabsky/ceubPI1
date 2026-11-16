@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import ProfileCommunitySections from './ProfileCommunitySections';
 import ProfileLocationEditor from './ProfileLocationEditor';
 import ProfilePhoneEditor from './ProfilePhoneEditor';
+import DeleteAccountSection from './DeleteAccountSection';
 
 interface ProfilePageProps {
   coins: number;
@@ -35,16 +36,6 @@ interface ProfileEvent {
   coins: number;
   reward_price?: number | null;
   occurred_at: string | null;
-}
-
-interface CommunityChallenge {
-  id: number;
-  id_horta: number;
-  nome: string;
-  goal_tasks: number;
-  completed_tasks: number;
-  ends_at: string;
-  completed: boolean;
 }
 
 interface CommunityMember {
@@ -78,7 +69,6 @@ interface GamificationData {
   achievements: Achievement[];
   events: ProfileEvent[];
   hortas: Garden[];
-  community_challenges: CommunityChallenge[];
   leaderboard: CommunityMember[];
   impact: { tasks_completed: number; gardens_count: number; seedlings_planted: number };
 }
@@ -149,7 +139,6 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onCreateG
   const achievements = data?.achievements ?? [];
   const events = data?.events ?? [];
   const gardens = data?.hortas ?? [];
-  const communityChallenges = data?.community_challenges ?? [];
   const saldo = Math.max(0, Number(data?.moedas ?? coins) || 0);
   const tabItems: { id: Tab; label: string; icon: typeof Award }[] = [
     { id: 'achievements', label: 'Conquistas', icon: Award },
@@ -196,14 +185,6 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onCreateG
           <div className="rounded-[14px] border border-gray-200 bg-white p-3 sm:p-4"><div className="flex size-8 items-center justify-center rounded-full bg-blue-50"><Users className="size-4 text-[#4285d4]" /></div><p className="mt-2 text-[19px] font-bold leading-5 text-neutral-950">{data?.impact?.gardens_count ?? gardens.length}</p><p className="mt-1 text-[10px] text-[#66736a] sm:text-[11px]">Hortas</p></div>
         </section>
 
-        {communityChallenges.length > 0 && <section className="mt-3 rounded-[14px] border border-[#dcebdd] bg-[#f5faf5] p-4">
-          <div className="mb-3 flex items-center gap-2"><span className="flex size-8 items-center justify-center rounded-full bg-white text-[#38844c]"><Users className="size-4" /></span><div><h2 className="text-[13px] font-bold text-[#26362a]">Desafio da comunidade</h2><p className="text-[10px] text-[#77837a]">Progresso coletivo nas tarefas deste mês.</p></div></div>
-          <div className="grid gap-2 sm:grid-cols-2">{communityChallenges.slice(0, 2).map((challenge) => {
-            const percent = Math.min(100, challenge.goal_tasks > 0 ? challenge.completed_tasks / challenge.goal_tasks * 100 : 0);
-            return <div key={challenge.id} className="rounded-lg border border-[#e4ece4] bg-white p-3"><div className="flex items-center justify-between gap-2"><p className="truncate text-[11px] font-semibold text-[#34453a]">{challenge.nome}</p><span className="shrink-0 text-[10px] font-semibold text-[#16803d]">{challenge.completed ? 'Concluído' : `${challenge.completed_tasks}/${challenge.goal_tasks}`}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#edf1ed]"><div className="h-full rounded-full bg-[#4eaa64]" style={{ width: `${percent}%` }} /></div></div>;
-          })}</div>
-        </section>}
-
         {!!data?.leaderboard?.length && <section className="mt-3 rounded-[14px] border border-gray-200 bg-white p-4"><div className="mb-3 flex items-center gap-2"><Users className="size-4 text-[#16803d]" /><div><h2 className="text-[13px] font-bold text-[#26362a]">Destaques da comunidade</h2><p className="text-[10px] text-[#77837a]">Participantes das hortas em comum, ordenados pelo XP acumulado.</p></div></div><ol className="grid gap-2 sm:grid-cols-2">{data.leaderboard.map((member) => <li key={member.id_perfil} className={`flex items-center justify-between rounded-lg px-3 py-2 text-[11px] ${member.is_you ? 'bg-[#eff8ef] font-semibold text-[#16803d]' : 'bg-[#f8faf8] text-[#526056]'}`}><span>{member.position}. {member.nome}{member.is_you ? ' · você' : ''}</span><span>{member.xp} XP · {member.tarefas_concluidas} tarefas</span></li>)}</ol></section>}
 
         <section className="mt-5 overflow-hidden rounded-[14px] border border-gray-200 bg-white">
@@ -236,6 +217,8 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onCreateG
 
 
         <div className="mt-4 flex items-center justify-between rounded-[14px] border border-gray-200 bg-white px-4 py-3"><div><p className="text-[12px] font-semibold text-[#34453a]">Impacto na comunidade</p><p className="text-[11px] text-[#718075]">Tarefas concluídas ajudam sua horta a crescer.</p></div><button onClick={() => { logout(); onLogout?.(); }} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium text-[#66736a] hover:bg-gray-50"><LogOut className="size-4" />Sair</button></div>
+
+        <DeleteAccountSection onDeleted={onLogout} />
       </div>
 
       {editOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4" onClick={() => setEditOpen(false)}><form onSubmit={saveProfile} onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"><div className="mb-5 flex items-center justify-between"><div><h2 className="text-[17px] font-bold text-neutral-950">Editar perfil</h2><p className="mt-1 text-[12px] text-[#718075]">Atualize seus dados da comunidade.</p></div><button type="button" onClick={() => setEditOpen(false)} aria-label="Fechar" className="flex size-8 items-center justify-center rounded-full text-[#718075] hover:bg-gray-100"><X className="size-4" /></button></div><label className="mb-3 block text-[12px] font-medium text-[#4a5565]">Nome<input value={editName} onChange={(event) => setEditName(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-200 px-3 text-[13px] outline-none focus:border-[#00a63e]" /></label><label className="block text-[12px] font-medium text-[#4a5565]">E-mail<input type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-200 px-3 text-[13px] outline-none focus:border-[#00a63e]" /></label><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setEditOpen(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-[12px] font-semibold text-[#66736a]">Cancelar</button><button type="submit" disabled={saving} className="rounded-lg bg-[#00a63e] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#008236] disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar alterações'}</button></div></form></div>}

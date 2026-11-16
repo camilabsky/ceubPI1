@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Check, Compass, ExternalLink, Leaf, LoaderCircle, MapPin, MapPinned, Search, Sprout, Users, X, Mail, Phone, ShieldCheck, ClipboardList } from 'lucide-react';
+import { Check, Compass, ExternalLink, Leaf, LoaderCircle, MapPin, MapPinned, Search, Sprout, Plus, ArrowRight, Users, X, Mail, Phone, ShieldCheck, ClipboardList } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_URL } from '../config';
 import { useAuth } from '../contexts/AuthContext';
@@ -98,7 +98,11 @@ function MapBounds({ hortas, selectedId }: { hortas: Horta[]; selectedId: number
   return null;
 }
 
-export default function ExplorePage() {
+interface ExplorePageProps {
+  onCreateGarden?: () => void;
+}
+
+export default function ExplorePage({ onCreateGarden }: ExplorePageProps) {
   const { token, user, applyUser } = useAuth();
   const [hortas, setHortas] = useState<Horta[]>([]);
   const [saldo, setSaldo] = useState(0);
@@ -381,6 +385,12 @@ export default function ExplorePage() {
         ))}
         <span className="ml-auto text-[11px] text-[#78847b] sm:text-[12px]">{listaVisivel.length} {listaVisivel.length === 1 ? 'horta encontrada' : 'hortas encontradas'}</span>
       </div>
+
+      {user && user.roles.length === 0 && <button type="button" onClick={() => onCreateGarden?.()} className="mb-5 flex w-full items-center gap-3 rounded-xl border border-[#cfe2d1] bg-white p-4 text-left shadow-sm transition hover:border-[#9dcda7] hover:bg-[#f8fcf8] sm:p-5">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#eaf7ed] text-[#16803d]"><Plus className="size-5" /></span>
+        <span className="min-w-0 flex-1"><span className="block text-[14px] font-bold text-[#26362a] sm:text-[15px]">Criar minha horta</span><span className="mt-0.5 block text-[11px] text-[#738076] sm:text-[12px]">Cadastre uma comunidade e seja seu administrador.</span></span>
+        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-[#16803d] sm:text-[12px]">Criar <ArrowRight className="size-4" /></span>
+      </button>}
 
       <section className="grid min-h-[610px] grid-cols-[minmax(0,1.04fr)_minmax(430px,0.96fr)] gap-4 max-[1050px]:min-h-0 max-[1050px]:grid-cols-1 sm:gap-5">
         <div className="relative min-h-[610px] overflow-hidden rounded-2xl border border-[#e0e7e1] bg-[#e8eee8] shadow-[0_2px_10px_#183b2410] max-[1050px]:min-h-[380px] max-[640px]:min-h-[320px]">

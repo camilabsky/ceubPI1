@@ -44,7 +44,7 @@ export function HortaMap({
   }
 
   return (
-    <div className="relative z-0 overflow-hidden rounded-xl" style={{ height }}>
+    <div className="isolate overflow-hidden rounded-xl" style={{ height }}>
       {/* key força recentralizar quando as coordenadas mudam (center é imutável) */}
       <MapContainer
         key={`${lat}-${lng}`}
