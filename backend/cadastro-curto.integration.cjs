@@ -43,6 +43,8 @@ async function registerScenarios() {
   assert.equal(result.status, 400, JSON.stringify(result.data));
   result = await request('/auth/register', { method: 'POST', body: { nome: 'Sem UF', email: email('semuf'), senha: 'Cadastro!123', cidade: 'Brasília' } });
   assert.equal(result.status, 400, JSON.stringify(result.data));
+  result = await request('/auth/register', { method: 'POST', body: { nome: 'Cidade Numero', email: email('cidadenum'), senha: 'Cadastro!123', cidade: 123 } });
+  assert.equal(result.status, 400, JSON.stringify(result.data));
 
   result = await request('/auth/register', { method: 'POST', body: {
     nome: 'Completo', email: email('completo'), senha: 'Cadastro!123', telefone: '(61) 99999-0000', cidade: 'Brasília', uf: 'df',
@@ -135,6 +137,12 @@ async function joinScenarios() {
   assert.equal(listA.find((row) => row.id_usuario === blank.user.id).telefone, null);
   assert.ok(!listA.some((row) => row.id_usuario === invalid.user.id));
 
+  // Member clears the phone on the profile → admin list shows it as missing.
+  result = await request('/me/telefone', { token: withPhone.token, method: 'PUT', body: { telefone: '' } });
+  assert.equal(result.status, 200, JSON.stringify(result.data));
+  listA = await participants(adminA, gardenA);
+  assert.equal(listA.find((row) => row.id_usuario === withPhone.user.id).telefone, null);
+
   const listB = await participants(adminB, gardenB);
   assert.deepEqual(listB.map((row) => row.id_usuario), [withPhone.user.id]);
   assert.ok(!listB.some((row) => row.id_usuario === blank.user.id));
@@ -152,7 +160,7 @@ async function joinScenarios() {
       'cadastro só com nome, e-mail e senha', 'campos opcionais validados se enviados', 'clientes antigos continuam funcionando',
       'ler, salvar, rejeitar e limpar telefone', 'telefone exige login',
       'telefone opcional ao entrar na horta', 'entrar sem telefone preserva o existente', 'telefone invalido impede a entrada',
-      'admins veem só os telefones da própria horta',
+      'admins veem só os telefones da própria horta', 'telefone apagado some da lista do admin', 'cidade que não é texto é rejeitada',
     ] }, null, 2));
   } finally {
     await db.end();

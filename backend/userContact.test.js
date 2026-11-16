@@ -33,3 +33,11 @@ test('parseLocation exige cidade e UF juntas', () => {
   assert.equal(parseLocation('123', 'DF').ok, false);
   assert.equal(parseLocation('A'.repeat(101), 'DF').ok, false);
 });
+
+test('parseLocation rejeita cidade ou UF que não sejam texto', () => {
+  assert.equal(parseLocation(123, undefined).ok, false);
+  assert.equal(parseLocation(123, 'DF').ok, false);
+  assert.equal(parseLocation('Brasília', 53).ok, false);
+  assert.equal(parseLocation({}, []).ok, false);
+  assert.deepEqual(parseLocation(null, null), { ok: true, cidade: null, uf: null });
+});

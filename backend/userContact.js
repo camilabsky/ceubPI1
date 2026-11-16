@@ -12,7 +12,12 @@ function parsePhone(value) {
   return { ok: true, telefone };
 }
 
+function isTextOrMissing(value) {
+  return value === undefined || value === null || typeof value === 'string';
+}
+
 function parseLocation(cidadeInput, ufInput) {
+  if (!isTextOrMissing(cidadeInput) || !isTextOrMissing(ufInput)) return { ok: false, error: 'Informe cidade e UF como texto' };
   const cidade = typeof cidadeInput === 'string' ? cidadeInput.trim() : '';
   const uf = typeof ufInput === 'string' ? ufInput.trim().toUpperCase() : '';
   if (!cidade && !uf) return { ok: true, cidade: null, uf: null };
