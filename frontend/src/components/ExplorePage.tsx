@@ -116,7 +116,7 @@ export default function ExplorePage() {
   const [telefoneAtual, setTelefoneAtual] = useState<string | null>(null);
   const [pedindoTelefone, setPedindoTelefone] = useState(false);
   const [erroEntrada, setErroEntrada] = useState('');
-  const [promptDispensado, setPromptDispensado] = useState(isLocationPromptDismissed);
+  const [promptDispensado, setPromptDispensado] = useState(() => isLocationPromptDismissed(user?.id));
   const [localizacaoVersao, setLocalizacaoVersao] = useState(0);
 
   useEffect(() => {
@@ -220,8 +220,10 @@ export default function ExplorePage() {
     return () => { ativo = false; };
   }, [token, posicao, localizacaoVersao]);
 
+  useEffect(() => { setPromptDispensado(isLocationPromptDismissed(user?.id)); }, [user?.id]);
+
   const dispensarPrompt = () => {
-    dismissLocationPrompt();
+    dismissLocationPrompt(user?.id);
     setPromptDispensado(true);
   };
 
@@ -265,7 +267,7 @@ export default function ExplorePage() {
     return encontrados;
   }, [busca, filtro, hortas, posicao]);
 
-  const usarLocalizacao = () => {
+  const usarLocalizacao = (aoObter?: () => void) => {
     if (!navigator.geolocation) return toast.error('Seu navegador não oferece localização.');
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
@@ -273,6 +275,7 @@ export default function ExplorePage() {
         try { sessionStorage.setItem('couve:user-position', JSON.stringify(currentPosition)); } catch { /* posição mantida em memória */ }
         setPosicao(currentPosition);
         setFiltro('Mais próximas');
+        aoObter?.();
       },
       () => toast.error('Não foi possível acessar sua localização. Confira a permissão do navegador.'),
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
@@ -352,7 +355,7 @@ export default function ExplorePage() {
           <Search className="absolute left-4 top-1/2 size-[18px] -translate-y-1/2 text-[#7a887e]" />
           <input value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Buscar por nome ou localização..." className="h-[50px] w-full rounded-xl border border-[#e1e8e2] bg-white pl-11 pr-4 text-[14px] outline-none transition focus:border-[#42a765] focus:ring-4 focus:ring-[#16a34a]/10" />
         </div>
-        <button onClick={usarLocalizacao} className="inline-flex h-[46px] w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#168a3c] px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#117331] sm:h-[50px] sm:w-auto sm:px-5 sm:text-[14px]">
+        <button onClick={() => usarLocalizacao()} className="inline-flex h-[46px] w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#168a3c] px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#117331] sm:h-[50px] sm:w-auto sm:px-5 sm:text-[14px]">
           <MapPin className="size-[17px]" /> {posicao ? 'Localização ativa' : 'Usar minha localização'}
         </button>
       </section>
@@ -360,7 +363,7 @@ export default function ExplorePage() {
       {mostrarPromptLocalizacao && (
         <div className="mb-4">
           <ExploreLocationPrompt
-            onUseLocation={() => { usarLocalizacao(); dispensarPrompt(); }}
+            onUseLocation={() => usarLocalizacao(dispensarPrompt)}
             onSaveCity={salvarCidadePrompt}
             onDismiss={dispensarPrompt}
           />

@@ -11,6 +11,7 @@ export default function ProfilePhoneEditor({ variant = 'inline' }: { variant?: '
   const [draft, setDraft] = useState('');
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
     let active = true;
@@ -19,9 +20,9 @@ export default function ProfilePhoneEditor({ variant = 'inline' }: { variant?: '
       .then(async (response) => {
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || 'Não foi possível carregar seu telefone.');
-        if (active) setTelefone(result.telefone || '');
+        if (active) { setTelefone(result.telefone || ''); setStatus('ready'); }
       })
-      .catch((error) => { if (active) toast.error(error instanceof Error ? error.message : 'Erro ao carregar seu telefone.'); });
+      .catch(() => { if (active) setStatus('error'); });
     return () => { active = false; };
   }, [token]);
 
@@ -51,8 +52,8 @@ export default function ProfilePhoneEditor({ variant = 'inline' }: { variant?: '
   return <>
     <div className={variant === 'card' ? 'mx-4 mb-5 rounded-[14px] border border-gray-200 bg-white p-4' : 'mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-white/90'}>
       {variant === 'card' && <h2 className="mb-2 text-[13px] font-semibold text-[#34453a]">Seu telefone</h2>}
-      <span className={`inline-flex items-center gap-1 ${variant === 'card' ? 'text-[12px] text-[#58665c]' : ''}`}><Phone className="size-3.5" />{telefone || 'Telefone não informado'}</span>
-      <button type="button" onClick={() => { setDraft(telefone); setEditing(true); }} className={variant === 'card' ? 'ml-2 text-[12px] font-semibold text-[#16803d] underline underline-offset-2' : 'text-[11px] text-white underline underline-offset-2 hover:text-white'}>{telefone ? 'Editar telefone' : 'Adicionar telefone'}</button>
+      <span className={`inline-flex items-center gap-1 ${variant === 'card' ? 'text-[12px] text-[#58665c]' : ''}`}><Phone className="size-3.5" />{status === 'loading' ? 'Carregando telefone…' : status === 'error' ? 'Não foi possível carregar seu telefone' : telefone || 'Telefone não informado'}</span>
+      <button type="button" disabled={status !== 'ready'} onClick={() => { setDraft(telefone); setEditing(true); }} className={`${variant === 'card' ? 'ml-2 text-[12px] font-semibold text-[#16803d] underline underline-offset-2' : 'text-[11px] text-white underline underline-offset-2 hover:text-white'} disabled:cursor-not-allowed disabled:opacity-50`}>{telefone ? 'Editar telefone' : 'Adicionar telefone'}</button>
       {variant === 'inline' && <span className="text-white/70">Visível só para administradores das suas hortas</span>}
       {variant === 'card' && <p className="mt-1 text-[11px] text-[#718075]">Opcional. Visível apenas para os administradores das hortas em que você participa.</p>}
     </div>

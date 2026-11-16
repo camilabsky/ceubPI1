@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ExplorePage from './ExplorePage';
@@ -87,6 +87,30 @@ describe('ExplorePage city prompt', () => {
     await waitFor(() => expect(screen.queryByText('Onde você está?')).not.toBeInTheDocument());
     const put = calls.find((c) => c.key === 'PUT /me/localizacao');
     expect(JSON.parse(String(put?.init?.body))).toEqual({ cidade: 'Brasília', uf: 'DF' });
+  });
+
+  it('keeps the card when the browser refuses the location', async () => {
+    vi.stubGlobal('navigator', { ...navigator, geolocation: { getCurrentPosition: (_ok: unknown, fail: () => void) => fail() } });
+    render(<ExplorePage />);
+    const card = await screen.findByRole('region', { name: 'Onde você está?' });
+    await userEvent.click(within(card).getByRole('button', { name: /Usar minha localização/ }));
+    expect(screen.getByText('Onde você está?')).toBeInTheDocument();
+    expect(localStorage.length).toBe(0);
+  });
+
+  it('hides the card once the browser gives a location', async () => {
+    vi.stubGlobal('navigator', { ...navigator, geolocation: { getCurrentPosition: (ok: (p: unknown) => void) => ok({ coords: { latitude: -15.79, longitude: -47.88 } }) } });
+    render(<ExplorePage />);
+    const card = await screen.findByRole('region', { name: 'Onde você está?' });
+    await userEvent.click(within(card).getByRole('button', { name: /Usar minha localização/ }));
+    await waitFor(() => expect(screen.queryByText('Onde você está?')).not.toBeInTheDocument());
+    expect(localStorage.getItem('couve:explore-location-prompt-dismissed:1')).toBe('1');
+  });
+
+  it('another account on the same device still gets asked', async () => {
+    localStorage.setItem('couve:explore-location-prompt-dismissed:99', '1');
+    render(<ExplorePage />);
+    expect(await screen.findByText('Onde você está?')).toBeInTheDocument();
   });
 
   it('keeps the card open when saving fails', async () => {

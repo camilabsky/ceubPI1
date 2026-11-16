@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LOCATION_PROMPT_DISMISSED_KEY, isLocationPromptDismissed, dismissLocationPrompt, shouldShowLocationPrompt } from './locationPrompt';
+import { locationPromptKey, isLocationPromptDismissed, dismissLocationPrompt, shouldShowLocationPrompt } from './locationPrompt';
 
 describe('shouldShowLocationPrompt', () => {
   const cases: Array<[boolean, boolean, boolean, boolean, boolean]> = [
@@ -16,14 +16,21 @@ describe('shouldShowLocationPrompt', () => {
 });
 
 describe('dismissal storage', () => {
-  it('uses the agreed localStorage key', () => {
-    expect(LOCATION_PROMPT_DISMISSED_KEY).toBe('couve:explore-location-prompt-dismissed');
+  it('keys the dismissal by account', () => {
+    expect(locationPromptKey(42)).toBe('couve:explore-location-prompt-dismissed:42');
   });
 
-  it('remembers dismissal', () => {
-    expect(isLocationPromptDismissed()).toBe(false);
-    dismissLocationPrompt();
-    expect(localStorage.getItem('couve:explore-location-prompt-dismissed')).toBe('1');
-    expect(isLocationPromptDismissed()).toBe(true);
+  it('remembers dismissal for that account only', () => {
+    expect(isLocationPromptDismissed(1)).toBe(false);
+    dismissLocationPrompt(1);
+    expect(localStorage.getItem('couve:explore-location-prompt-dismissed:1')).toBe('1');
+    expect(isLocationPromptDismissed(1)).toBe(true);
+    expect(isLocationPromptDismissed(2)).toBe(false);
+  });
+
+  it('never counts as dismissed without an account', () => {
+    dismissLocationPrompt(undefined);
+    expect(isLocationPromptDismissed(undefined)).toBe(false);
+    expect(localStorage.length).toBe(0);
   });
 });

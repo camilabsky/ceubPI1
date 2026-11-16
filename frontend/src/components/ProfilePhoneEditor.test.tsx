@@ -71,6 +71,27 @@ describe('ProfilePhoneEditor', () => {
     expect(JSON.parse(String(puts()[0][1]?.body))).toEqual({ telefone: '' });
   });
 
+  it('cannot be edited while the saved phone is still loading', async () => {
+    let release: () => void = () => {};
+    fetchMock.mockImplementationOnce(() => new Promise((resolve) => {
+      release = () => resolve(new Response(JSON.stringify({ telefone: '(61) 98888-0000' }), { status: 200 }));
+    }));
+    render(<ProfilePhoneEditor />);
+    expect(screen.getByText('Carregando telefone…')).toBeInTheDocument();
+    expect(screen.queryByText('Telefone não informado')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /telefone/i })).toBeDisabled();
+    release();
+    expect(await screen.findByRole('button', { name: 'Editar telefone' })).toBeEnabled();
+  });
+
+  it('cannot be edited when the saved phone failed to load', async () => {
+    fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify({ error: 'falhou' }), { status: 500 }));
+    render(<ProfilePhoneEditor />);
+    expect(await screen.findByText('Não foi possível carregar seu telefone')).toBeInTheDocument();
+    expect(screen.queryByText('Telefone não informado')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /telefone/i })).toBeDisabled();
+  });
+
   it('works in the card variant', async () => {
     render(<ProfilePhoneEditor variant="card" />);
     expect(await screen.findByRole('heading', { name: 'Seu telefone' })).toBeInTheDocument();

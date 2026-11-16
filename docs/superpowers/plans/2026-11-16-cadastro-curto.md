@@ -24,7 +24,7 @@
   - "Quer deixar um telefone? O administrador da horta pode precisar falar com você.", "Entrar na horta", "Pular"
   - "Telefone não informado"
 - **Frontend verification (Alice's request, added at execution):** the frontend has Vitest + Testing Library (`npm test`) and type checking (`npm run typecheck`, `tsc --noEmit`). Every frontend task writes its Vitest tests first and watches them fail. A task is done only when `npm test`, `npm run typecheck` and `npm run build` all pass. Tests mock `fetch` with `vi.stubGlobal('fetch', vi.fn(...))` and mock `useAuth` with `vi.mock('../contexts/AuthContext')`.
-- City-prompt dismissal key: `localStorage['couve:explore-location-prompt-dismissed'] = '1'`.
+- City-prompt dismissal key, per account: `localStorage['couve:explore-location-prompt-dismissed:<userId>'] = '1'`. It's only set after a successful geolocation, a saved city, or "Agora não" (changed after the final review).
 
 ## Review Focus
 
