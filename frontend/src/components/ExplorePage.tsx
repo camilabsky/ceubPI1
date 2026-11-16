@@ -6,6 +6,8 @@ import { Check, Compass, ExternalLink, Leaf, LoaderCircle, MapPin, MapPinned, Se
 import { toast } from 'sonner';
 import { API_URL } from '../config';
 import { useAuth } from '../contexts/AuthContext';
+import ExploreLocationPrompt from './ExploreLocationPrompt';
+import { dismissLocationPrompt, isLocationPromptDismissed, shouldShowLocationPrompt } from '../lib/locationPrompt';
 
 type Horta = {
   id: number;
@@ -109,6 +111,9 @@ export default function ExplorePage() {
   const [erroDetalhes, setErroDetalhes] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [entrando, setEntrando] = useState(false);
+  const [perfilSemCidade, setPerfilSemCidade] = useState(false);
+  const [promptDispensado, setPromptDispensado] = useState(isLocationPromptDismissed);
+  const [localizacaoVersao, setLocalizacaoVersao] = useState(0);
 
   useEffect(() => {
     let ativo = true;
@@ -162,7 +167,9 @@ export default function ExplorePage() {
         const response = await fetch(`${API_URL}/me/localizacao`, { headers: { Authorization: `Bearer ${token}` } });
         if (!response.ok) return;
         const { cidade, uf } = await response.json() as { cidade?: string; uf?: string };
-        if (!cidade || !uf || !ativo) return;
+        if (!ativo) return;
+        setPerfilSemCidade(!cidade || !uf);
+        if (!cidade || !uf) return;
 
         const cacheKey = `couve:profile-position:${cidade.trim().toLocaleLowerCase('pt-BR')}:${uf.toUpperCase()}`;
         const cached = readSessionPosition(cacheKey);
@@ -189,7 +196,38 @@ export default function ExplorePage() {
     };
     void carregarLocalizacaoPerfil();
     return () => { ativo = false; };
-  }, [token, posicao]);
+  }, [token, posicao, localizacaoVersao]);
+
+  const dispensarPrompt = () => {
+    dismissLocationPrompt();
+    setPromptDispensado(true);
+  };
+
+  const salvarCidadePrompt = async (cidade: string, uf: string) => {
+    try {
+      const response = await fetch(`${API_URL}/me/localizacao`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ cidade, uf }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Não foi possível salvar sua cidade.');
+      dispensarPrompt();
+      setPerfilSemCidade(false);
+      setLocalizacaoVersao((versao) => versao + 1);
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível salvar sua cidade.');
+      return false;
+    }
+  };
+
+  const mostrarPromptLocalizacao = shouldShowLocationPrompt({
+    hasToken: Boolean(token),
+    hasPosition: Boolean(posicao),
+    profileHasCity: !perfilSemCidade,
+    dismissed: promptDispensado,
+  });
 
   const listaVisivel = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase('pt-BR');
@@ -275,6 +313,16 @@ export default function ExplorePage() {
           <MapPin className="size-[17px]" /> {posicao ? 'Localização ativa' : 'Usar minha localização'}
         </button>
       </section>
+
+      {mostrarPromptLocalizacao && (
+        <div className="mb-4">
+          <ExploreLocationPrompt
+            onUseLocation={() => { usarLocalizacao(); dispensarPrompt(); }}
+            onSaveCity={salvarCidadePrompt}
+            onDismiss={dispensarPrompt}
+          />
+        </div>
+      )}
 
       <div className="mb-5 flex flex-wrap items-center gap-2" role="group" aria-label="Filtrar hortas">
         {filtros.map((opcao) => (
