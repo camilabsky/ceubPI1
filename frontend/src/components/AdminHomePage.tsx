@@ -4,6 +4,7 @@ import { API_URL } from '../config';
 import { ArrowRight, Bell, CheckCircle2, ClipboardList, Gift, MapPin, Plus, Settings, Sprout, User as UserIcon, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
+import ParticipantPhone from './ParticipantPhone';
 import { HortaMap } from './HortaMap';
 import HomeGardensSection from './HomeGardensSection';
 import type { AdminNavigationIntent, AppPage } from '../types/adminNavigation';
@@ -40,6 +41,7 @@ interface ParticipantActivity {
   id_usuario: number;
   id_perfil: number;
   nome: string;
+  telefone: string | null;
   ultima_entrada_at: string | null;
   ultima_contribuicao_at: string | null;
   tarefas_30_dias: number;
@@ -246,7 +248,7 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
             {participantsLoading ? <div className="mt-4 space-y-2"><div className="h-12 animate-pulse rounded-lg bg-gray-50" /><div className="h-12 animate-pulse rounded-lg bg-gray-50" /></div>
               : filteredParticipants.length === 0 ? <div className="mt-4 rounded-xl border border-dashed border-gray-200 px-4 py-7 text-center text-[12px] text-[#717182]">{participants.length ? 'Nenhum participante neste filtro.' : 'Ainda não há participantes nesta horta.'}</div>
                 : <div className="mt-4 divide-y divide-gray-100">{filteredParticipants.map((participant) => <article key={participant.id_usuario} className="flex flex-col gap-2 py-3 first:pt-0 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex min-w-0 items-center gap-3"><span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#eff8f0] text-[13px] font-semibold text-[#16803d]">{participant.nome.trim().charAt(0).toLocaleUpperCase('pt-BR')}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate text-[12px] font-semibold text-neutral-950">{participant.nome}</p><span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${participantStatusClasses[participant.activity_status]}`}>{participantStatusLabels[participant.activity_status]}</span></div><p className="mt-0.5 text-[10px] text-[#717182]">Última entrada: {formatActivityDate(participant.ultima_entrada_at, 'Sem registro desde a ativação do acompanhamento')} · Última contribuição: {formatActivityDate(participant.ultima_contribuicao_at, 'Nenhuma tarefa aprovada')}</p></div></div>
+                  <div className="flex min-w-0 items-center gap-3"><span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#eff8f0] text-[13px] font-semibold text-[#16803d]">{participant.nome.trim().charAt(0).toLocaleUpperCase('pt-BR')}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate text-[12px] font-semibold text-neutral-950">{participant.nome}</p><span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${participantStatusClasses[participant.activity_status]}`}>{participantStatusLabels[participant.activity_status]}</span></div><p className="mt-0.5 text-[10px] text-[#717182]">Última entrada: {formatActivityDate(participant.ultima_entrada_at, 'Sem registro desde a ativação do acompanhamento')} · Última contribuição: {formatActivityDate(participant.ultima_contribuicao_at, 'Nenhuma tarefa aprovada')}</p><ParticipantPhone telefone={participant.telefone ?? null} /></div></div>
                   <div className="pl-12 text-[10px] text-[#526056] sm:pl-0 sm:text-right"><p><strong>{participant.dias_contribuindo_30_dias}</strong> dias de contribuição · <strong>{participant.tarefas_30_dias}</strong> tarefas aprovadas</p><p className="mt-0.5 text-[#849087]">{participant.tarefas_totais} tarefas aprovadas no total</p></div>
                 </article>)}</div>}
             <p className="mt-2 border-t border-gray-100 pt-2 text-[9px] leading-relaxed text-[#849087]">Ativo: entrou nos últimos 14 dias. Atenção: entre 15 e 40 dias. Inativo: há mais de 40 dias sem entrar. Contas antigas sem histórico são mostradas como “Sem registro”.</p>
