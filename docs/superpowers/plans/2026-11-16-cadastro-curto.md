@@ -23,6 +23,7 @@
   - "Onde você está?", "Mostramos as hortas mais perto de você.", "Usar minha localização", "Agora não"
   - "Quer deixar um telefone? O administrador da horta pode precisar falar com você.", "Entrar na horta", "Pular"
   - "Telefone não informado"
+- **Frontend verification (Alice's request, added at execution):** the frontend has Vitest + Testing Library (`npm test`) and type checking (`npm run typecheck`, `tsc --noEmit`). Every frontend task writes its Vitest tests first and watches them fail. A task is done only when `npm test`, `npm run typecheck` and `npm run build` all pass. Tests mock `fetch` with `vi.stubGlobal('fetch', vi.fn(...))` and mock `useAuth` with `vi.mock('../contexts/AuthContext')`.
 - City-prompt dismissal key: `localStorage['couve:explore-location-prompt-dismissed'] = '1'`.
 
 ## Review Focus
@@ -96,8 +97,8 @@ test('parseLocation exige cidade e UF juntas', () => {
   - Register with all old fields valid → 201 (old clients keep working).
   - `GET /me/telefone` for the minimal user → `{ telefone: '' }`. `PUT { telefone: '(61) 98888-0000' }` → 200, then GET returns it. `PUT { telefone: 'abc' }` → 400. `PUT { telefone: '' }` → 200, then GET returns `''` and the DB has NULL.
   - `GET /me/telefone` without a token → 401.
-- [ ] **Step 2: Run, expect FAIL.** With the stack up (`docker compose up -d --build`, which exposes the API on `:8080` and the DB on `:3307`): `API_URL=http://localhost:8080 DB_PORT=3307 node backend/cadastro-curto.integration.cjs`. Use the same env vars for every integration run below. The script's defaults (`8082`/`3308`) come from `role-audit` and don't match compose. fails on the first register (400 "obrigatorios").
-- [ ] **Step 3: Implement** the register change and the two `/me/telefone` routes (`requireAuth`, `UPDATE Usuario SET telefone = ? WHERE id = ?`). Switch `PUT /me/localizacao` to `parseLocation` with the same responses as today. Rebuild/restart the backend container (`docker compose up -d --build backend`).
+- [ ] **Step 2: Run, expect FAIL.** With the local test stack up (`.superpowers/sdd/2026-11-16-cadastro-curto/teststack.sh start`, which runs MariaDB on `:3308` and the backend on `:8082`, the defaults the integration scripts use): `node backend/cadastro-curto.integration.cjs`. fails on the first register (400 "obrigatorios").
+- [ ] **Step 3: Implement** the register change and the two `/me/telefone` routes (`requireAuth`, `UPDATE Usuario SET telefone = ? WHERE id = ?`). Switch `PUT /me/localizacao` to `parseLocation` with the same responses as today. Restart the backend (`teststack.sh restart-backend`).
 - [ ] **Step 4: Run, expect PASS.** Run `node backend/cadastro-curto.integration.cjs` → `pass: true`. Then `node backend/role-audit.integration.cjs` → `pass: true` (it still sends phone/city at register).
 - [ ] **Step 5: Commit.** `git commit -m "feat(backend): cadastro so com nome, e-mail e senha; endpoints de telefone"`
 
@@ -142,6 +143,12 @@ test('parseLocation exige cidade e UF juntas', () => {
 - Produces: `GoogleSignInButton({ text }: { text: 'signin_with' | 'continue_with' })`. It calls `loginWithGoogle(credential)` from `useAuth` and shows the existing toast "Nao foi possivel entrar com Google" on failure.
 - Produces: `register(nome: string, email: string, senha: string, opts?: { telefone?: string; cidade?: string; uf?: string }) => Promise<void>`.
 
+- [ ] **Step 0 (RED): `src/components/RegisterPage.test.tsx`.**
+  - `shows only nome, e-mail and senha fields`: there are no Telefone/Cidade/UF/Confirmar senha labels.
+  - `submits with only three fields`: `register` is called with `('Ana', 'ana@x.test', 'segredo1')`.
+  - `rejects short password`: `register` is not called.
+  - `renders Google button container`.
+  Run `npm test` → FAIL.
 - [ ] **Step 1: Build `GoogleSignInButton`** and switch `LoginPage` to `<GoogleSignInButton text="signin_with" />`. Keep its current render options (theme/size/width) as they are.
 - [ ] **Step 2: Rewrite the RegisterPage form** to match the right-hand mockup:
   - `<GoogleSignInButton text="continue_with" />` on top, then the "ou com e-mail" divider.
@@ -149,7 +156,7 @@ test('parseLocation exige cidade e UF juntas', () => {
   - Then "Criar conta" and "Já tem conta? Entrar".
   - Remove the telefone/cidade/uf/confirmarSenha state, the `UFS` set and their validations. Keep the `nome/email/senha` required check, `senha.length < 6`, and the `enviando` guard.
   - Call `register(nome, email, senha)`. The left image panel is unchanged.
-- [ ] **Step 3: Verify the build.** `cd frontend && npm run build` → it builds with no errors.
+- [ ] **Step 3: Verify the build.** `cd frontend && npm test && npm run typecheck && npm run build` → all pass.
 - [ ] **Step 4: Manual check.** Run `npm run dev` with the backend up:
   - Sign up with name/email/password → you land in the app.
   - The Google button shows on both the login and sign-up pages.
@@ -168,12 +175,18 @@ test('parseLocation exige cidade e UF juntas', () => {
 - Produces: `ExploreLocationPrompt({ onUseLocation, onSaveCity, onDismiss }: { onUseLocation: () => void; onSaveCity: (cidade: string, uf: string) => Promise<boolean>; onDismiss: () => void })`. It's presentational: a city input, a UF input (max 2, upper-cased), a save button, and the copy from Global Constraints.
 - In `ExplorePage`: `const [perfilSemCidade, setPerfilSemCidade] = useState(false)` is set by the existing `carregarLocalizacaoPerfil` effect (lines ~158–191) when the response has no cidade/uf. Add `const [promptDispensado, setPromptDispensado] = useState(() => localStorage flag === '1')`.
 
+- [ ] **Step 0 (RED): `src/components/ExploreLocationPrompt.test.tsx`.**
+  - The copy renders.
+  - The "Usar minha localização", "Agora não" and save handlers are called. The UF input upper-cases and is max 2.
+  - The save button is disabled while saving.
+  Also add a pure helper, `shouldShowLocationPrompt({ hasToken, hasPosition, profileHasCity, dismissed }): boolean`, in `src/lib/locationPrompt.ts` with a table test: true only for `(true, false, false, false)`.
+  Run `npm test` → FAIL.
 - [ ] **Step 1: Wire up the show rule.** Render the card above the list when `token && !posicao && perfilSemCidade && !promptDispensado`. `dismissPrompt()` sets the localStorage key (wrapped in try/catch, like the existing sessionStorage code) and the state.
 - [ ] **Step 2: Wire up the three actions.**
   - `onUseLocation` → `usarLocalizacao()` then `dismissPrompt()`.
   - `onSaveCity` → `PUT /me/localizacao`. On 200: `dismissPrompt()`, `setPerfilSemCidade(false)`, and re-run the profile-location effect by adding a `localizacaoVersao` counter to its deps. On error: toast the server's `error`, return `false`, and keep the card open.
   - `onDismiss` → `dismissPrompt()`.
-- [ ] **Step 3: Verify the build.** `cd frontend && npm run build` → no errors.
+- [ ] **Step 3: Verify the build.** `cd frontend && npm test && npm run typecheck && npm run build` → all pass.
 - [ ] **Step 4: Manual check.** With a fresh minimal user:
   - The card shows. The list stays usable underneath it.
   - "Agora não" hides it, and it stays hidden after a reload.
@@ -194,6 +207,15 @@ test('parseLocation exige cidade e UF juntas', () => {
 - Produces: `isValidPhone(value: string): boolean` in `frontend/src/lib/contact.ts`. It uses the trimmed Global Constraints regex. Task 7 uses it too.
 - `participar(telefone?: string)` sends `body: JSON.stringify(telefone ? { telefone } : {})` with `Content-Type: application/json`.
 
+- [ ] **Step 0 (RED): `src/lib/contact.test.ts`.**
+  - `isValidPhone`: `'(61) 99999-0000'` true; `'abc'`, `'1234567'` and `''` false; it trims.
+  Join-step tests live in `src/components/JoinPhoneStep.test.tsx`. Extract the step UI as `JoinPhoneStep({ onJoin, onSkip, busy, serverError }: { onJoin: (telefone?: string) => void; onSkip: () => void; busy: boolean; serverError: string })`.
+  - Invalid → inline error, and `onJoin` is not called.
+  - Valid → `onJoin('(61) 99999-0000')`.
+  - Empty → `onJoin(undefined)`.
+  - "Pular" → `onSkip`.
+  - `serverError` is shown.
+  Run `npm test` → FAIL.
 - [ ] **Step 1: Load the user's phone.** When the details panel opens and the user isn't already a MEMBER of `selecionada`, fetch `GET /me/telefone` into `telefoneAtual: string | null`.
 - [ ] **Step 2: Footer behavior.**
   - "Participar desta horta" with `telefoneAtual` non-empty, or the user already a member → call `participar()` as today.
@@ -201,7 +223,7 @@ test('parseLocation exige cidade e UF juntas', () => {
   - "Entrar na horta" with a non-empty, invalid value → an inline red message under the input, "Informe um telefone válido ou toque em Pular", and no request. With a valid or empty value → `participar(valor.trim() || undefined)`.
   - "Pular" → `participar()`.
   - If the server returns 400 → its error goes in the same inline message and the step stays open.
-- [ ] **Step 3: Verify the build.** `cd frontend && npm run build` → no errors.
+- [ ] **Step 3: Verify the build.** `cd frontend && npm test && npm run typecheck && npm run build` → all pass.
 - [ ] **Step 4: Manual check** (covers Review Focus 1–3):
   - A Google or minimal user sees the step. "Pular" joins.
   - Typing "abc" → inline error, not joined.
@@ -221,11 +243,16 @@ test('parseLocation exige cidade e UF juntas', () => {
 - Consumes: `GET/PUT /me/telefone` (Task 2), `isValidPhone` (Task 6).
 - Produces: `ProfilePhoneEditor({ variant }: { variant?: 'inline' | 'card' })`.
 
+- [ ] **Step 0 (RED): `src/components/ProfilePhoneEditor.test.tsx`.**
+  - It loads and shows the phone from `GET /me/telefone`, or "Telefone não informado".
+  - Invalid → toast, no PUT.
+  - Clearing → PUT with `{ telefone: '' }`.
+  Run `npm test` → FAIL.
 - [ ] **Step 1: Implement it.**
   - View mode shows the phone, or "Telefone não informado".
   - Edit mode: a non-empty, invalid value → toast "Informe um telefone válido", no request. An empty value saves `''` (clears).
   - Success toast: "Telefone atualizado. Ele fica visível apenas para os administradores das suas hortas."
-- [ ] **Step 2: Verify the build.** `cd frontend && npm run build` → no errors.
+- [ ] **Step 2: Verify the build.** `cd frontend && npm test && npm run typecheck && npm run build` → all pass.
 - [ ] **Step 3: Manual check.** Add, change and clear the phone on both profile pages. Reload → the value persists.
 - [ ] **Step 4: Commit.** `git commit -m "feat(perfil): campo de telefone editavel"`
 
@@ -239,10 +266,15 @@ test('parseLocation exige cidade e UF juntas', () => {
 **Interfaces:**
 - Consumes: `telefone: string | null` on participant rows (Task 3).
 
+- [ ] **Step 0 (RED): `src/components/ParticipantPhone.test.tsx`.**
+  - Extract the phone line as `ParticipantPhone({ telefone }: { telefone: string | null })`.
+  - It renders `tel:+5561999990000`-style digits-only hrefs, e.g. `'(61) 99999-0000'` → `tel:61999990000`.
+  - `null` → "Telefone não informado".
+  Run `npm test` → FAIL.
 - [ ] **Step 1: Implement it.**
   - Add `telefone: string | null` to `ParticipantActivity`.
   - In the row, under the name/status line, render `<a href={`tel:${telefone.replace(/[^\d+]/g, '')}`}>{telefone}</a>` when present, otherwise the muted text "Telefone não informado". Use the row's existing text sizes and colors.
-- [ ] **Step 2: Verify the build.** `cd frontend && npm run build` → no errors.
+- [ ] **Step 2: Verify the build.** `cd frontend && npm test && npm run typecheck && npm run build` → all pass.
 - [ ] **Step 3: Manual check** (Review Focus 5):
   - As a horta admin, a member who gave a phone shows a tappable number.
   - A member who skipped shows "Telefone não informado".
