@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { API_URL } from '../config';
 import { useAuth } from '../contexts/AuthContext';
 import ExploreLocationPrompt from './ExploreLocationPrompt';
+import JoinPhoneStep from './JoinPhoneStep';
 import { dismissLocationPrompt, isLocationPromptDismissed, shouldShowLocationPrompt } from '../lib/locationPrompt';
 
 type Horta = {
@@ -112,6 +113,9 @@ export default function ExplorePage() {
   const [carregando, setCarregando] = useState(true);
   const [entrando, setEntrando] = useState(false);
   const [perfilSemCidade, setPerfilSemCidade] = useState(false);
+  const [telefoneAtual, setTelefoneAtual] = useState<string | null>(null);
+  const [pedindoTelefone, setPedindoTelefone] = useState(false);
+  const [erroEntrada, setErroEntrada] = useState('');
   const [promptDispensado, setPromptDispensado] = useState(isLocationPromptDismissed);
   const [localizacaoVersao, setLocalizacaoVersao] = useState(0);
 
@@ -158,6 +162,23 @@ export default function ExplorePage() {
       .finally(() => { if (!controller.signal.aborted) setCarregandoDetalhes(false); });
     return () => controller.abort();
   }, [modalAberto, selecionada?.id]);
+
+  const jaParticipaSelecionada = Boolean(selecionada && user?.roles.some((role) => role.id_horta === selecionada.id && role.role === 'MEMBER'));
+
+  useEffect(() => {
+    setPedindoTelefone(false);
+    setErroEntrada('');
+    if (!modalAberto || !selecionada || !token || jaParticipaSelecionada) return;
+    let ativo = true;
+    setTelefoneAtual(null);
+    fetch(`${API_URL}/me/telefone`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (ativo && response.ok) setTelefoneAtual(typeof data.telefone === 'string' ? data.telefone : '');
+      })
+      .catch(() => { /* sem telefone carregado: o passo opcional aparece */ });
+    return () => { ativo = false; };
+  }, [modalAberto, selecionada?.id, token, jaParticipaSelecionada]);
 
   useEffect(() => {
     let ativo = true;
@@ -257,16 +278,34 @@ export default function ExplorePage() {
     );
   };
 
-  const participar = async () => {
+  const pedirParticipacao = () => {
+    if (!jaParticipaSelecionada && !telefoneAtual) {
+      setPedindoTelefone(true);
+      return;
+    }
+    void participar();
+  };
+
+  const participar = async (telefone?: string) => {
     if (!selecionada || !token) return;
-    const jaParticipa = user?.roles.some((role) => role.id_horta === selecionada.id && role.role === 'MEMBER') ?? false;
+    const jaParticipa = jaParticipaSelecionada;
     setEntrando(true);
+    setErroEntrada('');
     try {
       const response = await fetch(`${API_URL}/hortas/${selecionada.id}/entrar`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(telefone ? { telefone } : {}),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Não foi possível entrar nesta horta.');
+      if (!response.ok) {
+        if (pedindoTelefone) {
+          setErroEntrada(data.error || 'Não foi possível entrar nesta horta.');
+          return;
+        }
+        throw new Error(data.error || 'Não foi possível entrar nesta horta.');
+      }
+      if (telefone) setTelefoneAtual(telefone);
       if (data.user) applyUser(data.user);
       toast.success(jaParticipa ? 'Você já participa desta horta.' : 'Você agora participa desta horta!');
       if (!jaParticipa) {
@@ -419,7 +458,9 @@ export default function ExplorePage() {
             </div>
           </div>
 
-          <footer className="border-t border-[#e5ebe5] bg-white p-4 sm:px-7"><button onClick={participar} disabled={entrando || Boolean(erroDetalhes)} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#168a3c] text-[13px] font-semibold text-white transition hover:bg-[#117331] disabled:opacity-60">{entrando && <LoaderCircle className="size-4 animate-spin" />}{entrando ? 'Entrando...' : user?.roles.some((role) => role.id_horta === selecionada.id && role.role === 'MEMBER') ? 'Você já participa desta horta' : 'Participar desta horta'}</button></footer>
+          <footer className="border-t border-[#e5ebe5] bg-white p-4 sm:px-7">{pedindoTelefone
+            ? <JoinPhoneStep onJoin={(telefone) => { void participar(telefone); }} onSkip={() => { void participar(); }} busy={entrando} serverError={erroEntrada} />
+            : <button onClick={pedirParticipacao} disabled={entrando || Boolean(erroDetalhes)} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#168a3c] text-[13px] font-semibold text-white transition hover:bg-[#117331] disabled:opacity-60">{entrando && <LoaderCircle className="size-4 animate-spin" />}{entrando ? 'Entrando...' : jaParticipaSelecionada ? 'Você já participa desta horta' : 'Participar desta horta'}</button>}</footer>
         </section>
       </div>}
     </main>

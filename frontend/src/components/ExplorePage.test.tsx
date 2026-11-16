@@ -98,3 +98,60 @@ describe('ExplorePage city prompt', () => {
     expect(screen.getByText('Onde você está?')).toBeInTheDocument();
   });
 });
+
+async function openGarden() {
+  render(<ExplorePage />);
+  await userEvent.click(await screen.findByRole('button', { name: 'Ver horta' }));
+}
+
+function joinBody() {
+  const join = calls.find((c) => c.key === 'POST /hortas/7/entrar');
+  return join ? JSON.parse(String(join.init?.body ?? '{}')) : undefined;
+}
+
+describe('ExplorePage join phone step', () => {
+  it('asks for a phone when the person has none, and Pular joins without one', async () => {
+    await openGarden();
+    await userEvent.click(await screen.findByRole('button', { name: 'Participar desta horta' }));
+    expect(screen.getByText(/Quer deixar um telefone\?/)).toBeInTheDocument();
+    expect(joinBody()).toBeUndefined();
+    await userEvent.click(screen.getByRole('button', { name: 'Pular' }));
+    await waitFor(() => expect(joinBody()).toEqual({}));
+    expect(auth.applyUser).toHaveBeenCalled();
+  });
+
+  it('sends the typed phone with the join', async () => {
+    await openGarden();
+    await userEvent.click(await screen.findByRole('button', { name: 'Participar desta horta' }));
+    await userEvent.type(screen.getByLabelText('Telefone'), '(61) 99999-0000');
+    await userEvent.click(screen.getByRole('button', { name: 'Entrar na horta' }));
+    await waitFor(() => expect(joinBody()).toEqual({ telefone: '(61) 99999-0000' }));
+  });
+
+  it('joins directly when the person already has a phone', async () => {
+    routes['GET /me/telefone'] = () => ({ body: { telefone: '(61) 98888-0000' } });
+    await openGarden();
+    const button = await screen.findByRole('button', { name: 'Participar desta horta' });
+    await waitFor(() => expect(calls.some((c) => c.key === 'GET /me/telefone')).toBe(true));
+    await userEvent.click(button);
+    await waitFor(() => expect(joinBody()).toEqual({}));
+    expect(screen.queryByText(/Quer deixar um telefone\?/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the step open with the server error when the phone is rejected', async () => {
+    routes['POST /hortas/7/entrar'] = () => ({ status: 400, body: { error: 'Informe um telefone válido' } });
+    await openGarden();
+    await userEvent.click(await screen.findByRole('button', { name: 'Participar desta horta' }));
+    await userEvent.type(screen.getByLabelText('Telefone'), '(61) 99999-0000');
+    await userEvent.click(screen.getByRole('button', { name: 'Entrar na horta' }));
+    expect(await screen.findByText('Informe um telefone válido')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pular' })).toBeEnabled();
+  });
+
+  it('does not ask members who already participate', async () => {
+    auth.user = { id: 1, roles: [{ id_horta: 7, role: 'MEMBER' }] };
+    await openGarden();
+    expect(await screen.findByRole('button', { name: 'Você já participa desta horta' })).toBeInTheDocument();
+    expect(calls.some((c) => c.key === 'GET /me/telefone')).toBe(false);
+  });
+});
