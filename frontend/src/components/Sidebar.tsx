@@ -1,6 +1,7 @@
 import { Home, ListTodo, Gift, User, Sprout, Compass } from 'lucide-react';
+import type { AppPage } from '../types/adminNavigation';
 
-type Page = 'home' | 'explore' | 'tasks' | 'rewards' | 'profile';
+type Page = AppPage;
 
 interface SidebarProps {
   currentPage: Page;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Award, CheckCircle2, Coins, Edit2, Flame, Gift, LogOut, Sprout, TrendingUp, Users, X } from 'lucide-react';
+import { Award, CheckCircle2, Coins, Edit2, Flame, Gift, LogOut, Plus, Sprout, TrendingUp, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_URL } from '../config';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +10,7 @@ interface ProfilePageProps {
   coins: number;
   tasksCompleted: number;
   onLogout?: () => void;
+  onCreateGarden?: () => void;
   isAdmin?: boolean;
   onNavigate?: (page: 'home' | 'explore' | 'tasks' | 'rewards' | 'profile') => void;
 }
@@ -90,7 +91,7 @@ function formatDate(value: string | null) {
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigate }: ProfilePageProps) {
+export default function ProfilePage({ coins, tasksCompleted, onLogout, onCreateGarden, onNavigate }: ProfilePageProps) {
   const { logout, token, user, updateUser, activeGardenId } = useAuth();
   const [tab, setTab] = useState<Tab>('achievements');
   const [data, setData] = useState<GamificationData | null>(null);
@@ -106,7 +107,7 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
       if (!token) return;
       setIsLoading(true);
       try {
-        const response = await fetch(`${API_URL}/me/gamificacao?id_horta=${activeGardenId ?? ''}`, { headers: { Authorization: `Bearer ${token}` } });
+        const response = await fetch(`${API_URL}/me/gamificacao${activeGardenId ? `?id_horta=${activeGardenId}` : ''}`, { headers: { Authorization: `Bearer ${token}` } });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || 'Falha ao carregar seu perfil.');
         if (active) {
@@ -172,6 +173,7 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
           <div className="flex items-center gap-2 self-start">
               <div className="flex items-center gap-2 rounded-full bg-white/15 px-3 py-2 text-[13px] font-semibold"><Coins className="size-4" /><span>{saldo}</span><span className="font-medium text-white/80">moedas</span></div>
               <button onClick={() => { setEditName(user?.nome ?? ''); setEditEmail(user?.email ?? ''); setEditOpen(true); }} className="inline-flex items-center gap-2 rounded-lg border border-white/35 bg-white/10 px-3 py-2 text-[12px] font-semibold transition hover:bg-white/20"><Edit2 className="size-3.5" />Editar perfil</button>
+              <button onClick={onCreateGarden} className="inline-flex items-center gap-2 rounded-lg border border-white/35 bg-white/10 px-3 py-2 text-[12px] font-semibold transition hover:bg-white/20"><Plus className="size-3.5" />Criar horta</button>
             </div>
           </div>
 

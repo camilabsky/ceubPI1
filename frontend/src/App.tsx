@@ -12,7 +12,7 @@ import ProfilePage from './components/ProfilePage';
 import RegisterPage from './components/RegisterPage';
 import AdminProfilePage from './components/AdminProfilePage';
 import Sidebar from './components/Sidebar';
-import OnboardingPage from './components/OnboardingPage';
+import CreateGardenPage from './components/CreateGardenPage';
 import ExplorePage from './components/ExplorePage';
 import PasswordResetPage from './components/PasswordResetPage';
 import type { AdminNavigationIntent, AppPage } from './types/adminNavigation';
@@ -126,7 +126,7 @@ export default function App() {
   }, [isAdmin, currentPage]);
 
   useEffect(() => {
-    if (user && availableGardens.length === 0 && currentPage !== 'explore') {
+    if (user && availableGardens.length === 0 && !['explore', 'profile', 'create-garden'].includes(currentPage)) {
       setCurrentPage('explore');
       setAdminNavigationIntent(null);
     }
@@ -142,10 +142,6 @@ export default function App() {
 
   const resetToken = new URLSearchParams(window.location.search).get('resetToken');
   if (resetToken) return <PasswordResetPage token={resetToken} />;
-
-  if (token && user && user.roles.length === 0 && currentPage !== 'explore') {
-    return <><Toaster position="top-center" richColors /><OnboardingPage onExplore={() => setCurrentPage('explore')} /></>;
-  }
 
   if (!token) {
     return <>
@@ -196,14 +192,19 @@ export default function App() {
             isAdmin
               ? <AdminProfilePage
                     onLogout={handleLogout}
+                    onCreateGarden={() => navigate('create-garden')}
                     editGardenOnOpen={adminNavigationIntent?.editGarden}
                   />
               : <ProfilePage
                   coins={coins}
                   tasksCompleted={tasksCompleted}
                   onLogout={handleLogout}
+                  onCreateGarden={() => navigate('create-garden')}
                   onNavigate={navigate}
                 />
+          )}
+          {currentPage === 'create-garden' && (
+            <CreateGardenPage onBack={() => navigate('profile')} onCreated={() => navigate('home')} />
           )}
         </div>
       </div>

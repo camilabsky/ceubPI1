@@ -24,10 +24,21 @@ async function request(path, { token, method = 'GET', body } = {}) {
 async function register(name, gardenName, gardenId) {
   const result = await request('/auth/register', { method: 'POST', body: {
     nome: name, email: `${name.toLowerCase()}-${suffix}@example.test`, senha: 'RoleAudit!123', telefone: '(61) 99999-0000', cidade: 'Brasília', uf: 'DF',
-    ...(gardenName ? { nome_nova_horta: gardenName, descricao: 'Horta comunitária de teste', latitude: -15.79, longitude: -47.88, endereco: 'Endereço de teste isolado', cidade_horta: 'Brasília', uf_horta: 'DF', contato: 'horta@example.test' } : {}),
-    ...(gardenId ? { id_horta: gardenId } : {}),
   } });
   assert.equal(result.status, 201, JSON.stringify(result.data));
+  const { token } = result.data;
+  if (gardenName) {
+    const garden = await request('/hortas', { token, method: 'POST', body: {
+      nome: gardenName, descricao: 'Horta comunitária de teste', latitude: -15.79, longitude: -47.88, endereco: 'Endereço de teste isolado', cidade: 'Brasília', uf: 'DF', contato: 'horta@example.test',
+    } });
+    assert.equal(garden.status, 201, JSON.stringify(garden.data));
+    return { token, user: garden.data.user };
+  }
+  if (gardenId) {
+    const joined = await request(`/hortas/${gardenId}/entrar`, { token, method: 'POST' });
+    assert.equal(joined.status, 200, JSON.stringify(joined.data));
+    return { token, user: joined.data.user };
+  }
   return result.data;
 }
 

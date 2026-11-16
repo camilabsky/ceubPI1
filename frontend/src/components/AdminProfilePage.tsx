@@ -1,5 +1,5 @@
 import { API_URL } from '../config';
-import {User,ShieldCheck,ClipboardList,CheckCircle,Sprout,LogOut,Mail,Lock,ChevronRight, MapPin} from 'lucide-react';
+import {User,ShieldCheck,ClipboardList,CheckCircle,Sprout,LogOut,Mail,Lock,ChevronRight, MapPin, Plus} from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,11 +17,13 @@ interface Task {
 
 interface AdminProfilePageProps {
   onLogout?: () => void;
+  onCreateGarden?: () => void;
   editGardenOnOpen?: boolean;
 }
 
 export default function AdminProfilePage({
   onLogout,
+  onCreateGarden,
   editGardenOnOpen = false,
 }: AdminProfilePageProps) {
   const { logout, token, user, updateUser, updatePassword, activeGarden, leaveGarden, refreshUser } = useAuth();
@@ -768,6 +770,20 @@ const handleUseCurrentLocation = () => {
       <p className="mt-1 text-[11px] leading-4 text-[#718075]">Encerrar a participação não altera sua administração. Suas tarefas em andamento e seus registros serão preservados, mas não poderão ser atualizados enquanto você não voltar como participante.</p>
       <button type="button" disabled={isLeavingMemberRole} onClick={() => void leaveMemberRole()} className="mt-3 text-[12px] font-medium text-[#9b3d34] hover:underline disabled:opacity-60">{isLeavingMemberRole ? 'Saindo…' : 'Sair da horta como participante'}</button>
     </div>}
+
+    <div className="px-4 mb-3">
+      <button
+        type="button"
+        onClick={onCreateGarden}
+        className="w-full bg-white border border-gray-200 rounded-[14px] py-3 px-4 flex items-center justify-center gap-2 text-[#16803d] hover:bg-gray-50 transition-colors"
+      >
+        <Plus className="size-5" />
+
+        <span className="text-[14px]">
+          Criar nova horta
+        </span>
+      </button>
+    </div>
 
     {/* Botão sair */}
     <div className="px-4">

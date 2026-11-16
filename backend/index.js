@@ -240,7 +240,7 @@ app.post('/auth/login', async (req, res) => {
 });
 
 app.post('/auth/register', async (req, res) => {
-    const { senha, id_horta, nome_nova_horta, latitude, longitude, endereco } = req.body;
+    const { senha } = req.body;
     const nome = typeof req.body.nome === 'string' ? req.body.nome.trim() : '';
     const email = typeof req.body.email === 'string' ? req.body.email.trim() : '';
     const telefone = typeof req.body.telefone === 'string' ? req.body.telefone.trim() : '';
@@ -253,27 +253,6 @@ app.post('/auth/register', async (req, res) => {
     }
     if (nome.length > 128 || email.length > 128 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || telefone.length > 24 || !/^\+?[0-9 ()-]{8,20}$/.test(telefone) || cidade.length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade) || !estados.has(uf)) {
         return res.status(400).send({ error: 'Confira o e-mail, telefone, cidade e UF informados' });
-    }
-
-    if (id_horta && nome_nova_horta) {
-        return res.status(400).send({ error: 'Informe apenas id_horta OU nome_nova_horta, nao os dois' });
-    }
-
-    const descricao = typeof req.body.descricao === 'string' ? req.body.descricao.trim() : '';
-    const cidadeHorta = typeof req.body.cidade_horta === 'string' ? req.body.cidade_horta.trim() : '';
-    const ufHorta = typeof req.body.uf_horta === 'string' ? req.body.uf_horta.trim().toUpperCase() : '';
-    const contato = typeof req.body.contato === 'string' ? req.body.contato.trim() : '';
-    let lat = null, lng = null;
-    if (nome_nova_horta) {
-        if (typeof nome_nova_horta !== 'string' || !nome_nova_horta.trim() || nome_nova_horta.trim().length > 128) return res.status(400).send({ error: 'Informe um nome válido para a horta' });
-        if (!descricao || descricao.length > 255) return res.status(400).send({ error: 'Informe a descrição e os objetivos da horta (até 255 caracteres)' });
-        if (typeof endereco !== 'string' || !endereco.trim() || endereco.trim().length > 255) return res.status(400).send({ error: 'Informe um endereço válido para a horta' });
-        if (!cidadeHorta || cidadeHorta.length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidadeHorta) || !estados.has(ufHorta)) return res.status(400).send({ error: 'Informe uma cidade e UF válidas para a horta' });
-        if (!contato || contato.length > 160 || (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contato) && !/^\+?[0-9 ()-]{8,20}$/.test(contato))) return res.status(400).send({ error: 'Informe um telefone ou e-mail de contato válido para a horta' });
-        const hasLat = latitude !== '' && latitude != null;
-        const hasLng = longitude !== '' && longitude != null;
-        if (hasLat !== hasLng) return res.status(400).send({ error: 'Informe latitude e longitude juntas ou deixe ambas vazias' });
-        if (hasLat) { lat = Number(latitude); lng = Number(longitude); if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) return res.status(400).send({ error: 'Informe coordenadas válidas para a localização' }); }
     }
 
     const connection = await db.getConnection();
@@ -300,32 +279,6 @@ app.post('/auth/register', async (req, res) => {
         );
         const id_usuario = userResult.insertId;
 
-        let idHortaFinal = id_horta;
-        let papel = 'MEMBER';
-
-        if (nome_nova_horta) {
-            const [hortaResult] = await connection.query(
-                'INSERT INTO Horta (nome, descricao, latitude, longitude, endereco, cidade, uf, contato) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                [nome_nova_horta.trim(), descricao, lat, lng, endereco.trim(), cidadeHorta, ufHorta, contato]
-            );
-            idHortaFinal = hortaResult.insertId;
-            papel = 'ADMIN';
-        } else if (id_horta) {
-            const [hortaRows] = await connection.query('SELECT id FROM Horta WHERE id = ? LIMIT 1', [id_horta]);
-
-            if (hortaRows.length === 0) {
-                await connection.rollback();
-                return res.status(404).send({ error: 'Horta nao encontrada' });
-            }
-        }
-
-                if (idHortaFinal) {
-            await connection.query(
-                'INSERT INTO UsuarioHortaRole (id_usuario, id_horta, papel) VALUES (?, ?, ?)',
-                [id_usuario, idHortaFinal, papel]
-            );
-        }
-
         await connection.commit();
 
         const roles = await getUserRoles(id_usuario);
@@ -342,7 +295,7 @@ app.post('/auth/register', async (req, res) => {
     } catch (error) {
         await connection.rollback();
         if (error.code === 'ER_DUP_ENTRY') {
-            return res.status(409).send({ error: 'Nome de horta ou email ja cadastrado' });
+            return res.status(409).send({ error: 'Ja existe um usuario com este email' });
         }
         console.error('Erro em /auth/register:', error);
         return res.status(500).send({ error: 'Erro ao cadastrar usuario' });

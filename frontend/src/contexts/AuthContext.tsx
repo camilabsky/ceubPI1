@@ -48,15 +48,6 @@ register: (
   email: string,
   senha: string,
   opts: {
-    id_horta?: number;
-    nome_nova_horta?: string;
-    latitude?: number | null;
-    longitude?: number | null;
-    endereco?: string;
-    descricao?: string;
-    cidade_horta?: string;
-    uf_horta?: string;
-    contato?: string;
     telefone?: string;
     cidade?: string;
     uf?: string;
@@ -250,15 +241,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: string,
       senha: string,
       opts: {
-        id_horta?: number;
-        nome_nova_horta?: string;
-        latitude?: number | null;
-        longitude?: number | null;
-        endereco?: string;
-        descricao?: string;
-        cidade_horta?: string;
-        uf_horta?: string;
-        contato?: string;
         telefone?: string;
         cidade?: string;
         uf?: string;

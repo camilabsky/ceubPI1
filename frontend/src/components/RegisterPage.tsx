@@ -1,12 +1,11 @@
 import { useState, useRef } from 'react';
 import {
-  ArrowRight, Sprout, Eye, EyeOff, User, Mail, Lock, UserPlus,
-  Leaf, Trophy, Users, Home,
+  Sprout, Eye, EyeOff, User, Mail, Lock, UserPlus,
+  Leaf, Trophy, Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import hortaLoginImg from '../assets/hortalogin.png';
-import HortaFields, { HORTA_VAZIA, validarHorta, type HortaDraft } from './HortaFields';
 
 interface RegisterPageProps {
   onSwitchToLogin: () => void;
@@ -27,9 +26,6 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [showSenha, setShowSenha] = useState(false);
   const [showConfirmar, setShowConfirmar] = useState(false);
-  const [escolha, setEscolha] = useState<'participar' | 'criar'>('participar');
-  const [horta, setHorta] = useState<HortaDraft>(HORTA_VAZIA);
-  const [confirmarCriacao, setConfirmarCriacao] = useState(false);
   const enviando = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,29 +46,10 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
       return;
     }
 
-    if (escolha === 'criar') {
-      const erro = validarHorta(horta, true);
-      if (erro) {
-        toast.error(erro);
-        return;
-      }
-      if (!confirmarCriacao) { setConfirmarCriacao(true); return; }
-    }
-
     if (enviando.current) return;
     enviando.current = true;
     try {
-      const opts =
-        escolha === 'criar'
-          ? {
-              nome_nova_horta: horta.nome.trim(),
-              latitude: horta.lat.trim() ? Number(horta.lat) : null,
-              longitude: horta.lng.trim() ? Number(horta.lng) : null,
-              endereco: horta.endereco.trim(),
-              descricao: horta.descricao.trim(), cidade_horta: horta.cidade.trim(), uf_horta: horta.uf.trim().toUpperCase(), contato: horta.contato.trim(),
-            }
-          : {};
-      await register(nome, email, senha, { telefone: telefone.trim(), cidade: cidade.trim(), uf: uf.trim().toUpperCase(), ...opts });
+      await register(nome, email, senha, { telefone: telefone.trim(), cidade: cidade.trim(), uf: uf.trim().toUpperCase() });
       toast.success('Cadastro realizado com sucesso!');
     } catch (error: any) {
       toast.error(error.message || 'Erro ao cadastrar');
@@ -130,9 +107,9 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
           </div>
         </div>
 
-        {/* Formulário + cards */}
-        <div className="w-full lg:w-[62%] flex flex-col xl:flex-row">
-          <div className="w-full xl:w-1/2 flex items-center justify-center px-6 py-10 lg:p-10">
+        {/* Formulário */}
+        <div className="w-full lg:w-[62%] flex">
+          <div className="w-full flex items-center justify-center px-6 py-10 lg:p-10">
             <div className="w-full max-w-sm">
               <div className="flex items-center justify-center mb-4">
                 <div className="bg-[#16A34A] rounded-xl p-3">
@@ -231,7 +208,7 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                   className="w-full bg-[#16A34A] text-white text-[14px] py-3 rounded-lg hover:bg-[#166534] transition-colors disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 font-semibold"
                 >
                   <UserPlus className="size-4" />
-                  {isAuthenticating ? 'Criando conta...' : escolha === 'criar' && confirmarCriacao ? 'Confirmar cadastro e criar horta' : escolha === 'criar' ? 'Revisar dados da horta' : 'Criar minha conta'}
+                  {isAuthenticating ? 'Criando conta...' : 'Criar minha conta'}
                 </button>
               </form>
 
@@ -249,67 +226,6 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                 Já possui uma conta? <span className="font-semibold text-[#16A34A]">Entrar</span>
               </button>
             </div>
-          </div>
-
-          {/* A escolha define o perfil e o destino da conta já no cadastro. */}
-          <div className="w-full xl:w-1/2 border-t xl:border-t-0 xl:border-l border-[#E2E8E3] px-6 py-8 lg:p-10 flex flex-col justify-center">
-            <h3 className="text-[18px] text-[#17201A] font-bold mb-1">Como você quer participar?</h3>
-            <p className="text-[13px] text-[#66736A] mb-5">
-              Escolha o caminho que mais combina com você.
-            </p>
-
-            <div className="space-y-4">
-              <button
-                type="button"
-                aria-pressed={escolha === 'participar'}
-                onClick={() => setEscolha('participar')}
-                className={`w-full text-left rounded-xl border p-4 flex items-center gap-3 transition-colors ${
-                  escolha === 'participar'
-                    ? 'border-[#16A34A] bg-[#F0FDF4]'
-                    : 'border-[#E2E8E3] bg-white hover:border-[#16A34A]/50'
-                }`}
-              >
-                <div className="bg-[#16A34A]/10 rounded-lg p-2">
-                  <Leaf className="size-6 text-[#16A34A]" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[14px] font-semibold text-[#17201A]">Participar de uma horta</p>
-                  <p className="text-[12px] text-[#66736A]">
-                    Encontre uma horta, participe de missões e conquiste recompensas.
-                  </p>
-                </div>
-                <ArrowRight className="size-4 text-[#16A34A]" />
-              </button>
-
-              <button
-                type="button"
-                aria-pressed={escolha === 'criar'}
-                onClick={() => setEscolha('criar')}
-                className={`w-full text-left rounded-xl border p-4 flex items-center gap-3 transition-colors ${
-                  escolha === 'criar'
-                    ? 'border-[#16A34A] bg-[#F0FDF4]'
-                    : 'border-[#E2E8E3] bg-white hover:border-[#16A34A]/50'
-                }`}
-              >
-                <div className="bg-[#16A34A]/10 rounded-lg p-2">
-                  <Home className="size-6 text-[#16A34A]" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[14px] font-semibold text-[#17201A]">Criar uma horta</p>
-                  <p className="text-[12px] text-[#66736A]">
-                    Cadastre sua horta, convide pessoas e gerencie as atividades.
-                  </p>
-                </div>
-                <ArrowRight className="size-4 text-[#16A34A]" />
-              </button>
-            </div>
-                  {escolha === 'criar' && (
-              <div className="mt-6 border-t border-[#E2E8E3] pt-5">
-                <h4 className="mb-4 text-[15px] font-bold text-[#17201A]">Dados da sua horta</h4>
-                <HortaFields value={horta} onChange={(draft) => { setHorta(draft); setConfirmarCriacao(false); }} mostrarDescricao />
-                {confirmarCriacao && <div className="mt-4 rounded-lg bg-[#F0FDF4] p-4 text-[13px] text-[#34483a]"><h5 className="font-semibold">Confirme os dados da horta</h5><p className="mt-2"><strong>{horta.nome}</strong> — {horta.cidade}/{horta.uf.toUpperCase()}</p><p>{horta.endereco}</p><p>{horta.descricao}</p><p>Contato: {horta.contato}</p><button type="button" onClick={() => setConfirmarCriacao(false)} className="mt-2 text-[#16803d] underline">Editar dados</button></div>}
-              </div>
-            )}
           </div>
         </div>
       </div>
