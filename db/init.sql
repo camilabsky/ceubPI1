@@ -155,18 +155,6 @@ CREATE TABLE IF NOT EXISTS ConquistasPerfil (
   CONSTRAINT fk_conquista_perfil FOREIGN KEY (id_perfil) REFERENCES Perfil(id)
 );
 
-CREATE TABLE IF NOT EXISTS DesafioComunitario (
-  id int AUTO_INCREMENT PRIMARY KEY,
-  id_horta int NOT NULL,
-  period_start date NOT NULL,
-  period_end date NOT NULL,
-  goal_tasks int NOT NULL,
-  completed_at datetime NULL,
-  created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_horta_desafio_periodo (id_horta, period_start),
-  CONSTRAINT fk_desafio_horta FOREIGN KEY (id_horta) REFERENCES Horta(id)
-);
-
 CREATE TABLE IF NOT EXISTS PerfilRecompensas (
   id_perfil int,
   id_recompensa int,

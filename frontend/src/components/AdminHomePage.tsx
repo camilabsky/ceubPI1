@@ -22,12 +22,6 @@ interface Task {
   completed_at?: string | null;
 }
 
-interface CommunityChallenge {
-  goal_tasks: number;
-  completed_tasks: number;
-  completed_at: string | null;
-}
-
 interface Garden {
   id: number;
   participantes: number;
@@ -66,7 +60,6 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
   const [adminTasks, setAdminTasks] = useState<Task[]>([]);
   const [participantCount, setParticipantCount] = useState(0);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [communityChallenge, setCommunityChallenge] = useState<CommunityChallenge | null>(null);
   const [showParticipants, setShowParticipants] = useState(false);
   const [participants, setParticipants] = useState<ParticipantActivity[]>([]);
   const [participantsLoaded, setParticipantsLoaded] = useState(false);
@@ -97,7 +90,6 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
         tasksRes.json(), historyRes.json(), gardensRes.json(),
       ]);
       setAdminTasks(tasks);
-      setCommunityChallenge(history.desafio_comunitario || null);
       setParticipantCount(Number(gardens.find((garden) => garden.id === idHorta)?.participantes) || 0);
       const recentActivity: Activity[] = [
         ...(history.tarefas_concluidas_horta || []).map((task: any) => ({
@@ -325,18 +317,6 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
               <button onClick={() => onNavigate('rewards')} className="flex min-h-[100px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[14px] border border-gray-200 bg-white p-4 transition-all hover:border-[#00a63e] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a63e]"><Gift className="size-6 text-[#00a63e]" /><span className="text-[12px] font-medium text-neutral-950">Gerenciar recompensas</span></button>
               <button onClick={() => onNavigate('profile', { editGarden: true })} className="col-span-2 flex cursor-pointer items-center justify-center gap-2 rounded-[14px] border border-gray-200 bg-white p-3 transition-all hover:border-[#00a63e] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a63e]"><Settings className="size-4 text-[#4a5565]" /><span className="text-[12px] font-medium text-neutral-950">Configurações da horta</span></button>
             </div>
-          </section>
-
-          <section className="rounded-[14px] border border-gray-200 bg-white p-4">
-            <h2 className="text-[15px] font-semibold text-neutral-950">Desafio comunitário do mês</h2>
-            {communityChallenge ? <>
-              <p className="mt-1 text-[11px] text-[#717182]">Tarefas concluídas pela comunidade</p>
-              <div className="mt-3 flex items-center justify-between text-[12px]">
-                <span className="font-semibold text-[#34453a]">{communityChallenge.completed_tasks} / {communityChallenge.goal_tasks} tarefas</span>
-                <span className="text-[#717182]">{communityChallenge.completed_at ? 'Concluído' : 'Em progresso'}</span>
-              </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-[#00a63e]" style={{ width: `${Math.min(100, communityChallenge.goal_tasks ? communityChallenge.completed_tasks / communityChallenge.goal_tasks * 100 : 0)}%` }} /></div>
-            </> : <p className="mt-2 text-[11px] text-[#717182]">Ainda não há desafio comunitário registrado para este mês.</p>}
           </section>
 
           <GardenAnalytics tasks={adminTasks} tasksLoading={isLoading} tasksError={adminDataError} />

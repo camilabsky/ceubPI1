@@ -36,16 +36,6 @@ interface ProfileEvent {
   occurred_at: string | null;
 }
 
-interface CommunityChallenge {
-  id: number;
-  id_horta: number;
-  nome: string;
-  goal_tasks: number;
-  completed_tasks: number;
-  ends_at: string;
-  completed: boolean;
-}
-
 interface CommunityMember {
   position: number;
   id_perfil: number;
@@ -77,7 +67,6 @@ interface GamificationData {
   achievements: Achievement[];
   events: ProfileEvent[];
   hortas: Garden[];
-  community_challenges: CommunityChallenge[];
   leaderboard: CommunityMember[];
   impact: { tasks_completed: number; gardens_count: number; seedlings_planted: number };
 }
@@ -148,7 +137,6 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
   const achievements = data?.achievements ?? [];
   const events = data?.events ?? [];
   const gardens = data?.hortas ?? [];
-  const communityChallenges = data?.community_challenges ?? [];
   const saldo = Math.max(0, Number(data?.moedas ?? coins) || 0);
   const tabItems: { id: Tab; label: string; icon: typeof Award }[] = [
     { id: 'achievements', label: 'Conquistas', icon: Award },
@@ -193,14 +181,6 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onNavigat
           <div className="rounded-[14px] border border-gray-200 bg-white p-3 sm:p-4"><div className="flex size-8 items-center justify-center rounded-full bg-lime-50"><Sprout className="size-4 text-[#5a8b34]" /></div><p className="mt-2 text-[19px] font-bold leading-5 text-neutral-950">{data?.impact?.seedlings_planted ?? data?.mudas_plantadas ?? 0}</p><p className="mt-1 text-[10px] text-[#66736a] sm:text-[11px]">Mudas plantadas</p></div>
           <div className="rounded-[14px] border border-gray-200 bg-white p-3 sm:p-4"><div className="flex size-8 items-center justify-center rounded-full bg-blue-50"><Users className="size-4 text-[#4285d4]" /></div><p className="mt-2 text-[19px] font-bold leading-5 text-neutral-950">{data?.impact?.gardens_count ?? gardens.length}</p><p className="mt-1 text-[10px] text-[#66736a] sm:text-[11px]">Hortas</p></div>
         </section>
-
-        {communityChallenges.length > 0 && <section className="mt-3 rounded-[14px] border border-[#dcebdd] bg-[#f5faf5] p-4">
-          <div className="mb-3 flex items-center gap-2"><span className="flex size-8 items-center justify-center rounded-full bg-white text-[#38844c]"><Users className="size-4" /></span><div><h2 className="text-[13px] font-bold text-[#26362a]">Desafio da comunidade</h2><p className="text-[10px] text-[#77837a]">Progresso coletivo nas tarefas deste mês.</p></div></div>
-          <div className="grid gap-2 sm:grid-cols-2">{communityChallenges.slice(0, 2).map((challenge) => {
-            const percent = Math.min(100, challenge.goal_tasks > 0 ? challenge.completed_tasks / challenge.goal_tasks * 100 : 0);
-            return <div key={challenge.id} className="rounded-lg border border-[#e4ece4] bg-white p-3"><div className="flex items-center justify-between gap-2"><p className="truncate text-[11px] font-semibold text-[#34453a]">{challenge.nome}</p><span className="shrink-0 text-[10px] font-semibold text-[#16803d]">{challenge.completed ? 'Concluído' : `${challenge.completed_tasks}/${challenge.goal_tasks}`}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#edf1ed]"><div className="h-full rounded-full bg-[#4eaa64]" style={{ width: `${percent}%` }} /></div></div>;
-          })}</div>
-        </section>}
 
         {!!data?.leaderboard?.length && <section className="mt-3 rounded-[14px] border border-gray-200 bg-white p-4"><div className="mb-3 flex items-center gap-2"><Users className="size-4 text-[#16803d]" /><div><h2 className="text-[13px] font-bold text-[#26362a]">Destaques da comunidade</h2><p className="text-[10px] text-[#77837a]">Participantes das hortas em comum, ordenados pelo XP acumulado.</p></div></div><ol className="grid gap-2 sm:grid-cols-2">{data.leaderboard.map((member) => <li key={member.id_perfil} className={`flex items-center justify-between rounded-lg px-3 py-2 text-[11px] ${member.is_you ? 'bg-[#eff8ef] font-semibold text-[#16803d]' : 'bg-[#f8faf8] text-[#526056]'}`}><span>{member.position}. {member.nome}{member.is_you ? ' · você' : ''}</span><span>{member.xp} XP · {member.tarefas_concluidas} tarefas</span></li>)}</ol></section>}
 

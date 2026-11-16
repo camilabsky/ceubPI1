@@ -31,16 +31,6 @@ interface Achievement {
   unlocked: boolean;
 }
 
-interface CommunityChallenge {
-  id: number;
-  id_horta: number;
-  nome: string;
-  goal_tasks: number;
-  completed_tasks: number;
-  ends_at: string;
-  completed: boolean;
-}
-
 interface CommunityMember {
   position: number;
   id_perfil: number;
@@ -63,7 +53,6 @@ interface GamificationData {
   mudas_este_mes: number;
   achievements: Achievement[];
   hortas: { id: number; nome: string }[];
-  community_challenges: CommunityChallenge[];
   leaderboard: CommunityMember[];
 }
 
@@ -253,25 +242,6 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             <div className="flex items-center gap-2.5 border-b border-[#edf0ed] px-3.5 py-3 sm:border-b-0 sm:border-r"><span className="flex size-8 items-center justify-center rounded-full bg-[#fff6df]"><Coins className="size-4 text-[#bd8514]" /></span><div><p className="text-[15px] font-bold leading-4">{coins}</p><p className="mt-0.5 text-[10px] text-[#77837a]">Moedas disponíveis</p></div></div>
             <div className="flex items-center gap-2.5 border-r border-[#edf0ed] px-3.5 py-3"><span className="flex size-8 items-center justify-center rounded-full bg-[#f2edfc]"><Award className="size-4 text-[#7953a9]" /></span><div><p className="text-[15px] font-bold leading-4">{xp} XP</p><p className="mt-0.5 text-[10px] text-[#77837a]">XP neste nível</p></div></div>
             <div className="flex items-center gap-2.5 px-3.5 py-3"><span className="flex size-8 items-center justify-center rounded-full bg-[#fff0e3]"><Flame className="size-4 text-[#d57d28]" /></span><div><p className="text-[15px] font-bold leading-4">{stats?.sequencia_dias ?? 0} dias</p><p className="mt-0.5 text-[10px] text-[#77837a]">Sequência atual</p></div></div>
-          </section>
-
-          <section className="rounded-xl border border-[#dcebdd] bg-gradient-to-r from-[#f1f9f1] to-white p-4 sm:p-5">
-            <div className="flex items-start gap-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-[#38844c] shadow-sm"><Users className="size-4" /></span>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-[14px] font-bold text-[#26362a]">Desafio da comunidade</h2>
-                <p className="mt-0.5 text-[11px] text-[#77837a]">Uma meta coletiva baseada nas tarefas concluídas neste mês.</p>
-              </div>
-            </div>
-            {stats?.community_challenges?.length ? <div className="mt-3 grid gap-3 sm:grid-cols-2">{stats.community_challenges.slice(0, 2).map((challenge) => {
-              const percent = Math.min(100, challenge.goal_tasks > 0 ? (challenge.completed_tasks / challenge.goal_tasks) * 100 : 0);
-              const daysLeft = Math.max(0, Math.ceil((new Date(challenge.ends_at).getTime() - Date.now()) / 86400000));
-              return <div key={challenge.id} className="rounded-lg border border-[#e4ece4] bg-white/90 p-3">
-                <div className="flex items-center justify-between gap-2"><p className="truncate text-[11px] font-semibold text-[#34453a]">{challenge.nome}</p><span className="shrink-0 text-[10px] font-semibold text-[#16803d]">{challenge.completed ? 'Concluído' : `${challenge.completed_tasks}/${challenge.goal_tasks}`}</span></div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#edf1ed]"><div className="h-full rounded-full bg-[#4eaa64] transition-all" style={{ width: `${percent}%` }} /></div>
-                <p className="mt-1.5 text-[10px] text-[#77837a]">{challenge.completed ? 'Meta alcançada em equipe' : `${daysLeft} ${daysLeft === 1 ? 'dia restante' : 'dias restantes'} · toda contribuição conta`}</p>
-              </div>;
-            })}</div> : <p className="mt-3 rounded-lg border border-dashed border-[#dce5dc] bg-white/80 px-3 py-3 text-[11px] text-[#77837a]">Participe de uma horta para acompanhar o próximo desafio coletivo.</p>}
           </section>
 
           {weeklyFocusTask && <section className="flex flex-col gap-3 rounded-xl border border-[#dce9d9] bg-gradient-to-r from-white to-[#f0f8ed] p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#5c8148]">Uma descoberta para esta semana</p><h2 className="mt-1 text-[14px] font-bold text-[#26362a]">{weeklyFocusTask.titulo}</h2><p className="mt-1 text-[11px] text-[#718075]">Atividade publicada por {weeklyFocusTask.horta}. Veja se combina com o que você quer cultivar hoje.</p></div><button onClick={() => onNavigate('tasks')} className="shrink-0 rounded-lg border border-[#cfe2cc] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#16803d] hover:bg-[#f8fcf8]">Conhecer missão</button></section>}

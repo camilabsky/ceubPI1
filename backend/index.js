@@ -1616,43 +1616,6 @@ app.get('/me/gamificacao', requireAuth, async (req, res) => {
             [id_perfil, req.user.id]
         );
 
-        const communityChallenges = [];
-        const challengeGardens = [...new Map(gardens
-            .filter((garden) => id_horta == null || Number(garden.id) === id_horta)
-            .map((garden) => [Number(garden.id), garden])).values()];
-        for (const garden of challengeGardens) {
-            const goalTasks = Math.max(5, (Number(garden.participantes) || 0) * 2);
-            await conn.query(
-                `INSERT IGNORE INTO DesafioComunitario (id_horta, period_start, period_end, goal_tasks)
-                 VALUES (?, ?, ?, ?)`,
-                [garden.id, clockRows[0].period_start, clockRows[0].period_end, goalTasks]
-            );
-            const [challengeRows] = await conn.query(
-                `SELECT d.id, d.id_horta, h.nome, d.period_start, d.period_end, d.goal_tasks, d.completed_at,
-                        (SELECT COUNT(*) FROM Tarefas t WHERE t.id_horta = d.id_horta AND t.concluido = true
-                         AND DATE(t.completed_at) BETWEEN d.period_start AND d.period_end) AS completed_tasks
-                 FROM DesafioComunitario d JOIN Horta h ON h.id = d.id_horta
-                 WHERE d.id_horta = ? AND d.period_start = ? LIMIT 1`,
-                [garden.id, clockRows[0].period_start]
-            );
-            if (!challengeRows.length) continue;
-            const challenge = challengeRows[0];
-            if (!challenge.completed_at && Number(challenge.completed_tasks) >= Number(challenge.goal_tasks)) {
-                await conn.query('UPDATE DesafioComunitario SET completed_at = NOW() WHERE id = ? AND completed_at IS NULL', [challenge.id]);
-                challenge.completed_at = new Date();
-            }
-            communityChallenges.push({
-                id: challenge.id,
-                id_horta: challenge.id_horta,
-                nome: challenge.nome,
-                starts_at: challenge.period_start,
-                ends_at: challenge.period_end,
-                goal_tasks: Number(challenge.goal_tasks) || 0,
-                completed_tasks: Number(challenge.completed_tasks) || 0,
-                completed: Boolean(challenge.completed_at),
-            });
-        }
-
         const [leaderboardRows] = await conn.query(
              `SELECT p.id, p.nome, COALESCE(pg.xp_total, 0) AS xp_total,
                     COUNT(DISTINCT t.id) AS tarefas_concluidas
@@ -1718,7 +1681,6 @@ app.get('/me/gamificacao', requireAuth, async (req, res) => {
             achievements,
             events,
             hortas: gardens,
-            community_challenges: communityChallenges,
             leaderboard,
             impact: { tasks_completed: tasks.length, gardens_count: gardens.length, seedlings_planted: mudasPlantadas },
         });
@@ -1754,21 +1716,9 @@ app.get('/admin/horta/historico', requireAuth, requireHortaAdmin, async (req, re
             [req.id_horta]
         );
 
-        const [desafiosComunitarios] = await db.query(
-            `SELECT d.id, d.goal_tasks, d.period_start, d.period_end, d.completed_at,
-                    (SELECT COUNT(*) FROM Tarefas t
-                     WHERE t.id_horta = d.id_horta AND t.concluido = true AND t.deleted_at IS NULL
-                       AND DATE(t.completed_at) BETWEEN d.period_start AND d.period_end) AS completed_tasks
-             FROM DesafioComunitario d
-             WHERE d.id_horta = ? AND d.period_start = DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
-             LIMIT 1`,
-            [req.id_horta]
-        );
-
         return res.send({
             tarefas_concluidas_horta: tarefasConcluidas,
             recompensas_resgatadas_horta: recompensasResgatadas,
-            desafio_comunitario: desafiosComunitarios[0] || null,
         });
     } catch (error) {
         console.error('Erro em /admin/horta/historico:', error);
@@ -2324,17 +2274,7 @@ async function ensureGamificationSchema() {
         UNIQUE KEY uq_perfil_conquista (id_perfil, achievement_key),
         CONSTRAINT fk_conquista_perfil FOREIGN KEY (id_perfil) REFERENCES Perfil(id)
     )`);
-    await db.query(`CREATE TABLE IF NOT EXISTS DesafioComunitario (
-        id int AUTO_INCREMENT PRIMARY KEY,
-        id_horta int NOT NULL,
-        period_start date NOT NULL,
-        period_end date NOT NULL,
-        goal_tasks int NOT NULL,
-        completed_at datetime NULL,
-        created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_horta_desafio_periodo (id_horta, period_start),
-        CONSTRAINT fk_desafio_horta FOREIGN KEY (id_horta) REFERENCES Horta(id)
-    )`);
+    await db.query('DROP TABLE IF EXISTS DesafioComunitario');
     await db.query(`UPDATE Tarefas
                     SET xp = GREATEST(0, COALESCE(xp, 0)),
                         moedas = GREATEST(0, COALESCE(moedas, 0)),
