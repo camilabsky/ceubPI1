@@ -174,9 +174,10 @@ export default function ExplorePage() {
     fetch(`${API_URL}/me/telefone`, { headers: { Authorization: `Bearer ${token}` } })
       .then(async (response) => {
         const data = await response.json().catch(() => ({}));
-        if (ativo && response.ok) setTelefoneAtual(typeof data.telefone === 'string' ? data.telefone : '');
+        if (ativo) setTelefoneAtual(response.ok && typeof data.telefone === 'string' ? data.telefone : '');
       })
-      .catch(() => { /* sem telefone carregado: o passo opcional aparece */ });
+      // Sem telefone carregado, o passo opcional aparece (Pular sempre entra).
+      .catch(() => { if (ativo) setTelefoneAtual(''); });
     return () => { ativo = false; };
   }, [modalAberto, selecionada?.id, token, jaParticipaSelecionada]);
 
@@ -278,6 +279,9 @@ export default function ExplorePage() {
     );
   };
 
+  // null = telefone ainda carregando; só importa para quem ainda não participa.
+  const carregandoTelefone = !jaParticipaSelecionada && telefoneAtual === null;
+
   const pedirParticipacao = () => {
     if (!jaParticipaSelecionada && !telefoneAtual) {
       setPedindoTelefone(true);
@@ -299,7 +303,7 @@ export default function ExplorePage() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        if (pedindoTelefone) {
+        if (pedindoTelefone && response.status === 400) {
           setErroEntrada(data.error || 'Não foi possível entrar nesta horta.');
           return;
         }
@@ -460,7 +464,7 @@ export default function ExplorePage() {
 
           <footer className="border-t border-[#e5ebe5] bg-white p-4 sm:px-7">{pedindoTelefone
             ? <JoinPhoneStep onJoin={(telefone) => { void participar(telefone); }} onSkip={() => { void participar(); }} busy={entrando} serverError={erroEntrada} />
-            : <button onClick={pedirParticipacao} disabled={entrando || Boolean(erroDetalhes)} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#168a3c] text-[13px] font-semibold text-white transition hover:bg-[#117331] disabled:opacity-60">{entrando && <LoaderCircle className="size-4 animate-spin" />}{entrando ? 'Entrando...' : jaParticipaSelecionada ? 'Você já participa desta horta' : 'Participar desta horta'}</button>}</footer>
+            : <button onClick={pedirParticipacao} disabled={entrando || Boolean(erroDetalhes) || carregandoTelefone} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#168a3c] text-[13px] font-semibold text-white transition hover:bg-[#117331] disabled:opacity-60">{entrando && <LoaderCircle className="size-4 animate-spin" />}{entrando ? 'Entrando...' : jaParticipaSelecionada ? 'Você já participa desta horta' : 'Participar desta horta'}</button>}</footer>
         </section>
       </div>}
     </main>

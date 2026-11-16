@@ -432,7 +432,10 @@ app.get('/me/telefone', requireAuth, async (req, res) => {
 });
 
 app.put('/me/telefone', requireAuth, async (req, res) => {
-    const phone = parsePhone(req.body?.telefone);
+    if (!req.body || !Object.prototype.hasOwnProperty.call(req.body, 'telefone')) {
+        return res.status(400).send({ error: 'Informe o telefone, ou envie vazio para remover' });
+    }
+    const phone = parsePhone(req.body.telefone);
     if (!phone.ok) return res.status(400).send({ error: phone.error });
     try {
         const [result] = await db.query('UPDATE Usuario SET telefone = ? WHERE id = ?', [phone.telefone, req.user.id]);

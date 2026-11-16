@@ -15,9 +15,11 @@ vi.mock('leaflet/dist/leaflet.css', () => ({}));
 
 const auth = { token: 'tok', user: { id: 1, roles: [] as Array<{ id_horta: number; role: string }> }, applyUser: vi.fn() };
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => auth }));
-vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }) }));
+const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), message: vi.fn() }));
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), toastMock) }));
 
-type Route = (init?: RequestInit) => { status?: number; body: unknown };
+type RouteResult = { status?: number; body: unknown };
+type Route = (init?: RequestInit) => RouteResult | Promise<RouteResult>;
 let routes: Record<string, Route>;
 const calls: Array<{ key: string; init?: RequestInit }> = [];
 
@@ -28,14 +30,14 @@ function route(url: string, init?: RequestInit) {
   calls.push({ key, init });
   const handler: Route | undefined = routes[key] || (url.includes('nominatim') ? () => ({ body: [] }) : undefined);
   if (!handler) return Promise.resolve(new Response(JSON.stringify({ error: `unmocked ${key}` }), { status: 404 }));
-  const { status = 200, body } = handler(init);
-  return Promise.resolve(new Response(JSON.stringify(body), { status }));
+  return Promise.resolve(handler(init)).then(({ status = 200, body }) => new Response(JSON.stringify(body), { status }));
 }
 
 const horta = { id: 7, nome: 'Horta Girassol', descricao: 'Teste', latitude: -15.79, longitude: -47.88, endereco: 'Rua 1', cidade: 'Brasília', uf: 'DF', contato: 'h@x.test', participantes: 3 };
 
 beforeEach(() => {
   calls.length = 0;
+  toastMock.error.mockReset();
   auth.user = { id: 1, roles: [] };
   auth.applyUser.mockReset();
   routes = {
@@ -145,6 +147,39 @@ describe('ExplorePage join phone step', () => {
     await userEvent.type(screen.getByLabelText('Telefone'), '(61) 99999-0000');
     await userEvent.click(screen.getByRole('button', { name: 'Entrar na horta' }));
     expect(await screen.findByText('Informe um telefone válido')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pular' })).toBeEnabled();
+  });
+
+  it('waits for the saved phone before letting the person join', async () => {
+    let release: () => void = () => {};
+    routes['GET /me/telefone'] = () => new Promise((resolve) => { release = () => resolve({ body: { telefone: '(61) 98888-0000' } }); });
+    await openGarden();
+    const button = await screen.findByRole('button', { name: 'Participar desta horta' });
+    await waitFor(() => expect(calls.some((c) => c.key === 'GET /me/telefone')).toBe(true));
+    expect(button).toBeDisabled();
+    release();
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+    await waitFor(() => expect(joinBody()).toEqual({}));
+    expect(screen.queryByText(/Quer deixar um telefone\?/)).not.toBeInTheDocument();
+  });
+
+  it('falls back to the optional step when the saved phone cannot be loaded', async () => {
+    routes['GET /me/telefone'] = () => ({ status: 500, body: { error: 'falhou' } });
+    await openGarden();
+    const button = await screen.findByRole('button', { name: 'Participar desta horta' });
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+    expect(screen.getByText(/Quer deixar um telefone\?/)).toBeInTheDocument();
+  });
+
+  it('shows non-phone join errors as a toast, not under the phone field', async () => {
+    routes['POST /hortas/7/entrar'] = () => ({ status: 404, body: { error: 'Horta nao encontrada' } });
+    await openGarden();
+    await userEvent.click(await screen.findByRole('button', { name: 'Participar desta horta' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Pular' }));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('Horta nao encontrada'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pular' })).toBeEnabled();
   });
 

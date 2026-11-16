@@ -67,6 +67,13 @@ async function phoneScenarios(minimal) {
   assert.equal(result.status, 400, JSON.stringify(result.data));
   assert.deepEqual((await request('/me/telefone', { token })).data, { telefone: '(61) 98888-0000' });
 
+  // A body without the telefone key must not wipe the saved phone.
+  result = await request('/me/telefone', { token, method: 'PUT', body: { phone: '(61) 91111-0000' } });
+  assert.equal(result.status, 400, JSON.stringify(result.data));
+  result = await request('/me/telefone', { token, method: 'PUT', body: {} });
+  assert.equal(result.status, 400, JSON.stringify(result.data));
+  assert.deepEqual((await request('/me/telefone', { token })).data, { telefone: '(61) 98888-0000' });
+
   result = await request('/me/telefone', { token, method: 'PUT', body: { telefone: '' } });
   assert.equal(result.status, 200, JSON.stringify(result.data));
   assert.deepEqual((await request('/me/telefone', { token })).data, { telefone: '' });
