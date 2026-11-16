@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { HortaMap } from './HortaMap';
 import ProfileLocationEditor from './ProfileLocationEditor';
+import ProfilePhoneEditor from './ProfilePhoneEditor';
 
 interface Task {
   id: number;
@@ -332,7 +333,7 @@ const handleUseCurrentLocation = () => {
               {hortaNome}
             </p>
             <p className="text-white/80 text-[12px] mt-1">{user?.email || 'E-mail não informado'}</p>
-            <div className="mt-1"><ProfileLocationEditor /></div>
+            <div className="mt-1"><ProfileLocationEditor /><ProfilePhoneEditor /></div>
           </div>
         </div>
       </div>

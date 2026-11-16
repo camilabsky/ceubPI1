@@ -5,6 +5,7 @@ import { API_URL } from '../config';
 import { useAuth } from '../contexts/AuthContext';
 import ProfileCommunitySections from './ProfileCommunitySections';
 import ProfileLocationEditor from './ProfileLocationEditor';
+import ProfilePhoneEditor from './ProfilePhoneEditor';
 
 interface ProfilePageProps {
   coins: number;
@@ -166,7 +167,7 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onCreateG
                 <p className="text-[12px] font-medium text-white/80">Perfil da comunidade</p>
                 <h1 className="mt-0.5 truncate text-[22px] font-bold">{user?.nome || 'Usuário'}</h1>
                 <p className="mt-1 truncate text-[12px] text-white/85">{user?.email || 'E-mail não informado'}</p>
-                <div className="mt-2"><ProfileLocationEditor /></div>
+                <div className="mt-2"><ProfileLocationEditor /><ProfilePhoneEditor /></div>
                 <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold"><Sprout className="size-3.5" /> Nível {level} · {levelName}</span>
               </div>
             </div>
