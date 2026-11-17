@@ -1,5 +1,5 @@
 import { API_URL } from '../config';
-import {User,ShieldCheck,ClipboardList,CheckCircle,LogOut,Mail,Lock,ChevronRight, MapPin, Plus} from 'lucide-react';
+import {User,ShieldCheck,LogOut,Mail,Lock,ChevronRight, MapPin, Plus} from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,15 +7,6 @@ import { HortaMap } from './HortaMap';
 import ProfileLocationEditor from './ProfileLocationEditor';
 import ProfilePhoneEditor from './ProfilePhoneEditor';
 import DeleteAccountSection from './DeleteAccountSection';
-
-interface Task {
-  id: number;
-  titulo: string;
-  tipo: string;
-  dificuldade: number;
-  moedas: number;
-  concluido?: boolean;
-}
 
 interface AdminProfilePageProps {
   onLogout?: () => void;
@@ -30,8 +21,6 @@ export default function AdminProfilePage({
 }: AdminProfilePageProps) {
   const { logout, token, user, updateUser, updatePassword, activeGarden, leaveGarden, refreshUser } = useAuth();
 
-  const [adminTasks, setAdminTasks] = useState<Task[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(user?.nome || '');
   const [isSavingName, setIsSavingName] = useState(false);
@@ -86,47 +75,9 @@ export default function AdminProfilePage({
     requestAnimationFrame(() => document.getElementById('admin-garden-location')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   }, [editGardenOnOpen, user]);
 
-  useEffect(() => {
-    const fetchAdminData = async () => {
-      if (!token) return;
-
-      setIsLoading(true);
-
-      try {
-        const tasksRes = await fetch(`${API_URL}/admin/tarefas?id_horta=${activeGarden?.id_horta ?? ''}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!tasksRes.ok) {
-          throw new Error('Falha ao carregar tarefas');
-        }
-
-        const tasksData: Task[] = await tasksRes.json();
-        setAdminTasks(tasksData);
-      } catch (error) {
-        console.error('Erro ao carregar dados administrativos:', error);
-        toast.error('Erro ao carregar estatísticas da horta');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchAdminData();
-  }, [token, activeGarden?.id_horta, activeGarden?.role]);
-
   const hortaNome =
     (activeGarden?.role === 'ADMIN' ? activeGarden.horta_nome : null) ||
     'Sua horta';
-
-  const tarefasPendentes = adminTasks.filter(
-    (task) => !task.concluido
-  ).length;
-
-  const tarefasConcluidas = adminTasks.filter(
-    (task) => task.concluido
-  ).length;
 
 
   //Alterar senha do usuário 
@@ -571,51 +522,6 @@ const handleUseCurrentLocation = () => {
               </div>
             </div>
           )}
-        </div>
-      </div>
-    </div>
-
-    {/* Estatísticas */}
-    <div className="px-4 mb-6">
-      <h2 className="text-[16px] font-semibold text-neutral-950 mb-4 px-2">
-        Estatísticas da horta
-      </h2>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
-          <ClipboardList className="size-6 text-[#f0b100] mb-2" />
-
-          <p className="text-[24px] font-semibold text-neutral-950 mb-1">
-            {isLoading ? '—' : tarefasPendentes}
-          </p>
-
-          <p className="text-[11px] text-[#4a5565] text-center">
-            Tarefas pendentes
-          </p>
-        </div>
-
-        <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
-          <CheckCircle className="size-6 text-[#00a63e] mb-2" />
-
-          <p className="text-[24px] font-semibold text-neutral-950 mb-1">
-            {isLoading ? '—' : tarefasConcluidas}
-          </p>
-
-          <p className="text-[11px] text-[#4a5565] text-center">
-            Tarefas concluídas
-          </p>
-        </div>
-
-        <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
-          <ClipboardList className="size-6 text-[#64748b] mb-2" />
-
-          <p className="text-[24px] font-semibold text-neutral-950 mb-1">
-            {isLoading ? '—' : adminTasks.length}
-          </p>
-
-          <p className="text-[11px] text-[#4a5565] text-center">
-            Total de tarefas
-          </p>
         </div>
       </div>
     </div>
