@@ -137,11 +137,17 @@ Mais Trabalho → Mais Produção → Mais Produtos → Mais Incentivo → Mais 
 - **Vite** - Build tool e dev server
 - **TailwindCSS** - Estilização
 - **Shadcn/ui** - Componentes UI reutilizáveis
-- **Axios/Fetch API** - Requisições HTTP
+- **Leaflet / react-leaflet** - Mapa de hortas e localização
+- **Recharts** - Gráficos do Dashboard
+- **Vitest + Testing Library** - Testes de componentes
+- **Fetch API** - Requisições HTTP
 
 ### **Backend**
 - **Node.js** com Express.js
 - **JWT (JSON Web Tokens)** - Autenticação
+- **Login com Google** (Google OAuth 2.0)
+- **Google Gemini** - Análise automática das fotos de comprovação de tarefas
+- **Brevo / SMTP** - Envio do e-mail de recuperação de senha
 - **MySQL 8.0** - Banco de dados relacional
 
 ### **Infraestrutura**
@@ -150,8 +156,8 @@ Mais Trabalho → Mais Produção → Mais Produtos → Mais Incentivo → Mais 
 
 ### **Arquitetura**
 - API RESTful
-- Autenticação baseada em JWT com Bearer tokens
-- Role-based access control (RBAC) para admin/usuário
+- Autenticação baseada em JWT com Bearer tokens (expiração de 8h)
+- Papéis por horta (ADMIN e MEMBER): a mesma pessoa pode ser admin de uma horta e participante de outra
 - Banco de dados relacional com soft deletes
 - Imagens com fallback SVG para recompensas
 
@@ -184,12 +190,41 @@ Mais Trabalho → Mais Produção → Mais Produtos → Mais Incentivo → Mais 
 3. **Acesse a aplicação**
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:8080
-   - Database: localhost:3306
+   - Database: localhost:3307
 
 ### **Parar os containers**
    ```bash
    docker compose down
    ```
+
+### **Configuração (variáveis de ambiente)**
+
+O backend lê as variáveis de `backend/.env` (modelo em [`backend/.env.example`](backend/.env.example)). As principais:
+
+| Variável | Para que serve |
+|---|---|
+| `JWT_SECRET` | Segredo para assinar os tokens de sessão |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Conexão com o MySQL |
+| `GOOGLE_CLIENT_ID` | Login com Google (o frontend usa `VITE_GOOGLE_CLIENT_ID`) |
+| `GEMINI_API_KEY` | Análise automática das fotos de comprovação (opcional) |
+| `BREVO_API_KEY` ou `SMTP_*` | Envio do e-mail de recuperação de senha |
+| `PASSWORD_RESET_URL` | URL do frontend usada no link de recuperação de senha |
+| `CORS_ORIGIN` | Origens permitidas, separadas por vírgula |
+
+O frontend usa `VITE_API_URL` para apontar para a API.
+
+### **Testes e verificação**
+
+```bash
+# Frontend
+cd frontend
+npm run typecheck   # checagem de tipos
+npm test            # testes (Vitest)
+
+# Backend
+cd backend
+npm test            # testes unitários (node --test)
+```
 
 ### **Dados de Teste**
 
@@ -211,14 +246,20 @@ A aplicação inclui seed data com usuários de exemplo:
 ceubPI1/
 ├── frontend/              # React app com Vite
 │   ├── src/
-│   │   ├── components/    # Páginas: TasksPage, RewardsPage, ProfilePage
-│   │   ├── App.tsx        # Router principal
+│   │   ├── components/    # Páginas e componentes (Home, Explorar, Tarefas, Recompensas, Perfil, Dashboard...)
+│   │   ├── contexts/      # AuthContext (sessão, hortas ativas, papéis)
+│   │   ├── lib/           # Utilitários (telefone, localização)
+│   │   ├── App.tsx        # Navegação principal
 │   │   └── main.tsx       # Entry point
 │   ├── package.json
 │   └── Dockerfile
 │
 ├── backend/               # Express API
 │   ├── index.js           # Servidor e endpoints
+│   ├── userContact.js     # Validação de telefone, e-mail e cidade/UF
+│   ├── gamification.js    # Regras de XP, níveis e conquistas
+│   ├── gemini.js          # Análise de comprovações com IA
+│   ├── geolocation.js     # Distância e validação de coordenadas
 │   ├── package.json
 │   └── Dockerfile
 │
@@ -233,22 +274,43 @@ ceubPI1/
 
 ## 🔌 **Principais Endpoints da API**
 
-### **Autenticação**
+Rotas marcadas com (admin) exigem ser ADMIN da horta informada em `id_horta`.
+
+### **Autenticação e conta**
+- `POST /auth/register` - Cadastro curto (nome, e-mail e senha)
 - `POST /auth/login` - Login (retorna JWT token)
+- `POST /auth/google` - Login/cadastro com Google
+- `GET /auth/me`, `PUT /auth/me`, `DELETE /auth/me` - Consultar, editar e excluir a própria conta
+- `PUT /auth/password` - Alterar senha
+- `POST /auth/password/forgot`, `POST /auth/password/reset` - Recuperação de senha por e-mail
+- `GET`/`PUT /me/telefone` e `GET`/`PUT /me/localizacao` - Telefone e cidade/UF do usuário (opcionais)
+
+### **Hortas**
+- `GET /hortas` - Listar hortas (com telefone e e-mail de contato)
+- `GET /hortas/:id/detalhes` - Detalhes e responsáveis da horta
+- `POST /hortas` - Criar horta (quem cria vira ADMIN; telefone e e-mail são opcionais)
+- `POST /hortas/:id/entrar`, `DELETE /hortas/:id/sair` - Entrar e sair de uma horta
+- `PUT /admin/horta` (admin) - Editar dados e localização da horta
+- `GET /admin/horta/participantes` (admin) - Participantes, frequência e telefone
 
 ### **Tarefas**
 - `GET /tarefas_disponiveis` - Listar tarefas disponíveis
-- `POST /tarefas` (admin) - Criar tarefa
-- `PUT /tarefas/:id` (admin) - Atualizar tarefa
-- `DELETE /tarefas/:id` (admin) - Deletar tarefa
+- `POST /aceitar_tarefa` - Aceitar uma tarefa
+- `POST /tarefas/:id/comprovacao` - Enviar foto de comprovação (com localização)
+- `POST /admin/tarefas` (admin) - Criar tarefa
+- `PUT /admin/tarefas/:id` (admin) - Atualizar tarefa
+- `DELETE /admin/tarefas/:id` (admin) - Deletar tarefa
+- `POST /admin/tarefas/:id/aprovar-comprovacao` e `/reprovar-comprovacao` (admin) - Revisar comprovações
 
 ### **Recompensas**
-- `GET /recompensas` - Listar recompensas disponíveis
-- `POST /recompensas` (admin) - Criar recompensa
-- `PUT /recompensas/:id` (admin) - Atualizar recompensa
-- `DELETE /recompensas/:id` (admin) - Deletar recompensa
+- `GET /recompensas_disponiveis` - Listar recompensas disponíveis
+- `POST /resgatar_recompensa` - Resgatar uma recompensa com moedas
+- `POST /admin/recompensas` (admin) - Criar recompensa
+- `PUT /admin/recompensas/:id` (admin) - Atualizar recompensa
+- `DELETE /admin/recompensas/:id` (admin) - Deletar recompensa
 
-### **Histórico do Usuário**
+### **Perfil e gamificação**
+- `GET /me/gamificacao` - Nível, XP, conquistas, sequência e destaques da comunidade
 - `GET /me/historico` - Tarefas concluídas e recompensas resgatadas do usuário
 
 ### **Histórico da Horta (Admin)**
@@ -258,13 +320,19 @@ ceubPI1/
 
 ## 📝 **Funcionalidades**
 
-✅ Autenticação com JWT  
-✅ Gestão de tarefas (CRUD completo)  
+✅ Cadastro curto (nome, e-mail e senha) e login com Google  
+✅ Recuperação de senha por e-mail e exclusão da própria conta  
+✅ Várias hortas por usuário, com papéis ADMIN e MEMBER por horta  
+✅ Explorar hortas no mapa, com pedido de cidade na primeira visita  
+✅ Criar horta (telefone e e-mail de contato opcionais) e entrar em uma horta com telefone opcional  
+✅ Gestão de tarefas (CRUD completo) com aceite, comprovação por foto/localização e revisão do admin  
+✅ Análise automática da comprovação com IA (Gemini)  
 ✅ Gestão de recompensas (CRUD completo)  
-✅ Sistema de gamificação com moedas virtuais (HortaCoins)  
-✅ Histórico de tarefas concluídas por usuário  
-✅ Histórico de recompensas resgatadas por usuário  
-✅ Panel administrativo integrado nas abas  
+✅ Sistema de gamificação: moedas virtuais (HortaCoins), XP, níveis, conquistas e sequência de dias  
+✅ Dashboard com indicadores da horta (admin) e da evolução pessoal (participante)  
+✅ Perfil com informações pessoais e, para admins, informações da horta em seções separadas  
+✅ Acompanhamento de frequência e contato dos participantes (admin)  
+✅ Histórico de tarefas concluídas e recompensas resgatadas por usuário  
 ✅ Histórico de atividades da horta (para admin)  
 ✅ Fallback visual para imagens externas bloqueadas  
 
