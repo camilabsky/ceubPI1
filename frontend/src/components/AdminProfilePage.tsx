@@ -339,199 +339,6 @@ const handleUseCurrentLocation = () => {
       </div>
     </div>
 
-    {/* Estatísticas */}
-    <div className="px-4 mb-6">
-      <h2 className="text-[16px] font-semibold text-neutral-950 mb-4 px-2">
-        Estatísticas da horta
-      </h2>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
-          <ClipboardList className="size-6 text-[#f0b100] mb-2" />
-
-          <p className="text-[24px] font-semibold text-neutral-950 mb-1">
-            {isLoading ? '—' : tarefasPendentes}
-          </p>
-
-          <p className="text-[11px] text-[#4a5565] text-center">
-            Tarefas pendentes
-          </p>
-        </div>
-
-        <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
-          <CheckCircle className="size-6 text-[#00a63e] mb-2" />
-
-          <p className="text-[24px] font-semibold text-neutral-950 mb-1">
-            {isLoading ? '—' : tarefasConcluidas}
-          </p>
-
-          <p className="text-[11px] text-[#4a5565] text-center">
-            Tarefas concluídas
-          </p>
-        </div>
-
-        <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
-          <ClipboardList className="size-6 text-[#64748b] mb-2" />
-
-          <p className="text-[24px] font-semibold text-neutral-950 mb-1">
-            {isLoading ? '—' : adminTasks.length}
-          </p>
-
-          <p className="text-[11px] text-[#4a5565] text-center">
-            Total de tarefas
-          </p>
-        </div>
-      </div>
-    </div>
-
-    {/* Informações da horta */}
-    <div className="px-4 mb-6">
-      <h2 className="text-[16px] font-semibold text-neutral-950 px-2">
-        Informações da horta
-      </h2>
-      <p className="text-[12px] text-[#66736a] mb-4 px-2">{hortaNome}</p>
-
-      <div className="bg-white rounded-[14px] border border-gray-200 overflow-hidden">
-        <div id="admin-garden-location" className="p-4 scroll-mt-5">
-      {!isEditingLocation ? (
-      <>
-      <button
-        type="button"
-        onClick={() => {
-          const horta = activeGarden?.role === 'ADMIN' ? activeGarden : null;
-          setNewLatitude(horta?.latitude != null ? String(horta.latitude) : '');
-          setNewLongitude(horta?.longitude != null ? String(horta.longitude) : '');
-          setNewEndereco(horta?.endereco || '');
-          setNewDescricaoHorta(horta?.descricao || '');
-          setNewCidadeHorta(horta?.cidade || '');
-          setNewUfHorta(horta?.uf || '');
-          setNewTelefoneHorta(horta?.telefone || '');
-          setNewEmailHorta(horta?.email || '');
-          setIsEditingLocation(true);
-        }}
-        className="w-full flex items-center gap-3 text-left"
-      >
-        <div className="size-9 rounded-full bg-gray-100 flex items-center justify-center">
-          <MapPin className="size-5 text-gray-600" />
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <p className="text-[12px] text-gray-500">
-            Localização
-          </p>
-
-          <p className="text-[14px] text-neutral-950 truncate">
-            {(() => {
-              const horta = activeGarden?.role === 'ADMIN' ? activeGarden : null;
-              if (horta?.endereco) return horta.endereco;
-              return horta?.latitude != null && horta?.longitude != null
-                ? `${horta.latitude}, ${horta.longitude}`
-                : 'Não informado';
-            })()}
-          </p>
-        </div>
-
-        <ChevronRight className="size-5 text-gray-400" />
-      </button>
-      {activeGarden?.role === 'ADMIN' && <div className="mt-3 space-y-3 pl-12">
-        <p className="text-[12px] leading-5 text-[#66736a]">{activeGarden.descricao || 'Descrição não cadastrada.'}</p>
-        <p className="text-[12px] text-[#66736a]">{[activeGarden.cidade, activeGarden.uf].filter(Boolean).join(' / ') || 'Cidade e UF não informadas'}</p>
-        {(activeGarden.telefone || activeGarden.email) && <p className="text-[12px] text-[#66736a]">Contato: {[activeGarden.telefone, activeGarden.email].filter(Boolean).join(' · ')}</p>}
-        <p className="text-[11px] text-[#718075]">{activeGarden.latitude != null && activeGarden.longitude != null ? `${activeGarden.latitude}, ${activeGarden.longitude}` : 'Coordenadas não informadas'}</p>
-        <HortaMap latitude={activeGarden.latitude} longitude={activeGarden.longitude} nome={activeGarden.horta_nome} endereco={activeGarden.endereco} height="180px" />
-      </div>}
-      </>
-    ) : (
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="size-9 rounded-full bg-gray-100 flex items-center justify-center">
-            <MapPin className="size-5 text-gray-600" />
-          </div>
-
-          <p className="text-[14px] font-medium text-neutral-950">
-            Alterar localização
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleUseCurrentLocation}
-          disabled={isFetchingGeoLocation}
-          className="w-full flex items-center justify-center gap-2 rounded-lg border border-green-600 text-green-600 py-2 text-[13px] font-medium disabled:opacity-60"
-        >
-          {isFetchingGeoLocation ? 'Obtendo localização...' : 'Usar minha localização atual'}
-        </button>
-
-        <div>
-        <label className="text-[12px] text-gray-500 mb-1 block">Endereço</label>
-        <textarea
-          value={newEndereco}
-          onChange={(event) => setNewEndereco(event.target.value)}
-          placeholder="Endereço da horta"
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500 min-h-16"
-        />
-      </div>
-
-        <div className="grid grid-cols-[1fr_5rem] gap-3"><div><label className="text-[12px] text-gray-500 mb-1 block">Cidade</label><input maxLength={100} value={newCidadeHorta} onChange={(event) => setNewCidadeHorta(event.target.value)} placeholder="Cidade" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div><div><label className="text-[12px] text-gray-500 mb-1 block">UF</label><input maxLength={2} value={newUfHorta} onChange={(event) => setNewUfHorta(event.target.value.toUpperCase())} placeholder="UF" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div></div>
-
-        <div><label className="text-[12px] text-gray-500 mb-1 block">Telefone <span className="text-gray-400">(opcional)</span></label><input maxLength={24} value={newTelefoneHorta} onChange={(event) => setNewTelefoneHorta(event.target.value)} placeholder="(61) 99999-9999" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div>
-
-        <div><label className="text-[12px] text-gray-500 mb-1 block">E-mail <span className="text-gray-400">(opcional)</span></label><input maxLength={160} type="email" value={newEmailHorta} onChange={(event) => setNewEmailHorta(event.target.value)} placeholder="contato@horta.org" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div>
-
-        <div>
-          <label className="text-[12px] text-gray-500 mb-1 block">Descrição da horta</label>
-          <textarea maxLength={255} value={newDescricaoHorta} onChange={(event) => setNewDescricaoHorta(event.target.value)} placeholder="Conte o que torna esta comunidade especial" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500 min-h-16" />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-[12px] text-gray-500 mb-1 block">Latitude</label>
-            <input
-              type="number"
-              step="any"
-              value={newLatitude}
-              onChange={(event) => setNewLatitude(event.target.value)}
-              placeholder="-15.79381800"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500"
-            />
-          </div>
-          <div>
-            <label className="text-[12px] text-gray-500 mb-1 block">Longitude</label>
-            <input
-              type="number"
-              step="any"
-              value={newLongitude}
-              onChange={(event) => setNewLongitude(event.target.value)}
-              placeholder="-47.88277800"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500"
-            />
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setIsEditingLocation(false)}
-            disabled={isSavingLocation}
-            className="flex-1 rounded-lg border border-gray-300 py-2 text-[13px] text-gray-700"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleSaveLocation}
-            disabled={isSavingLocation}
-            className="flex-1 rounded-lg bg-green-600 text-white py-2 text-[13px] font-medium disabled:opacity-70"
-          >
-            {isSavingLocation ? 'Salvando...' : 'Salvar'}
-          </button>
-        </div>
-      </div>
-    )}
-    </div>
-      </div>
-    </div>
-
     {/* Informações pessoais */}
     <div className="px-4 mb-6">
       <h2 className="text-[16px] font-semibold text-neutral-950 mb-4 px-2">
@@ -765,6 +572,199 @@ const handleUseCurrentLocation = () => {
             </div>
           )}
         </div>
+      </div>
+    </div>
+
+    {/* Estatísticas */}
+    <div className="px-4 mb-6">
+      <h2 className="text-[16px] font-semibold text-neutral-950 mb-4 px-2">
+        Estatísticas da horta
+      </h2>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
+          <ClipboardList className="size-6 text-[#f0b100] mb-2" />
+
+          <p className="text-[24px] font-semibold text-neutral-950 mb-1">
+            {isLoading ? '—' : tarefasPendentes}
+          </p>
+
+          <p className="text-[11px] text-[#4a5565] text-center">
+            Tarefas pendentes
+          </p>
+        </div>
+
+        <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
+          <CheckCircle className="size-6 text-[#00a63e] mb-2" />
+
+          <p className="text-[24px] font-semibold text-neutral-950 mb-1">
+            {isLoading ? '—' : tarefasConcluidas}
+          </p>
+
+          <p className="text-[11px] text-[#4a5565] text-center">
+            Tarefas concluídas
+          </p>
+        </div>
+
+        <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
+          <ClipboardList className="size-6 text-[#64748b] mb-2" />
+
+          <p className="text-[24px] font-semibold text-neutral-950 mb-1">
+            {isLoading ? '—' : adminTasks.length}
+          </p>
+
+          <p className="text-[11px] text-[#4a5565] text-center">
+            Total de tarefas
+          </p>
+        </div>
+      </div>
+    </div>
+
+    {/* Informações da horta */}
+    <div className="px-4 mb-6">
+      <h2 className="text-[16px] font-semibold text-neutral-950 px-2">
+        Informações da horta
+      </h2>
+      <p className="text-[12px] text-[#66736a] mb-4 px-2">{hortaNome}</p>
+
+      <div className="bg-white rounded-[14px] border border-gray-200 overflow-hidden">
+        <div id="admin-garden-location" className="p-4 scroll-mt-5">
+      {!isEditingLocation ? (
+      <>
+      <button
+        type="button"
+        onClick={() => {
+          const horta = activeGarden?.role === 'ADMIN' ? activeGarden : null;
+          setNewLatitude(horta?.latitude != null ? String(horta.latitude) : '');
+          setNewLongitude(horta?.longitude != null ? String(horta.longitude) : '');
+          setNewEndereco(horta?.endereco || '');
+          setNewDescricaoHorta(horta?.descricao || '');
+          setNewCidadeHorta(horta?.cidade || '');
+          setNewUfHorta(horta?.uf || '');
+          setNewTelefoneHorta(horta?.telefone || '');
+          setNewEmailHorta(horta?.email || '');
+          setIsEditingLocation(true);
+        }}
+        className="w-full flex items-center gap-3 text-left"
+      >
+        <div className="size-9 rounded-full bg-gray-100 flex items-center justify-center">
+          <MapPin className="size-5 text-gray-600" />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-[12px] text-gray-500">
+            Localização
+          </p>
+
+          <p className="text-[14px] text-neutral-950 truncate">
+            {(() => {
+              const horta = activeGarden?.role === 'ADMIN' ? activeGarden : null;
+              if (horta?.endereco) return horta.endereco;
+              return horta?.latitude != null && horta?.longitude != null
+                ? `${horta.latitude}, ${horta.longitude}`
+                : 'Não informado';
+            })()}
+          </p>
+        </div>
+
+        <ChevronRight className="size-5 text-gray-400" />
+      </button>
+      {activeGarden?.role === 'ADMIN' && <div className="mt-3 space-y-3 pl-12">
+        <p className="text-[12px] leading-5 text-[#66736a]">{activeGarden.descricao || 'Descrição não cadastrada.'}</p>
+        <p className="text-[12px] text-[#66736a]">{[activeGarden.cidade, activeGarden.uf].filter(Boolean).join(' / ') || 'Cidade e UF não informadas'}</p>
+        {(activeGarden.telefone || activeGarden.email) && <p className="text-[12px] text-[#66736a]">Contato: {[activeGarden.telefone, activeGarden.email].filter(Boolean).join(' · ')}</p>}
+        <p className="text-[11px] text-[#718075]">{activeGarden.latitude != null && activeGarden.longitude != null ? `${activeGarden.latitude}, ${activeGarden.longitude}` : 'Coordenadas não informadas'}</p>
+        <HortaMap latitude={activeGarden.latitude} longitude={activeGarden.longitude} nome={activeGarden.horta_nome} endereco={activeGarden.endereco} height="180px" />
+      </div>}
+      </>
+    ) : (
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="size-9 rounded-full bg-gray-100 flex items-center justify-center">
+            <MapPin className="size-5 text-gray-600" />
+          </div>
+
+          <p className="text-[14px] font-medium text-neutral-950">
+            Alterar localização
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleUseCurrentLocation}
+          disabled={isFetchingGeoLocation}
+          className="w-full flex items-center justify-center gap-2 rounded-lg border border-green-600 text-green-600 py-2 text-[13px] font-medium disabled:opacity-60"
+        >
+          {isFetchingGeoLocation ? 'Obtendo localização...' : 'Usar minha localização atual'}
+        </button>
+
+        <div>
+        <label className="text-[12px] text-gray-500 mb-1 block">Endereço</label>
+        <textarea
+          value={newEndereco}
+          onChange={(event) => setNewEndereco(event.target.value)}
+          placeholder="Endereço da horta"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500 min-h-16"
+        />
+      </div>
+
+        <div className="grid grid-cols-[1fr_5rem] gap-3"><div><label className="text-[12px] text-gray-500 mb-1 block">Cidade</label><input maxLength={100} value={newCidadeHorta} onChange={(event) => setNewCidadeHorta(event.target.value)} placeholder="Cidade" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div><div><label className="text-[12px] text-gray-500 mb-1 block">UF</label><input maxLength={2} value={newUfHorta} onChange={(event) => setNewUfHorta(event.target.value.toUpperCase())} placeholder="UF" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div></div>
+
+        <div><label className="text-[12px] text-gray-500 mb-1 block">Telefone <span className="text-gray-400">(opcional)</span></label><input maxLength={24} value={newTelefoneHorta} onChange={(event) => setNewTelefoneHorta(event.target.value)} placeholder="(61) 99999-9999" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div>
+
+        <div><label className="text-[12px] text-gray-500 mb-1 block">E-mail <span className="text-gray-400">(opcional)</span></label><input maxLength={160} type="email" value={newEmailHorta} onChange={(event) => setNewEmailHorta(event.target.value)} placeholder="contato@horta.org" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div>
+
+        <div>
+          <label className="text-[12px] text-gray-500 mb-1 block">Descrição da horta</label>
+          <textarea maxLength={255} value={newDescricaoHorta} onChange={(event) => setNewDescricaoHorta(event.target.value)} placeholder="Conte o que torna esta comunidade especial" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500 min-h-16" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[12px] text-gray-500 mb-1 block">Latitude</label>
+            <input
+              type="number"
+              step="any"
+              value={newLatitude}
+              onChange={(event) => setNewLatitude(event.target.value)}
+              placeholder="-15.79381800"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500"
+            />
+          </div>
+          <div>
+            <label className="text-[12px] text-gray-500 mb-1 block">Longitude</label>
+            <input
+              type="number"
+              step="any"
+              value={newLongitude}
+              onChange={(event) => setNewLongitude(event.target.value)}
+              placeholder="-47.88277800"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setIsEditingLocation(false)}
+            disabled={isSavingLocation}
+            className="flex-1 rounded-lg border border-gray-300 py-2 text-[13px] text-gray-700"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveLocation}
+            disabled={isSavingLocation}
+            className="flex-1 rounded-lg bg-green-600 text-white py-2 text-[13px] font-medium disabled:opacity-70"
+          >
+            {isSavingLocation ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+    )}
+    </div>
       </div>
     </div>
 
