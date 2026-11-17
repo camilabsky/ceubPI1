@@ -1,5 +1,5 @@
 import { API_URL } from '../config';
-import {User,ShieldCheck,ClipboardList,CheckCircle,Sprout,LogOut,Mail,Lock,ChevronRight, MapPin, Plus} from 'lucide-react';
+import {User,ShieldCheck,ClipboardList,CheckCircle,LogOut,Mail,Lock,ChevronRight, MapPin, Plus} from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
@@ -126,7 +126,6 @@ export default function AdminProfilePage({
     (task) => task.concluido
   ).length;
 
-  const mudasPlantadas = '—';
 
   //Alterar senha do usuário 
   const handleSavePassword = async () => {
@@ -368,18 +367,6 @@ const handleUseCurrentLocation = () => {
 
           <p className="text-[11px] text-[#4a5565] text-center">
             Tarefas concluídas
-          </p>
-        </div>
-
-        <div className="bg-white rounded-[14px] border border-gray-200 p-4 flex flex-col items-center">
-          <Sprout className="size-6 text-[#16a34a] mb-2" />
-
-          <p className="text-[24px] font-semibold text-neutral-950 mb-1">
-            {mudasPlantadas}
-          </p>
-
-          <p className="text-[11px] text-[#4a5565] text-center">
-            Mudas plantadas
           </p>
         </div>
 

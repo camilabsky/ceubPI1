@@ -64,13 +64,12 @@ interface GamificationData {
   is_max_level: boolean;
   moedas: number;
   tarefas_concluidas: number;
-  mudas_plantadas: number;
   sequencia_dias: number;
   achievements: Achievement[];
   events: ProfileEvent[];
   hortas: Garden[];
   leaderboard: CommunityMember[];
-  impact: { tasks_completed: number; gardens_count: number; seedlings_planted: number };
+  impact: { tasks_completed: number; gardens_count: number };
 }
 
 type Tab = 'achievements' | 'history';
@@ -179,9 +178,8 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onCreateG
 
         <ProfileCommunitySections />
 
-        <section className="mt-4 grid grid-cols-3 gap-2 sm:gap-3" aria-label="Seu impacto na comunidade">
+        <section className="mt-4 grid grid-cols-2 gap-2 sm:gap-3" aria-label="Seu impacto na comunidade">
           <div className="rounded-[14px] border border-gray-200 bg-white p-3 sm:p-4"><div className="flex size-8 items-center justify-center rounded-full bg-green-50"><CheckCircle2 className="size-4 text-[#00a63e]" /></div><p className="mt-2 text-[19px] font-bold leading-5 text-neutral-950">{completed}</p><p className="mt-1 text-[10px] text-[#66736a] sm:text-[11px]">Tarefas concluídas</p></div>
-          <div className="rounded-[14px] border border-gray-200 bg-white p-3 sm:p-4"><div className="flex size-8 items-center justify-center rounded-full bg-lime-50"><Sprout className="size-4 text-[#5a8b34]" /></div><p className="mt-2 text-[19px] font-bold leading-5 text-neutral-950">{data?.impact?.seedlings_planted ?? data?.mudas_plantadas ?? 0}</p><p className="mt-1 text-[10px] text-[#66736a] sm:text-[11px]">Mudas plantadas</p></div>
           <div className="rounded-[14px] border border-gray-200 bg-white p-3 sm:p-4"><div className="flex size-8 items-center justify-center rounded-full bg-blue-50"><Users className="size-4 text-[#4285d4]" /></div><p className="mt-2 text-[19px] font-bold leading-5 text-neutral-950">{data?.impact?.gardens_count ?? gardens.length}</p><p className="mt-1 text-[10px] text-[#66736a] sm:text-[11px]">Hortas</p></div>
         </section>
 
