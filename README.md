@@ -287,17 +287,39 @@ Usuários que fazem login na plataforma.
 id (PK)                   | int          | Auto-increment
 nome                      | varchar(128) | Nome completo
 email (UNIQUE)            | varchar(128) | Email único
-password_hash             | varchar(255) | Hash bcrypt da senha
+password_hash             | varchar(255) | Hash bcrypt da senha (NULL para contas criadas só com Google)
 ativo                     | boolean      | Status ativo/inativo
 id_perfil (FK)            | int          | Referência ao Perfil
+cidade                    | varchar(100) | Cidade do usuário (opcional)
+uf                        | char(2)      | UF do usuário (opcional, junto com a cidade)
+telefone                  | varchar(24)  | Telefone do usuário (opcional)
+last_login_at             | datetime     | Último login (acompanhamento de frequência)
+```
+
+#### **PasswordResetToken**
+Tokens de recuperação de senha.
+```
+id (PK)          | int          | Auto-increment
+id_usuario       | int          | Usuário que pediu a recuperação
+token_hash       | char(64)     | Hash do token (UNIQUE)
+expires_at       | datetime     | Validade do token
+used_at          | datetime     | Quando foi usado (NULL se ainda não usado)
+created_at       | datetime     | Criação do token
 ```
 
 #### **Horta**
 Hortas urbanas cadastradas no sistema.
 ```
-id (PK)      | int          | Auto-increment
-nome (UNIQUE)| varchar(128) | Nome da horta
-descricao    | varchar(255) | Descrição da horta
+id (PK)      | int            | Auto-increment
+nome (UNIQUE)| varchar(128)   | Nome da horta
+descricao    | varchar(255)   | Descrição da horta
+latitude     | decimal(10,8)  | Latitude (opcional)
+longitude    | decimal(11,8)  | Longitude (opcional)
+endereco     | varchar(255)   | Endereço ou localização
+cidade       | varchar(100)   | Cidade
+uf           | char(2)        | UF
+telefone     | varchar(24)    | Telefone de contato (opcional)
+email        | varchar(160)   | E-mail de contato (opcional)
 ```
 
 #### **UsuarioHortaRole**
@@ -317,15 +339,55 @@ tipo                 | varchar(32)  | Plantio, Manutenção, Colheita, Compostag
 descricao            | varchar(128) | Descrição breve
 dificuldade          | int          | Nível de dificuldade
 moedas               | int          | HortaCoins como recompensa
+moedas_recebidas     | int          | Moedas efetivamente creditadas na conclusão
+xp                   | int          | XP oferecido pela tarefa (padrão 50)
+xp_recebido          | int          | XP efetivamente creditado na conclusão
 mudas                | int          | Quantidade de mudas entregues (se houver)
 tempo                | int          | Tempo estimado em minutos
 horta                | varchar(128) | Nome da horta (redundante com id_horta)
 concluido            | boolean      | Status de conclusão
-id_perfil (FK)       | int          | Perfil que completou a tarefa
+status               | varchar(24)  | available, in_progress, pending_review, proof_submitted, completed
+id_perfil (FK)       | int          | Perfil que aceitou/completou a tarefa
 id_horta (FK)        | int          | Horta associada
 created_by (FK)      | int          | Usuário que criou a tarefa
 updated_at           | datetime     | Última atualização
+completed_at         | datetime     | Quando foi concluída
 deleted_at           | datetime     | Soft delete timestamp
+```
+
+Colunas de comprovação (foto, localização e análise automática):
+```
+completion_submitted_at    | datetime      | Envio da comprovação
+completion_photo_url       | varchar(512)  | Foto enviada
+completion_latitude        | decimal(10,8) | Latitude da comprovação
+completion_longitude       | decimal(11,8) | Longitude da comprovação
+completion_review_status   | varchar(24)   | pending, approved ou rejected
+completion_review_note     | varchar(512)  | Observação da revisão
+completion_reviewed_by     | int           | Admin que revisou
+completion_reviewed_at     | datetime      | Data da revisão
+completion_ai_status       | varchar(24)   | Estado da análise de IA
+ai_resultado               | varchar(24)   | Resultado da análise
+ai_confianca               | decimal(4,3)  | Confiança da análise
+ai_justificativa           | varchar(512)  | Justificativa da análise
+ai_modelo                  | varchar(64)   | Modelo usado
+ai_analisado_em            | datetime      | Quando foi analisada
+```
+
+#### **TarefaComprovacaoHistorico**
+Histórico de comprovações reprovadas de uma tarefa.
+```
+id (PK)             | int           | Auto-increment
+id_tarefa           | int           | Tarefa avaliada
+id_perfil           | int           | Perfil que enviou
+foto_url            | varchar(512)  | Foto reprovada
+latitude/longitude  | decimal       | Localização enviada
+localizacao_status  | varchar(32)   | Resultado da checagem de localização
+distancia_metros    | int           | Distância até a horta
+ai_*                | -             | Dados da análise de IA da época
+motivo_reprovacao   | varchar(512)  | Motivo da reprovação
+revisado_por        | int           | Admin que reprovou
+enviado_em          | datetime      | Envio original
+rejeitado_em        | datetime      | Quando foi reprovada
 ```
 
 #### **Recompensas**
@@ -347,8 +409,31 @@ deleted_at               | datetime     | Soft delete timestamp
 #### **PerfilRecompensas**
 Histórico de recompensas resgatadas por usuários.
 ```
-id_perfil (FK, PK)     | int | Referência ao Perfil
-id_recompensa (FK, PK) | int | Referência ao Recompensas
+id_perfil (FK)         | int      | Referência ao Perfil
+id_recompensa (FK)     | int      | Referência ao Recompensas
+redeemed_at            | datetime | Quando foi resgatada
+redeemed_price         | int      | Preço pago no momento do resgate
+```
+
+#### **PerfilGamificacao**
+Progresso de gamificação de cada perfil.
+```
+id_perfil (PK, FK)   | int      | Referência ao Perfil
+xp_total             | int      | XP acumulado
+streak_days          | int      | Dias seguidos de atividade
+last_activity_date   | date     | Última atividade
+created_at           | datetime | Criação
+updated_at           | datetime | Última atualização
+```
+
+#### **ConquistasPerfil**
+Conquistas desbloqueadas por perfil (única por `id_perfil` + `achievement_key`).
+```
+id (PK)          | int         | Auto-increment
+id_perfil (FK)   | int         | Referência ao Perfil
+achievement_key  | varchar(48) | Identificador da conquista
+xp_awarded       | int         | XP concedido
+unlocked_at      | datetime    | Quando foi desbloqueada
 ```
 
 
