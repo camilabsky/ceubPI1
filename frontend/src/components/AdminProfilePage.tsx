@@ -332,9 +332,6 @@ const handleUseCurrentLocation = () => {
               {user?.nome || 'Administrador'}
             </h1>
 
-            <p className="text-white/90 text-[13px] mt-1">
-              {hortaNome}
-            </p>
             <p className="text-white/80 text-[12px] mt-1">{user?.email || 'E-mail não informado'}</p>
             <div className="mt-1"><ProfileLocationEditor /><ProfilePhoneEditor /></div>
           </div>
@@ -387,83 +384,15 @@ const handleUseCurrentLocation = () => {
       </div>
     </div>
 
-    {/* Informações da conta */}
+    {/* Informações da horta */}
     <div className="px-4 mb-6">
-      <h2 className="text-[16px] font-semibold text-neutral-950 mb-4 px-2">
-        Informações da conta
+      <h2 className="text-[16px] font-semibold text-neutral-950 px-2">
+        Informações da horta
       </h2>
+      <p className="text-[12px] text-[#66736a] mb-4 px-2">{hortaNome}</p>
 
       <div className="bg-white rounded-[14px] border border-gray-200 overflow-hidden">
-        {/* Nome */}
-        <div className="p-4 border-b border-gray-100">
-          {!isEditingName ? (
-            <button
-              type="button"
-              onClick={() => {
-                setNewName(user?.nome || '');
-                setIsEditingName(true);
-              }}
-              className="w-full flex items-center gap-3 text-left"
-            >
-              <div className="size-9 rounded-full bg-gray-100 flex items-center justify-center">
-                <User className="size-5 text-gray-600" />
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <p className="text-[12px] text-gray-500">
-                  Nome
-                </p>
-
-                <p className="text-[14px] text-neutral-950 truncate">
-                  {user?.nome || 'Não informado'}
-                </p>
-              </div>
-
-              <ChevronRight className="size-5 text-gray-400" />
-            </button>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="size-9 rounded-full bg-gray-100 flex items-center justify-center">
-                  <User className="size-5 text-gray-600" />
-                </div>
-
-                <p className="text-[14px] font-medium text-neutral-950">
-                  Alterar nome
-                </p>
-              </div>
-
-              <input
-                type="text"
-                value={newName}
-                onChange={(event) => setNewName(event.target.value)}
-                placeholder="Digite seu novo nome *"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500"
-              />
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsEditingName(false)}
-                  disabled={isSavingName}
-                  className="flex-1 rounded-lg border border-gray-300 py-2 text-[13px] text-gray-700"
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSaveName}
-                  disabled={isSavingName}
-                  className="flex-1 rounded-lg bg-[#00a63e] py-2 text-[13px] text-white disabled:opacity-60"
-                >
-                  {isSavingName ? 'Salvando...' : 'Salvar'}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-        <div id="admin-garden-location" className="p-4 border-b border-gray-100 scroll-mt-5">
+        <div id="admin-garden-location" className="p-4 scroll-mt-5">
       {!isEditingLocation ? (
       <>
       <button
@@ -600,7 +529,86 @@ const handleUseCurrentLocation = () => {
       </div>
     )}
     </div>
-        
+      </div>
+    </div>
+
+    {/* Informações pessoais */}
+    <div className="px-4 mb-6">
+      <h2 className="text-[16px] font-semibold text-neutral-950 mb-4 px-2">
+        Informações pessoais
+      </h2>
+
+      <div className="bg-white rounded-[14px] border border-gray-200 overflow-hidden">
+        {/* Nome */}
+        <div className="p-4 border-b border-gray-100">
+          {!isEditingName ? (
+            <button
+              type="button"
+              onClick={() => {
+                setNewName(user?.nome || '');
+                setIsEditingName(true);
+              }}
+              className="w-full flex items-center gap-3 text-left"
+            >
+              <div className="size-9 rounded-full bg-gray-100 flex items-center justify-center">
+                <User className="size-5 text-gray-600" />
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] text-gray-500">
+                  Nome
+                </p>
+
+                <p className="text-[14px] text-neutral-950 truncate">
+                  {user?.nome || 'Não informado'}
+                </p>
+              </div>
+
+              <ChevronRight className="size-5 text-gray-400" />
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="size-9 rounded-full bg-gray-100 flex items-center justify-center">
+                  <User className="size-5 text-gray-600" />
+                </div>
+
+                <p className="text-[14px] font-medium text-neutral-950">
+                  Alterar nome
+                </p>
+              </div>
+
+              <input
+                type="text"
+                value={newName}
+                onChange={(event) => setNewName(event.target.value)}
+                placeholder="Digite seu novo nome *"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500"
+              />
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingName(false)}
+                  disabled={isSavingName}
+                  className="flex-1 rounded-lg border border-gray-300 py-2 text-[13px] text-gray-700"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveName}
+                  disabled={isSavingName}
+                  className="flex-1 rounded-lg bg-[#00a63e] py-2 text-[13px] text-white disabled:opacity-60"
+                >
+                  {isSavingName ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* E-mail */}
         <div className="p-4 border-b border-gray-100">
           {!isEditingEmail ? (
