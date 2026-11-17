@@ -2,6 +2,7 @@
 const ESTADOS = new Set(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
 const PHONE_PATTERN = /^\+?[0-9 ()-]{8,20}$/;
 const CITY_PATTERN = /^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function parsePhone(value) {
   if (value === undefined || value === null) return { ok: true, telefone: null };
@@ -10,6 +11,15 @@ function parsePhone(value) {
   if (!telefone) return { ok: true, telefone: null };
   if (telefone.length > 24 || !PHONE_PATTERN.test(telefone)) return { ok: false, error: 'Informe um telefone válido' };
   return { ok: true, telefone };
+}
+
+function parseEmail(value, maxLength = 160) {
+  if (value === undefined || value === null) return { ok: true, email: null };
+  if (typeof value !== 'string') return { ok: false, error: 'Informe um e-mail válido' };
+  const email = value.trim();
+  if (!email) return { ok: true, email: null };
+  if (email.length > maxLength || !EMAIL_PATTERN.test(email)) return { ok: false, error: 'Informe um e-mail válido' };
+  return { ok: true, email };
 }
 
 function isTextOrMissing(value) {
@@ -27,4 +37,4 @@ function parseLocation(cidadeInput, ufInput) {
   return { ok: true, cidade, uf };
 }
 
-module.exports = { ESTADOS, parsePhone, parseLocation };
+module.exports = { ESTADOS, parsePhone, parseEmail, parseLocation };

@@ -9,12 +9,13 @@ export interface HortaDraft {
   endereco: string;
   cidade: string;
   uf: string;
-  contato: string;
+  telefone: string;
+  email: string;
   lat: string;
   lng: string;
 }
 
-export const HORTA_VAZIA: HortaDraft = { nome: '', descricao: '', endereco: '', cidade: '', uf: '', contato: '', lat: '', lng: '' };
+export const HORTA_VAZIA: HortaDraft = { nome: '', descricao: '', endereco: '', cidade: '', uf: '', telefone: '', email: '', lat: '', lng: '' };
 
 const UFS = new Set(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
 
@@ -24,9 +25,9 @@ export function validarHorta(d: HortaDraft, exigirDadosCompletos = false): strin
   if (!d.endereco.trim()) return 'Informe o endereço da horta';
   if (exigirDadosCompletos && !d.cidade.trim()) return 'Informe a cidade da horta';
   if (exigirDadosCompletos && !UFS.has(d.uf.trim().toUpperCase())) return 'Informe uma UF brasileira válida';
-  if (exigirDadosCompletos && !d.contato.trim()) return 'Informe um telefone ou e-mail de contato da horta';
-  if (exigirDadosCompletos && d.contato.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.contato.trim()) && !/^\+?[0-9 ()-]{8,20}$/.test(d.contato.trim())) return 'Informe um telefone ou e-mail válido para o contato da horta';
-  if (d.nome.trim().length > 128 || d.endereco.trim().length > 255 || d.descricao.trim().length > 255 || d.cidade.trim().length > 100 || d.contato.trim().length > 160) return 'Um dos campos da horta excede o limite permitido';
+  if (d.telefone.trim() && !/^\+?[0-9 ()-]{8,20}$/.test(d.telefone.trim())) return 'Informe um telefone válido para a horta';
+  if (d.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email.trim())) return 'Informe um e-mail válido para a horta';
+  if (d.nome.trim().length > 128 || d.endereco.trim().length > 255 || d.descricao.trim().length > 255 || d.cidade.trim().length > 100 || d.telefone.trim().length > 24 || d.email.trim().length > 160) return 'Um dos campos da horta excede o limite permitido';
   const temLatitude = Boolean(d.lat.trim());
   const temLongitude = Boolean(d.lng.trim());
   if (!temLatitude && !temLongitude) return null;
@@ -46,7 +47,8 @@ export function payloadHorta(d: HortaDraft) {
     endereco: d.endereco.trim(),
     cidade: d.cidade.trim(),
     uf: d.uf.trim().toUpperCase(),
-    contato: d.contato.trim(),
+    telefone: d.telefone.trim(),
+    email: d.email.trim(),
     latitude: d.lat.trim() ? Number(d.lat) : null,
     longitude: d.lng.trim() ? Number(d.lng) : null,
   };
@@ -124,7 +126,12 @@ export default function HortaFields({ value, onChange, mostrarDescricao = false,
         </div>
       </div>
 
-      {mostrarDescricao && <div><label className="mb-1 block text-[13px] text-[#4a5565]">Contato da horta (telefone ou e-mail) *</label><input className={inputCls} maxLength={160} value={value.contato} onChange={(e) => set({ contato: e.target.value })} placeholder="(61) 99999-9999 ou contato@horta.org" /></div>}
+      {mostrarDescricao && <div>
+        <div className="grid grid-cols-2 gap-2">
+          <div><label className="mb-1 block text-[13px] text-[#4a5565]">Telefone <span className="text-[#849087]">(opcional)</span></label><input className={inputCls} maxLength={24} value={value.telefone} onChange={(e) => set({ telefone: e.target.value })} placeholder="(61) 99999-9999" /></div>
+          <div><label className="mb-1 block text-[13px] text-[#4a5565]">E-mail <span className="text-[#849087]">(opcional)</span></label><input className={inputCls} maxLength={160} type="email" value={value.email} onChange={(e) => set({ email: e.target.value })} placeholder="contato@horta.org" /></div>
+        </div>
+      </div>}
 
       <div>
         <div className="mb-1 flex items-center justify-between">

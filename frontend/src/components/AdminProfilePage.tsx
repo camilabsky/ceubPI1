@@ -52,7 +52,8 @@ export default function AdminProfilePage({
   const [newDescricaoHorta, setNewDescricaoHorta] = useState('');
   const [newCidadeHorta, setNewCidadeHorta] = useState('');
   const [newUfHorta, setNewUfHorta] = useState('');
-  const [newContatoHorta, setNewContatoHorta] = useState('');
+  const [newTelefoneHorta, setNewTelefoneHorta] = useState('');
+  const [newEmailHorta, setNewEmailHorta] = useState('');
   const [isLeavingMemberRole, setIsLeavingMemberRole] = useState(false);
 
   const leaveMemberRole = async () => {
@@ -79,7 +80,8 @@ export default function AdminProfilePage({
     setNewDescricaoHorta(garden?.descricao || '');
     setNewCidadeHorta(garden?.cidade || '');
     setNewUfHorta(garden?.uf || '');
-    setNewContatoHorta(garden?.contato || '');
+    setNewTelefoneHorta(garden?.telefone || '');
+    setNewEmailHorta(garden?.email || '');
     setIsEditingLocation(true);
     requestAnimationFrame(() => document.getElementById('admin-garden-location')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   }, [editGardenOnOpen, user]);
@@ -180,7 +182,8 @@ export default function AdminProfilePage({
   if (newEndereco.trim().length > 255) return toast.error('O endereço deve ter no máximo 255 caracteres');
   if (newDescricaoHorta.trim().length > 255) return toast.error('A descrição deve ter no máximo 255 caracteres');
   if (newCidadeHorta.trim() && !newUfHorta.trim()) return toast.error('Informe a UF junto com a cidade');
-  if (newContatoHorta.trim().length > 160) return toast.error('O contato deve ter no máximo 160 caracteres');
+  if (newTelefoneHorta.trim() && (newTelefoneHorta.trim().length > 24 || !/^\+?[0-9 ()-]{8,20}$/.test(newTelefoneHorta.trim()))) return toast.error('Informe um telefone válido');
+  if (newEmailHorta.trim() && (newEmailHorta.trim().length > 160 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmailHorta.trim()))) return toast.error('Informe um e-mail válido');
 
   setIsSavingLocation(true);
   try {
@@ -193,7 +196,7 @@ export default function AdminProfilePage({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ latitude: lat, longitude: lng, endereco: newEndereco, descricao: newDescricaoHorta, cidade: newCidadeHorta, uf: newUfHorta, contato: newContatoHorta }),
+        body: JSON.stringify({ latitude: lat, longitude: lng, endereco: newEndereco, descricao: newDescricaoHorta, cidade: newCidadeHorta, uf: newUfHorta, telefone: newTelefoneHorta, email: newEmailHorta }),
       }
     );
 
@@ -486,7 +489,8 @@ const handleUseCurrentLocation = () => {
           setNewDescricaoHorta(horta?.descricao || '');
           setNewCidadeHorta(horta?.cidade || '');
           setNewUfHorta(horta?.uf || '');
-          setNewContatoHorta(horta?.contato || '');
+          setNewTelefoneHorta(horta?.telefone || '');
+          setNewEmailHorta(horta?.email || '');
           setIsEditingLocation(true);
         }}
         className="w-full flex items-center gap-3 text-left"
@@ -516,7 +520,7 @@ const handleUseCurrentLocation = () => {
       {activeGarden?.role === 'ADMIN' && <div className="mt-3 space-y-3 pl-12">
         <p className="text-[12px] leading-5 text-[#66736a]">{activeGarden.descricao || 'Descrição não cadastrada.'}</p>
         <p className="text-[12px] text-[#66736a]">{[activeGarden.cidade, activeGarden.uf].filter(Boolean).join(' / ') || 'Cidade e UF não informadas'}</p>
-        {activeGarden.contato && <p className="text-[12px] text-[#66736a]">Contato: {activeGarden.contato}</p>}
+        {(activeGarden.telefone || activeGarden.email) && <p className="text-[12px] text-[#66736a]">Contato: {[activeGarden.telefone, activeGarden.email].filter(Boolean).join(' · ')}</p>}
         <p className="text-[11px] text-[#718075]">{activeGarden.latitude != null && activeGarden.longitude != null ? `${activeGarden.latitude}, ${activeGarden.longitude}` : 'Coordenadas não informadas'}</p>
         <HortaMap latitude={activeGarden.latitude} longitude={activeGarden.longitude} nome={activeGarden.horta_nome} endereco={activeGarden.endereco} height="180px" />
       </div>}
@@ -554,7 +558,9 @@ const handleUseCurrentLocation = () => {
 
         <div className="grid grid-cols-[1fr_5rem] gap-3"><div><label className="text-[12px] text-gray-500 mb-1 block">Cidade</label><input maxLength={100} value={newCidadeHorta} onChange={(event) => setNewCidadeHorta(event.target.value)} placeholder="Cidade" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div><div><label className="text-[12px] text-gray-500 mb-1 block">UF</label><input maxLength={2} value={newUfHorta} onChange={(event) => setNewUfHorta(event.target.value.toUpperCase())} placeholder="UF" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div></div>
 
-        <div><label className="text-[12px] text-gray-500 mb-1 block">Contato</label><input maxLength={160} value={newContatoHorta} onChange={(event) => setNewContatoHorta(event.target.value)} placeholder="Telefone ou e-mail" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div>
+        <div><label className="text-[12px] text-gray-500 mb-1 block">Telefone <span className="text-gray-400">(opcional)</span></label><input maxLength={24} value={newTelefoneHorta} onChange={(event) => setNewTelefoneHorta(event.target.value)} placeholder="(61) 99999-9999" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div>
+
+        <div><label className="text-[12px] text-gray-500 mb-1 block">E-mail <span className="text-gray-400">(opcional)</span></label><input maxLength={160} type="email" value={newEmailHorta} onChange={(event) => setNewEmailHorta(event.target.value)} placeholder="contato@horta.org" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500" /></div>
 
         <div>
           <label className="text-[12px] text-gray-500 mb-1 block">Descrição da horta</label>

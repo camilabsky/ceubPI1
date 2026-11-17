@@ -33,7 +33,7 @@ function route(url: string, init?: RequestInit) {
   return Promise.resolve(handler(init)).then(({ status = 200, body }) => new Response(JSON.stringify(body), { status }));
 }
 
-const horta = { id: 7, nome: 'Horta Girassol', descricao: 'Teste', latitude: -15.79, longitude: -47.88, endereco: 'Rua 1', cidade: 'Brasília', uf: 'DF', contato: 'h@x.test', participantes: 3 };
+const horta = { id: 7, nome: 'Horta Girassol', descricao: 'Teste', latitude: -15.79, longitude: -47.88, endereco: 'Rua 1', cidade: 'Brasília', uf: 'DF', telefone: null, email: 'h@x.test', participantes: 3 };
 
 beforeEach(() => {
   calls.length = 0;

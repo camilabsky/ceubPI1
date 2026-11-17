@@ -19,7 +19,8 @@ type Horta = {
   endereco: string | null;
   cidade: string | null;
   uf: string | null;
-  contato: string | null;
+  telefone: string | null;
+  email: string | null;
   participantes: number | string;
 };
 
@@ -259,7 +260,7 @@ export default function ExplorePage({ onCreateGarden }: ExplorePageProps) {
 
   const listaVisivel = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase('pt-BR');
-    const encontrados = hortas.filter((horta) => `${horta.nome} ${horta.endereco ?? ''} ${horta.descricao ?? ''} ${horta.cidade ?? ''} ${horta.uf ?? ''} ${horta.contato ?? ''}`.toLocaleLowerCase('pt-BR').includes(termo));
+    const encontrados = hortas.filter((horta) => `${horta.nome} ${horta.endereco ?? ''} ${horta.descricao ?? ''} ${horta.cidade ?? ''} ${horta.uf ?? ''} ${horta.telefone ?? ''} ${horta.email ?? ''}`.toLocaleLowerCase('pt-BR').includes(termo));
     if (filtro === 'Mais ativas') return [...encontrados].sort((a, b) => Number(b.participantes) - Number(a.participantes));
     if (filtro === 'Novas hortas') return [...encontrados].sort((a, b) => b.id - a.id);
     if (filtro === 'Mais próximas' && posicao) {
@@ -467,7 +468,7 @@ export default function ExplorePage({ onCreateGarden }: ExplorePageProps) {
 
               <article className="rounded-xl border border-[#e4eae4] bg-white p-4"><div className="flex items-center gap-2"><ShieldCheck className="size-4 text-[#16803d]" /><h3 className="text-[14px] font-semibold text-[#243328]">Responsável pela horta</h3></div>{hortaDetalhada?.responsaveis?.length ? <ul className="mt-2 space-y-1 text-[13px] text-[#58665c]">{hortaDetalhada.responsaveis.map((nome, index) => <li key={`${nome}-${index}`}>{nome}</li>)}</ul> : <p className="mt-2 text-[12px] text-[#89948b]">Responsável não informado.</p>}</article>
 
-              {hortaDetalhada?.contato && <article className="rounded-xl border border-[#e4eae4] bg-white p-4"><div className="flex items-center gap-2"><Mail className="size-4 text-[#16803d]" /><h3 className="text-[14px] font-semibold text-[#243328]">Contato</h3></div><a href={hortaDetalhada.contato.includes('@') ? `mailto:${hortaDetalhada.contato}` : `tel:${hortaDetalhada.contato.replace(/[^+0-9]/g, '')}`} className="mt-2 inline-flex items-center gap-1.5 break-all text-[13px] text-[#16803d] hover:underline">{hortaDetalhada.contato.includes('@') ? <Mail className="size-3.5 shrink-0" /> : <Phone className="size-3.5 shrink-0" />}{hortaDetalhada.contato}</a></article>}
+              {(hortaDetalhada?.telefone || hortaDetalhada?.email) && <article className="rounded-xl border border-[#e4eae4] bg-white p-4"><div className="flex items-center gap-2"><Mail className="size-4 text-[#16803d]" /><h3 className="text-[14px] font-semibold text-[#243328]">Contato</h3></div><div className="mt-2 space-y-1.5">{hortaDetalhada?.telefone && <a href={`tel:${hortaDetalhada.telefone.replace(/[^+0-9]/g, '')}`} className="flex items-center gap-1.5 break-all text-[13px] text-[#16803d] hover:underline"><Phone className="size-3.5 shrink-0" />{hortaDetalhada.telefone}</a>}{hortaDetalhada?.email && <a href={`mailto:${hortaDetalhada.email}`} className="flex items-center gap-1.5 break-all text-[13px] text-[#16803d] hover:underline"><Mail className="size-3.5 shrink-0" />{hortaDetalhada.email}</a>}</div></article>}
 
               <article className="rounded-xl border border-[#e4eae4] bg-white p-4"><div className="flex items-center gap-2"><Users className="size-4 text-[#16803d]" /><h3 className="text-[14px] font-semibold text-[#243328]">Sobre a comunidade</h3></div><p className="mt-2 text-[13px] text-[#58665c]">{hortaDetalhada ? `${Number(hortaDetalhada.participantes) || 0} ${Number(hortaDetalhada.participantes) === 1 ? 'membro' : 'membros'}` : `${Number(selecionada.participantes) || 0} membros`}</p></article>
 

@@ -72,7 +72,7 @@ export default function CreateGardenPage({ onBack, onCreated }: CreateGardenPage
 
         <HortaFields value={horta} onChange={(draft) => { setHorta(draft); setConfirmarCriacao(false); }} mostrarDescricao permitirEnderecoSemCoordenadas />
 
-        {confirmarCriacao && <div className="mt-4 rounded-lg bg-[#F0FDF4] p-4 text-[13px] text-[#34483a]"><h2 className="font-semibold">Confirme os dados da horta</h2><p className="mt-2"><strong>{horta.nome}</strong> — {horta.cidade}/{horta.uf.toUpperCase()}</p><p>{horta.endereco}</p><p>{horta.descricao}</p><p>Contato: {horta.contato}</p><button type="button" onClick={() => setConfirmarCriacao(false)} className="mt-2 text-[#16803d] underline">Editar dados</button></div>}
+        {confirmarCriacao && <div className="mt-4 rounded-lg bg-[#F0FDF4] p-4 text-[13px] text-[#34483a]"><h2 className="font-semibold">Confirme os dados da horta</h2><p className="mt-2"><strong>{horta.nome}</strong> — {horta.cidade}/{horta.uf.toUpperCase()}</p><p>{horta.endereco}</p><p>{horta.descricao}</p>{(horta.telefone || horta.email) && <p>Contato: {[horta.telefone, horta.email].filter(Boolean).join(' · ')}</p>}<button type="button" onClick={() => setConfirmarCriacao(false)} className="mt-2 text-[#16803d] underline">Editar dados</button></div>}
 
         <button
           onClick={criarHorta}

@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS Horta (
   endereco varchar(255) NULL,
   cidade varchar(100) NULL,
   uf char(2) NULL,
-  contato varchar(160) NULL
+  telefone varchar(24) NULL,
+  email varchar(160) NULL
 );
 
 CREATE TABLE IF NOT EXISTS Usuario (

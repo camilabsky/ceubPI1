@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { ESTADOS, parsePhone, parseLocation } = require('./userContact');
+const { ESTADOS, parsePhone, parseEmail, parseLocation } = require('./userContact');
 
 test('ESTADOS contém as 27 UFs', () => {
   assert.equal(ESTADOS.size, 27);
@@ -40,4 +40,19 @@ test('parseLocation rejeita cidade ou UF que não sejam texto', () => {
   assert.equal(parseLocation('Brasília', 53).ok, false);
   assert.equal(parseLocation({}, []).ok, false);
   assert.deepEqual(parseLocation(null, null), { ok: true, cidade: null, uf: null });
+});
+
+test('parseEmail aceita vazio como sem e-mail', () => {
+  assert.deepEqual(parseEmail(undefined), { ok: true, email: null });
+  assert.deepEqual(parseEmail(null), { ok: true, email: null });
+  assert.deepEqual(parseEmail('   '), { ok: true, email: null });
+});
+
+test('parseEmail valida e apara', () => {
+  assert.deepEqual(parseEmail(' contato@horta.org '), { ok: true, email: 'contato@horta.org' });
+  assert.equal(parseEmail('invalido').ok, false);
+  assert.equal(parseEmail('sem-arroba.com').ok, false);
+  assert.equal(parseEmail('a@b.com'.padEnd(161, 'x')).ok, false);
+  assert.equal(parseEmail(123).ok, false);
+  assert.equal(typeof parseEmail('invalido').error, 'string');
 });

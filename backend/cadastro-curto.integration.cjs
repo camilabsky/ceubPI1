@@ -95,7 +95,7 @@ async function phoneScenarios(minimal) {
 async function createGarden(admin, label) {
   const garden = await request('/hortas', { token: admin.token, method: 'POST', body: {
     nome: `${label} ${suffix}`, descricao: 'Horta de teste do cadastro curto', latitude: -15.79, longitude: -47.88,
-    endereco: 'Endereço de teste isolado', cidade: 'Brasília', uf: 'DF', contato: 'horta@example.test',
+    endereco: 'Endereço de teste isolado', cidade: 'Brasília', uf: 'DF', email: 'horta@example.test',
   } });
   assert.equal(garden.status, 201, JSON.stringify(garden.data));
   return garden.data.id_horta;

@@ -29,7 +29,7 @@ async function register(name, gardenName, gardenId) {
   const { token } = result.data;
   if (gardenName) {
     const garden = await request('/hortas', { token, method: 'POST', body: {
-      nome: gardenName, descricao: 'Horta comunitária de teste', latitude: -15.79, longitude: -47.88, endereco: 'Endereço de teste isolado', cidade: 'Brasília', uf: 'DF', contato: 'horta@example.test',
+      nome: gardenName, descricao: 'Horta comunitária de teste', latitude: -15.79, longitude: -47.88, endereco: 'Endereço de teste isolado', cidade: 'Brasília', uf: 'DF', email: 'horta@example.test',
     } });
     assert.equal(garden.status, 201, JSON.stringify(garden.data));
     return { token, user: garden.data.user };

@@ -11,7 +11,8 @@ interface Role {
   descricao: string | null;
   cidade: string | null;
   uf: string | null;
-  contato: string | null;
+  telefone: string | null;
+  email: string | null;
 }
 
 interface User {

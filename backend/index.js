@@ -12,7 +12,7 @@ const nodemailer = require('nodemailer');
 const { ACHIEVEMENTS, getAchievementProgress, getActiveStreak, getLevelInfo, getNextStreak } = require('./gamification');
 const { distanceInMeters, isValidCoordinate } = require('./geolocation');
 const { GEMINI_MODEL, requestGeminiAnalysis, shouldAutoApprove } = require('./gemini');
-const { parsePhone, parseLocation } = require('./userContact');
+const { parsePhone, parseEmail, parseLocation } = require('./userContact');
 
 const app = express();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -128,7 +128,7 @@ function tokenFromHeader(authorizationHeader) {
 
 async function getUserRoles(id_usuario) {
     const [roles] = await db.query(
-        `SELECT uhr.papel AS role, uhr.id_horta, h.nome AS horta_nome, h.latitude, h.longitude, h.endereco, h.descricao, h.cidade, h.uf, h.contato
+        `SELECT uhr.papel AS role, uhr.id_horta, h.nome AS horta_nome, h.latitude, h.longitude, h.endereco, h.descricao, h.cidade, h.uf, h.telefone, h.email
         FROM UsuarioHortaRole uhr
         INNER JOIN Horta h ON h.id = uhr.id_horta
         WHERE uhr.id_usuario = ?`,
@@ -1187,11 +1187,11 @@ app.get('/hortas', async (req, res) => {
         res.set('Pragma', 'no-cache');
         res.set('Expires', '0');
         const [results] = await db.query(
-            `SELECT h.id, h.nome, h.descricao, h.latitude, h.longitude, h.endereco, h.cidade, h.uf, h.contato,
+            `SELECT h.id, h.nome, h.descricao, h.latitude, h.longitude, h.endereco, h.cidade, h.uf, h.telefone, h.email,
                     COUNT(CASE WHEN uhr.papel = 'MEMBER' THEN 1 END) AS participantes
              FROM Horta h
              LEFT JOIN UsuarioHortaRole uhr ON uhr.id_horta = h.id
-             GROUP BY h.id, h.nome, h.descricao, h.latitude, h.longitude, h.endereco, h.cidade, h.uf, h.contato
+             GROUP BY h.id, h.nome, h.descricao, h.latitude, h.longitude, h.endereco, h.cidade, h.uf, h.telefone, h.email
              ORDER BY h.nome ASC`
         );
         return res.send(results);
@@ -1209,7 +1209,7 @@ app.get('/hortas/:id/detalhes', async (req, res) => {
     if (!Number.isInteger(id_horta) || id_horta <= 0) return res.status(400).send({ error: 'Horta invalida' });
     try {
         const [hortas] = await db.query(
-            `SELECT h.id, h.nome, h.descricao, h.latitude, h.longitude, h.endereco, h.cidade, h.uf, h.contato,
+            `SELECT h.id, h.nome, h.descricao, h.latitude, h.longitude, h.endereco, h.cidade, h.uf, h.telefone, h.email,
                     (SELECT COUNT(DISTINCT garden_member.id_usuario) FROM UsuarioHortaRole garden_member WHERE garden_member.id_horta = h.id AND garden_member.papel = 'MEMBER') AS participantes,
                     (SELECT COUNT(*) FROM Tarefas t WHERE t.id_horta = h.id AND t.id_perfil IS NULL AND t.status = 'available' AND t.concluido = false AND t.deleted_at IS NULL) AS atividades_disponiveis
              FROM Horta h WHERE h.id = ? LIMIT 1`,
@@ -1744,7 +1744,6 @@ app.post('/hortas', requireAuth, async (req, res) => {
     const { nome, descricao, latitude, longitude, endereco } = req.body;
     const cidade = typeof req.body.cidade === 'string' ? req.body.cidade.trim() : '';
     const uf = typeof req.body.uf === 'string' ? req.body.uf.trim().toUpperCase() : '';
-    const contato = typeof req.body.contato === 'string' ? req.body.contato.trim() : '';
     const estados = new Set(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
 
     if (typeof nome !== 'string' || !nome.trim()) {
@@ -1760,7 +1759,11 @@ app.post('/hortas', requireAuth, async (req, res) => {
         return res.status(400).send({ error: 'Informe um endereço válido para a horta' });
     }
     if (!cidade || cidade.length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u.test(cidade) || !estados.has(uf)) return res.status(400).send({ error: 'Informe uma cidade e UF válidas para a horta' });
-    if (!contato || contato.length > 160 || (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contato) && !/^\+?[0-9 ()-]{8,20}$/.test(contato))) return res.status(400).send({ error: 'Informe um telefone ou e-mail de contato válido para a horta' });
+    const phone = parsePhone(req.body.telefone);
+    if (!phone.ok) return res.status(400).send({ error: phone.error });
+    const email = parseEmail(req.body.email);
+    if (!email.ok) return res.status(400).send({ error: email.error });
+    const { telefone } = phone;
 
     const hasLatitude = latitude !== '' && latitude != null;
     const hasLongitude = longitude !== '' && longitude != null;
@@ -1775,8 +1778,8 @@ app.post('/hortas', requireAuth, async (req, res) => {
         await connection.beginTransaction();
 
         const [hortaResult] = await connection.query(
-            'INSERT INTO Horta (nome, descricao, latitude, longitude, endereco, cidade, uf, contato) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [nome.trim(), descricao.trim(), lat, lng, endereco.trim(), cidade, uf, contato]
+            'INSERT INTO Horta (nome, descricao, latitude, longitude, endereco, cidade, uf, telefone, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [nome.trim(), descricao.trim(), lat, lng, endereco.trim(), cidade, uf, telefone, email.email]
         );
         const id_horta = hortaResult.insertId;
 
@@ -2095,7 +2098,6 @@ app.put('/admin/horta', requireAuth, requireHortaAdmin, async (req, res) => {
         const { latitude, longitude, endereco, descricao } = req.body;
         const cidade = typeof req.body.cidade === 'string' ? req.body.cidade.trim() : '';
         const uf = typeof req.body.uf === 'string' ? req.body.uf.trim().toUpperCase() : '';
-        const contato = typeof req.body.contato === 'string' ? req.body.contato.trim() : '';
         const hasLatitude = latitude !== '' && latitude != null;
         const hasLongitude = longitude !== '' && longitude != null;
         if (hasLatitude !== hasLongitude) return res.status(400).send({ error: 'Informe latitude e longitude juntas ou deixe ambas vazias' });
@@ -2109,14 +2111,18 @@ app.put('/admin/horta', requireAuth, requireHortaAdmin, async (req, res) => {
         const estados = new Set(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
         if (uf && !estados.has(uf)) return res.status(400).send({ error: 'Informe uma UF brasileira válida' });
         if ((cidade && !uf) || (!cidade && uf)) return res.status(400).send({ error: 'Informe cidade e UF juntas' });
-        if (contato.length > 160 || (contato && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contato) && !/^\+?[0-9 ()-]{8,20}$/.test(contato))) return res.status(400).send({ error: 'Informe um contato válido' });
+        const phone = parsePhone(req.body.telefone);
+        if (!phone.ok) return res.status(400).send({ error: phone.error });
+        const email = parseEmail(req.body.email);
+        if (!email.ok) return res.status(400).send({ error: email.error });
+        const { telefone } = phone;
 
         await db.query(
-            'UPDATE Horta SET latitude = ?, longitude = ?, endereco = ?, descricao = ?, cidade = ?, uf = ?, contato = ? WHERE id = ?',
-            [lat, lng, endereco.trim() || null, typeof descricao === 'string' && descricao.trim() ? descricao.trim() : null, cidade || null, uf || null, contato || null, req.id_horta]
+            'UPDATE Horta SET latitude = ?, longitude = ?, endereco = ?, descricao = ?, cidade = ?, uf = ?, telefone = ?, email = ? WHERE id = ?',
+            [lat, lng, endereco.trim() || null, typeof descricao === 'string' && descricao.trim() ? descricao.trim() : null, cidade || null, uf || null, telefone, email.email, req.id_horta]
         );
 
-        return res.send({ message: 'Informações da horta atualizadas', latitude: lat, longitude: lng, endereco: endereco.trim() || null, descricao: typeof descricao === 'string' && descricao.trim() ? descricao.trim() : null, cidade: cidade || null, uf: uf || null, contato: contato || null });
+        return res.send({ message: 'Informações da horta atualizadas', latitude: lat, longitude: lng, endereco: endereco.trim() || null, descricao: typeof descricao === 'string' && descricao.trim() ? descricao.trim() : null, cidade: cidade || null, uf: uf || null, telefone, email: email.email });
     } catch (error) {
         console.error('Erro em PUT /admin/horta:', error);
         return res.status(500).send({ error: 'Erro ao atualizar localizacao da horta' });
@@ -2162,11 +2168,14 @@ async function ensureGamificationSchema() {
     if (stateColumns.length === 0) await db.query('ALTER TABLE Usuario ADD COLUMN uf char(2) NULL');
     const [phoneColumns] = await db.query("SHOW COLUMNS FROM Usuario LIKE 'telefone'");
     if (phoneColumns.length === 0) await db.query('ALTER TABLE Usuario ADD COLUMN telefone varchar(24) NULL');
-    const gardenColumns = [['cidade', 'varchar(100) NULL'], ['uf', 'char(2) NULL'], ['contato', 'varchar(160) NULL']];
+    const gardenColumns = [['cidade', 'varchar(100) NULL'], ['uf', 'char(2) NULL'], ['contato', 'varchar(160) NULL'], ['telefone', 'varchar(24) NULL'], ['email', 'varchar(160) NULL']];
     for (const [column, definition] of gardenColumns) {
         const [columns] = await db.query(`SHOW COLUMNS FROM Horta LIKE '${column}'`);
         if (columns.length === 0) await db.query(`ALTER TABLE Horta ADD COLUMN ${column} ${definition}`);
     }
+    // Migra o contato antigo (telefone ou e-mail em um único campo) para as novas colunas separadas.
+    await db.query("UPDATE Horta SET telefone = contato WHERE telefone IS NULL AND contato IS NOT NULL AND contato NOT LIKE '%@%'");
+    await db.query("UPDATE Horta SET email = contato WHERE email IS NULL AND contato IS NOT NULL AND contato LIKE '%@%'");
     const [statusColumns] = await db.query("SHOW COLUMNS FROM Tarefas LIKE 'status'");
     if (statusColumns.length === 0) {
         await db.query('ALTER TABLE Tarefas ADD COLUMN status varchar(24) NULL');
