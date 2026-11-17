@@ -412,7 +412,7 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
             <p className="-mt-2 text-[12px] text-[#66736a]">Exemplo: 50 moedas + 50 XP. Ajuste os valores desta missão; o participante verá a recompensa antes de aceitá-la.</p>
 
             <div>
-              <label className="text-[13px] text-[#4a5565] mb-1 block">Título</label>
+              <label className="text-[13px] text-[#4a5565] mb-1 block">Título<span className="text-red-600" aria-hidden="true"> *</span></label>
               <input
                 type="text"
                 placeholder="Título"
@@ -423,7 +423,7 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
             </div>
 
             <div>
-              <label className="text-[13px] text-[#4a5565] mb-1 block">Descrição</label>
+              <label className="text-[13px] text-[#4a5565] mb-1 block">Descrição<span className="text-red-600" aria-hidden="true"> *</span></label>
               <textarea
                 placeholder="Descrição"
                 value={formData.descricao}
@@ -576,7 +576,7 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
                     </div>
 
                     <div>
-                      <label className="text-[13px] text-[#4a5565] mb-1 block">Título</label>
+                      <label className="text-[13px] text-[#4a5565] mb-1 block">Título<span className="text-red-600" aria-hidden="true"> *</span></label>
                       <input
                         type="text"
                         placeholder="Título"
@@ -589,7 +589,7 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
                     </div>
 
                     <div>
-                      <label className="text-[13px] text-[#4a5565] mb-1 block">Descrição</label>
+                      <label className="text-[13px] text-[#4a5565] mb-1 block">Descrição<span className="text-red-600" aria-hidden="true"> *</span></label>
                       <textarea
                         placeholder="Descrição"
                         value={formData.descricao}

@@ -35,9 +35,9 @@ export default function ExploreLocationPrompt({ onUseLocation, onSaveCity, onDis
         <span className="text-[13px] text-[#66736A]">ou</span>
         <form onSubmit={salvar} className="flex flex-wrap items-center gap-2">
           <label className="sr-only" htmlFor="explore-prompt-cidade">Cidade</label>
-          <input id="explore-prompt-cidade" required maxLength={100} value={cidade} onChange={(e) => setCidade(e.target.value)} placeholder="Cidade" className={`${inputClass} w-40`} />
+          <input id="explore-prompt-cidade" required maxLength={100} value={cidade} onChange={(e) => setCidade(e.target.value)} placeholder="Cidade *" className={`${inputClass} w-40`} />
           <label className="sr-only" htmlFor="explore-prompt-uf">UF</label>
-          <input id="explore-prompt-uf" required maxLength={2} value={uf} onChange={(e) => setUf(e.target.value.toUpperCase())} placeholder="UF" className={`${inputClass} w-16`} />
+          <input id="explore-prompt-uf" required maxLength={2} value={uf} onChange={(e) => setUf(e.target.value.toUpperCase())} placeholder="UF *" className={`${inputClass} w-16`} />
           <button type="submit" disabled={saving} className="h-10 rounded-lg border border-[#168a3c] px-3 text-[13px] font-semibold text-[#168a3c] hover:bg-white disabled:opacity-60">
             {saving ? 'Salvando…' : 'Salvar'}
           </button>

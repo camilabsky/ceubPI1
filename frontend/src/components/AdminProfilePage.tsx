@@ -447,7 +447,7 @@ const handleUseCurrentLocation = () => {
                 type="text"
                 value={newName}
                 onChange={(event) => setNewName(event.target.value)}
-                placeholder="Digite seu novo nome"
+                placeholder="Digite seu novo nome *"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500"
               />
 
@@ -650,7 +650,7 @@ const handleUseCurrentLocation = () => {
                 type="email"
                 value={newEmail}
                 onChange={(event) => setNewEmail(event.target.value)}
-                placeholder="Digite seu novo e-mail"
+                placeholder="Digite seu novo e-mail *"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500"
               />
 
@@ -717,7 +717,7 @@ const handleUseCurrentLocation = () => {
                 type="password"
                 value={currentPassword}
                 onChange={(event) => setCurrentPassword(event.target.value)}
-                placeholder="Senha atual"
+                placeholder="Senha atual *"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500"
               />
 
@@ -725,7 +725,7 @@ const handleUseCurrentLocation = () => {
                 type="password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
-                placeholder="Nova senha"
+                placeholder="Nova senha *"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500"
               />
 
@@ -733,7 +733,7 @@ const handleUseCurrentLocation = () => {
                 type="password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
-                placeholder="Confirme a nova senha"
+                placeholder="Confirme a nova senha *"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-green-500"
               />
 

@@ -120,7 +120,7 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label htmlFor="register-nome" className="block text-[13px] text-[#4a5565] mb-2">Nome</label>
+                  <label htmlFor="register-nome" className="block text-[13px] text-[#4a5565] mb-2">Nome<span className="text-red-600" aria-hidden="true"> *</span></label>
                   <div className="relative">
                     <User className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#66736A]" />
                     <input
@@ -137,7 +137,7 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                 </div>
 
                 <div>
-                  <label htmlFor="register-email" className="block text-[13px] text-[#4a5565] mb-2">E-mail</label>
+                  <label htmlFor="register-email" className="block text-[13px] text-[#4a5565] mb-2">E-mail<span className="text-red-600" aria-hidden="true"> *</span></label>
                   <div className="relative">
                     <Mail className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#66736A]" />
                     <input
@@ -154,7 +154,7 @@ export default function RegisterPage({ onSwitchToLogin }: RegisterPageProps) {
                 </div>
 
                 <div>
-                  <label htmlFor="register-senha" className="block text-[13px] text-[#4a5565] mb-2">Senha (mín. 6 caracteres)</label>
+                  <label htmlFor="register-senha" className="block text-[13px] text-[#4a5565] mb-2">Senha (mín. 6 caracteres)<span className="text-red-600" aria-hidden="true"> *</span></label>
                   <div className="relative">
                     <Lock className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#66736A]" />
                     <input

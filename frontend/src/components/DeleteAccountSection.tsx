@@ -86,7 +86,7 @@ export default function DeleteAccountSection({ onDeleted }: DeleteAccountSection
           </label>
 
           <label className="block text-[12px] font-medium text-[#4a5565]">
-            Digite <strong>{PALAVRA_CONFIRMACAO}</strong> para confirmar
+            Digite <strong>{PALAVRA_CONFIRMACAO}</strong> para confirmar<span className="text-red-600" aria-hidden="true"> *</span>
             <input
               value={confirmacao}
               onChange={(e) => setConfirmacao(e.target.value)}
