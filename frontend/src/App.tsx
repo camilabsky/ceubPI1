@@ -79,7 +79,7 @@ export default function App() {
   };
 
   const navigate = (page: Page, intent?: AdminNavigationIntent) => {
-    const destination = (page === 'explore' || page === 'my-tasks') && isAdmin ? 'home' : page;
+    const destination = ((page === 'explore' || page === 'my-tasks') && isAdmin) || (page === 'dashboard' && !isAdmin) ? 'home' : page;
     if (destination === 'tasks' && currentPage !== 'tasks') taskPageReturn.current.tasks = currentPage;
     if (destination === 'my-tasks' && currentPage !== 'my-tasks') taskPageReturn.current['my-tasks'] = currentPage;
     setAdminNavigationIntent(intent || null);
@@ -98,7 +98,7 @@ export default function App() {
   const [tasksCompleted, setTasksCompleted] = useState(0);
   const mobileNavItems = [
     { page: 'home' as Page, label: 'Início', icon: Home },
-    { page: 'dashboard' as Page, label: 'Dashboard', icon: ChartNoAxesCombined },
+    ...(isAdmin ? [{ page: 'dashboard' as Page, label: 'Dashboard', icon: ChartNoAxesCombined }] : []),
     ...(!isAdmin ? [{ page: 'explore' as Page, label: 'Explorar', icon: Compass }] : []),
     { page: 'tasks' as Page, label: isAdmin ? 'Tarefas' : 'Disponíveis', icon: ListTodo },
     ...(!isAdmin ? [{ page: 'my-tasks' as Page, label: 'Minhas tarefas', icon: ClipboardCheck }] : []),
@@ -128,7 +128,7 @@ export default function App() {
   }, [token, user?.id_perfil]);
 
   useEffect(() => {
-    if (isAdmin && currentPage === 'explore') setCurrentPage('home');
+    if ((isAdmin && currentPage === 'explore') || (!isAdmin && currentPage === 'dashboard')) setCurrentPage('home');
   }, [isAdmin, currentPage]);
 
   useEffect(() => {
@@ -183,7 +183,7 @@ export default function App() {
               : <HomePage onNavigate={(page) => navigate(page)} />
           )}
           {currentPage === 'explore' && !isAdmin && <ExplorePage onCreateGarden={() => navigate('create-garden')} />}
-          {currentPage === 'dashboard' && <DashboardPage onNavigate={navigate} />}
+          {currentPage === 'dashboard' && isAdmin && <DashboardPage onNavigate={navigate} />}
           {currentPage === 'tasks' && (
             <TasksPage navigationIntent={adminNavigationIntent} onBack={() => returnFromTaskPage('tasks')} />
           )}
