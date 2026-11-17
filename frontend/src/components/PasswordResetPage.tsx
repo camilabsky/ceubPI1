@@ -56,7 +56,7 @@ export default function PasswordResetPage({ token }: { token: string }) {
             <p className="mt-2 text-sm text-[#66736A]">O link é válido por 5 minutos e pode ser usado uma única vez.</p>
             <form onSubmit={submit} className="mt-5 space-y-4">
               <div>
-                <label className="block text-[13px] text-[#4a5565] mb-2">Nova senha</label>
+                <label className="block text-[13px] text-[#4a5565] mb-2">Nova senha<span className="text-red-600" aria-hidden="true"> *</span></label>
                 <div className="relative">
                   <input
                     type={showSenha ? 'text' : 'password'}
@@ -81,7 +81,7 @@ export default function PasswordResetPage({ token }: { token: string }) {
               </div>
 
               <div>
-                <label className="block text-[13px] text-[#4a5565] mb-2">Confirmar nova senha</label>
+                <label className="block text-[13px] text-[#4a5565] mb-2">Confirmar nova senha<span className="text-red-600" aria-hidden="true"> *</span></label>
                 <div className="relative">
                   <input
                     type={showConfirmacao ? 'text' : 'password'}

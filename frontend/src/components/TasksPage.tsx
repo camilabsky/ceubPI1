@@ -412,7 +412,7 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
             <p className="-mt-2 text-[12px] text-[#66736a]">Exemplo: 50 moedas + 50 XP. Ajuste os valores desta missão; o participante verá a recompensa antes de aceitá-la.</p>
 
             <div>
-              <label className="text-[13px] text-[#4a5565] mb-1 block">Título</label>
+              <label className="text-[13px] text-[#4a5565] mb-1 block">Título<span className="text-red-600" aria-hidden="true"> *</span></label>
               <input
                 type="text"
                 placeholder="Título"
@@ -423,7 +423,7 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
             </div>
 
             <div>
-              <label className="text-[13px] text-[#4a5565] mb-1 block">Descrição</label>
+              <label className="text-[13px] text-[#4a5565] mb-1 block">Descrição<span className="text-red-600" aria-hidden="true"> *</span></label>
               <textarea
                 placeholder="Descrição"
                 value={formData.descricao}
@@ -554,7 +554,7 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
               <div
                 key={task.id}
                 id={isAdmin ? `admin-task-${task.id}` : undefined}
-                className={`rounded-[14px] border bg-white p-6 transition-colors ${focusedTaskId === task.id ? 'border-[#00a63e] ring-2 ring-[#00a63e]/20' : 'border-gray-200'}`}
+                className={`rounded-[14px] border bg-white p-4 sm:p-6 transition-colors ${focusedTaskId === task.id ? 'border-[#00a63e] ring-2 ring-[#00a63e]/20' : 'border-gray-200'}`}
               >
                 {editingId === task.id && isAdmin ? (
                   // EDIÇÃO INLINE
@@ -576,7 +576,7 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
                     </div>
 
                     <div>
-                      <label className="text-[13px] text-[#4a5565] mb-1 block">Título</label>
+                      <label className="text-[13px] text-[#4a5565] mb-1 block">Título<span className="text-red-600" aria-hidden="true"> *</span></label>
                       <input
                         type="text"
                         placeholder="Título"
@@ -589,7 +589,7 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
                     </div>
 
                     <div>
-                      <label className="text-[13px] text-[#4a5565] mb-1 block">Descrição</label>
+                      <label className="text-[13px] text-[#4a5565] mb-1 block">Descrição<span className="text-red-600" aria-hidden="true"> *</span></label>
                       <textarea
                         placeholder="Descrição"
                         value={formData.descricao}
@@ -707,7 +707,7 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
                 ) : (
                   // VISUALIZAÇÃO NORMAL
                   <>
-                    <div className="flex items-start justify-between mb-3 gap-3">
+                    <div className="mb-3 flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
                       <div className="min-w-0 flex-1">
                         <h3 className="text-[16px] text-neutral-950">{task.titulo}</h3>
                         {isAdmin && <span className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${getAdminTaskStatus(task).styles}`}>{getAdminTaskStatus(task).label}</span>}
@@ -719,10 +719,9 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
                             {adminTaskLocations[task.id].latitude != null && adminTaskLocations[task.id].longitude != null && ` · ${Number(adminTaskLocations[task.id].latitude).toFixed(5)}, ${Number(adminTaskLocations[task.id].longitude).toFixed(5)}`}
                           </p>}
                         </div>}
-                        {isAdmin && (task.status === 'proof_submitted' || (task.status === 'completed' && task.completion_ai_status === 'analyzed')) && <AdminTaskReview taskId={task.id} readOnly={task.status === 'completed'} onReviewed={() => { void fetchData(); }} />}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
                         <div className="bg-[#f4f0ff] rounded-[10px] px-3 py-1.5 flex items-center gap-1">
                           <Award className="size-4 text-[#7953a9]" />
                           <span className="text-[15px] text-[#7953a9] font-bold">{task.xp}</span>
@@ -759,14 +758,16 @@ export default function TasksPage({ navigationIntent, onBack }: TasksPageProps) 
                       </div>
                     </div>
 
-                    <p className="text-[14px] text-[#717182] mb-4">
+                    {isAdmin && (task.status === 'proof_submitted' || (task.status === 'completed' && task.completion_ai_status === 'analyzed')) && <AdminTaskReview taskId={task.id} readOnly={task.status === 'completed'} onReviewed={() => { void fetchData(); }} />}
+
+                    <p className="mb-4 break-words text-[14px] text-[#717182]">
                       {task.descricao}
                     </p>
 
                     <div className="space-y-3 mb-4">
-                      <div className="flex items-center gap-2 text-[14px] text-[#4a5565]">
-                        <MapPin className="size-4" />
-                        <span>{task.horta}</span>
+                      <div className="flex min-w-0 items-center gap-2 text-[14px] text-[#4a5565]">
+                        <MapPin className="size-4 shrink-0" />
+                        <span className="break-words">{task.horta}</span>
                       </div>
 
                       <div className="flex items-center gap-2 text-[14px] text-[#4a5565]">

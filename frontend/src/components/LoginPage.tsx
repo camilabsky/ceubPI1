@@ -116,7 +116,7 @@ export default function LoginPage({ onSwitchToRegister }: LoginPageProps) {
             <form onSubmit={handleSubmit} className="space-y-4">
               {loginError && <p role="alert" aria-live="polite" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800">{loginError}</p>}
               <div>
-                <label className="block text-[13px] text-[#4a5565] mb-2">E-mail</label>
+                <label className="block text-[13px] text-[#4a5565] mb-2">E-mail<span className="text-red-600" aria-hidden="true"> *</span></label>
                 <input
                   type="email"
                   value={email}
@@ -128,7 +128,7 @@ export default function LoginPage({ onSwitchToRegister }: LoginPageProps) {
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-[13px] text-[#4a5565]">Senha</label>
+                  <label className="text-[13px] text-[#4a5565]">Senha<span className="text-red-600" aria-hidden="true"> *</span></label>
                   <button
                     type="button"
                     onClick={handleForgotPassword}
@@ -168,7 +168,7 @@ export default function LoginPage({ onSwitchToRegister }: LoginPageProps) {
 
             {forgotOpen && <form onSubmit={handleRequestPasswordReset} className="mt-4 space-y-3 rounded-lg border border-[#E2E8E3] bg-[#F7F9F7] p-4">
               <p className="text-[13px] font-semibold text-[#17201A]">Recuperar senha</p>
-              <label className="block text-[12px] text-[#4a5565]">E-mail da conta
+              <label className="block text-[12px] text-[#4a5565]">E-mail da conta<span className="text-red-600" aria-hidden="true"> *</span>
                 <input type="email" required value={forgotEmail} onChange={(event) => setForgotEmail(event.target.value)} className="mt-1 w-full rounded-lg border border-[#E2E8E3] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#16A34A]" />
               </label>
               <div className="flex justify-end gap-2">

@@ -92,7 +92,7 @@ export default function CreateTaskPage({ onBack, onCreated }: CreateTaskPageProp
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-[13px] text-[#4a5565] mb-1">Titulo</label>
+            <label className="block text-[13px] text-[#4a5565] mb-1">Titulo<span className="text-red-600" aria-hidden="true"> *</span></label>
             <input
               value={form.titulo}
               onChange={(e) => updateField('titulo', e.target.value)}
@@ -102,7 +102,7 @@ export default function CreateTaskPage({ onBack, onCreated }: CreateTaskPageProp
           </div>
 
           <div>
-            <label className="block text-[13px] text-[#4a5565] mb-1">Descricao</label>
+            <label className="block text-[13px] text-[#4a5565] mb-1">Descricao<span className="text-red-600" aria-hidden="true"> *</span></label>
             <textarea
               value={form.descricao}
               onChange={(e) => updateField('descricao', e.target.value)}
@@ -112,7 +112,7 @@ export default function CreateTaskPage({ onBack, onCreated }: CreateTaskPageProp
           </div>
 
           <div>
-            <label className="block text-[13px] text-[#4a5565] mb-1">Horta</label>
+            <label className="block text-[13px] text-[#4a5565] mb-1">Horta<span className="text-red-600" aria-hidden="true"> *</span></label>
             <input
               value={form.horta}
               onChange={(e) => updateField('horta', e.target.value)}

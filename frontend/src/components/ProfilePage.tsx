@@ -64,13 +64,12 @@ interface GamificationData {
   is_max_level: boolean;
   moedas: number;
   tarefas_concluidas: number;
-  mudas_plantadas: number;
   sequencia_dias: number;
   achievements: Achievement[];
   events: ProfileEvent[];
   hortas: Garden[];
   leaderboard: CommunityMember[];
-  impact: { tasks_completed: number; gardens_count: number; seedlings_planted: number };
+  impact: { tasks_completed: number; gardens_count: number };
 }
 
 type Tab = 'achievements' | 'history';
@@ -179,9 +178,8 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onCreateG
 
         <ProfileCommunitySections />
 
-        <section className="mt-4 grid grid-cols-3 gap-2 sm:gap-3" aria-label="Seu impacto na comunidade">
+        <section className="mt-4 grid grid-cols-2 gap-2 sm:gap-3" aria-label="Seu impacto na comunidade">
           <div className="rounded-[14px] border border-gray-200 bg-white p-3 sm:p-4"><div className="flex size-8 items-center justify-center rounded-full bg-green-50"><CheckCircle2 className="size-4 text-[#00a63e]" /></div><p className="mt-2 text-[19px] font-bold leading-5 text-neutral-950">{completed}</p><p className="mt-1 text-[10px] text-[#66736a] sm:text-[11px]">Tarefas concluídas</p></div>
-          <div className="rounded-[14px] border border-gray-200 bg-white p-3 sm:p-4"><div className="flex size-8 items-center justify-center rounded-full bg-lime-50"><Sprout className="size-4 text-[#5a8b34]" /></div><p className="mt-2 text-[19px] font-bold leading-5 text-neutral-950">{data?.impact?.seedlings_planted ?? data?.mudas_plantadas ?? 0}</p><p className="mt-1 text-[10px] text-[#66736a] sm:text-[11px]">Mudas plantadas</p></div>
           <div className="rounded-[14px] border border-gray-200 bg-white p-3 sm:p-4"><div className="flex size-8 items-center justify-center rounded-full bg-blue-50"><Users className="size-4 text-[#4285d4]" /></div><p className="mt-2 text-[19px] font-bold leading-5 text-neutral-950">{data?.impact?.gardens_count ?? gardens.length}</p><p className="mt-1 text-[10px] text-[#66736a] sm:text-[11px]">Hortas</p></div>
         </section>
 
@@ -221,7 +219,7 @@ export default function ProfilePage({ coins, tasksCompleted, onLogout, onCreateG
         <DeleteAccountSection onDeleted={onLogout} />
       </div>
 
-      {editOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4" onClick={() => setEditOpen(false)}><form onSubmit={saveProfile} onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"><div className="mb-5 flex items-center justify-between"><div><h2 className="text-[17px] font-bold text-neutral-950">Editar perfil</h2><p className="mt-1 text-[12px] text-[#718075]">Atualize seus dados da comunidade.</p></div><button type="button" onClick={() => setEditOpen(false)} aria-label="Fechar" className="flex size-8 items-center justify-center rounded-full text-[#718075] hover:bg-gray-100"><X className="size-4" /></button></div><label className="mb-3 block text-[12px] font-medium text-[#4a5565]">Nome<input value={editName} onChange={(event) => setEditName(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-200 px-3 text-[13px] outline-none focus:border-[#00a63e]" /></label><label className="block text-[12px] font-medium text-[#4a5565]">E-mail<input type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-200 px-3 text-[13px] outline-none focus:border-[#00a63e]" /></label><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setEditOpen(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-[12px] font-semibold text-[#66736a]">Cancelar</button><button type="submit" disabled={saving} className="rounded-lg bg-[#00a63e] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#008236] disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar alterações'}</button></div></form></div>}
+      {editOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4" onClick={() => setEditOpen(false)}><form onSubmit={saveProfile} onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"><div className="mb-5 flex items-center justify-between"><div><h2 className="text-[17px] font-bold text-neutral-950">Editar perfil</h2><p className="mt-1 text-[12px] text-[#718075]">Atualize seus dados da comunidade.</p></div><button type="button" onClick={() => setEditOpen(false)} aria-label="Fechar" className="flex size-8 items-center justify-center rounded-full text-[#718075] hover:bg-gray-100"><X className="size-4" /></button></div><label className="mb-3 block text-[12px] font-medium text-[#4a5565]">Nome<span className="text-red-600" aria-hidden="true"> *</span><input value={editName} onChange={(event) => setEditName(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-200 px-3 text-[13px] outline-none focus:border-[#00a63e]" /></label><label className="block text-[12px] font-medium text-[#4a5565]">E-mail<span className="text-red-600" aria-hidden="true"> *</span><input type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-200 px-3 text-[13px] outline-none focus:border-[#00a63e]" /></label><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setEditOpen(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-[12px] font-semibold text-[#66736a]">Cancelar</button><button type="submit" disabled={saving} className="rounded-lg bg-[#00a63e] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#008236] disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar alterações'}</button></div></form></div>}
     </div>
   );
 }

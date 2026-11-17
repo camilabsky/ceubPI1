@@ -364,7 +364,7 @@ export default function RewardsPage({ navigationIntent }: RewardsPageProps) {
             <p className="mt-1.5 max-w-3xl text-[12px] leading-5 text-[#66736a]">Cadastre uma recompensa que os membros da horta poderão resgatar com as moedas conquistadas nas tarefas. Preencha os dados e escolha o tipo de recompensa.</p>
           </div>
 
-          <label className="block text-[12px] font-medium text-[#4a5565]">Nome
+          <label className="block text-[12px] font-medium text-[#4a5565]">Nome<span className="text-red-600" aria-hidden="true"> *</span>
             <input
               type="text"
               placeholder="Ex.: Kit de ferramentas para horta"
@@ -509,7 +509,7 @@ export default function RewardsPage({ navigationIntent }: RewardsPageProps) {
 
                       <input
                         type="text"
-                        placeholder="Nome"
+                        placeholder="Nome *"
                         value={formRecompensa.nome}
                         onChange={(e) =>
                           setFormRecompensa({
